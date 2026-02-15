@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" fill="none">
+  <!-- Bâtiment stylisé AQUIZ — icône seule, sans texte -->
+  <g transform="translate(10, 5)">
+    <!-- Lignes horizontales du bâtiment (de bas en haut, épaisseur décroissante) -->
+    <path d="M0 70 L80 70" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M5 60 L75 60" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M10 50 L70 50" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.75"/>
+    <path d="M15 40 L65 40" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+    <path d="M20 30 L60 30" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.45"/>
+    <path d="M25 20 L55 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+    <path d="M30 10 L50 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.2"/>
+    <!-- Lignes de perspective (droite) -->
+    <path d="M80 70 L100 52" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.85"/>
+    <path d="M75 60 L95 42" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+    <path d="M70 50 L90 32" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.45"/>
+    <path d="M65 40 L85 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  </g>
+</svg>

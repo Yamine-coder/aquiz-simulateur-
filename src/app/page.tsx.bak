@@ -1,0 +1,226 @@
+'use client'
+
+import { Card, CardContent } from '@/components/ui/card'
+import { ArrowRight, History, Home, Quote, Scale, TrendingUp, Users, Wallet } from 'lucide-react'
+import Image from 'next/image'
+import Link from 'next/link'
+
+/**
+ * Page principale du simulateur AQUIZ
+ * Design widget intégrable - charte graphique AQUIZ (noir/gris)
+ * Optimisé Desktop (visible sans scroll) & Mobile
+ */
+export default function SimulateurPage() {
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* ============================================ */}
+      {/* HEADER COMPACT                              */}
+      {/* ============================================ */}
+      <header className="relative bg-aquiz-black overflow-hidden">
+        {/* Motif décoratif (lignes du logo AQUIZ) */}
+        <div className="absolute inset-0 opacity-[0.07]">
+          <div className="absolute top-2 left-[15%] w-48 h-[2px] bg-white transform -rotate-6" />
+          <div className="absolute top-6 left-[18%] w-36 h-[1.5px] bg-white transform -rotate-6" />
+          <div className="absolute top-10 left-[21%] w-24 h-[1px] bg-white transform -rotate-6" />
+          <div className="absolute bottom-2 right-[15%] w-48 h-[2px] bg-white transform rotate-6" />
+          <div className="absolute bottom-6 right-[18%] w-36 h-[1.5px] bg-white transform rotate-6" />
+          <div className="absolute bottom-10 right-[21%] w-24 h-[1px] bg-white transform rotate-6" />
+        </div>
+        
+        <div className="relative max-w-5xl mx-auto px-6 py-5 md:py-6">
+          {/* Top bar avec navigation */}
+          <div className="flex items-center justify-between">
+            {/* Logo + Slogan */}
+            <Link href="/" className="flex items-center gap-5">
+              <div className="w-[72px] h-[72px] md:w-[88px] md:h-[88px] flex-shrink-0">
+                <Image 
+                  src="/image AQUIZ.jpeg" 
+                  alt="AQUIZ - Simulateur immobilier" 
+                  width={88} 
+                  height={88} 
+                  className="w-full h-full object-contain mix-blend-lighten"
+                  priority
+                />
+              </div>
+              <div className="hidden sm:flex flex-col justify-center">
+                <p className="text-white text-lg font-semibold tracking-tight leading-tight">
+                  Votre projet immobilier
+                </p>
+                <p className="text-white/50 text-sm font-normal">
+                  commence ici
+                </p>
+              </div>
+            </Link>
+            
+            {/* Navigation - Mes outils */}
+            <div className="flex items-center gap-3">
+              <Link 
+                href="/mes-simulations"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-all"
+              >
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">Mes simulations</span>
+              </Link>
+              <Link 
+                href="/comparateur"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold bg-white text-aquiz-black hover:bg-aquiz-green hover:text-white rounded-xl transition-all shadow-sm"
+              >
+                <Scale className="w-4 h-4" />
+                <span className="hidden sm:inline">Comparer</span>
+              </Link>
+            </div>
+          </div>
+          
+          {/* Bandeau avantages */}
+          <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10 mt-5 pt-4 border-t border-white/10">
+            <span className="flex items-center gap-2 text-sm text-white/70">
+              <span className="w-2 h-2 rounded-full bg-aquiz-green animate-pulse" />
+              100% gratuit
+            </span>
+            <span className="flex items-center gap-2 text-sm text-white/70">
+              <span className="w-2 h-2 rounded-full bg-aquiz-green" />
+              Résultat immédiat
+            </span>
+            <span className="flex items-center gap-2 text-sm text-white/70">
+              <span className="w-2 h-2 rounded-full bg-aquiz-green" />
+              Conseils personnalisés
+            </span>
+            <span className="flex items-center gap-2 text-sm text-white/70">
+              <span className="w-2 h-2 rounded-full bg-aquiz-green" />
+              Export PDF
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* ============================================ */}
+      {/* MAIN - CHOIX DES MODES                      */}
+      {/* ============================================ */}
+      <main className="flex-1 flex flex-col justify-center max-w-4xl mx-auto w-full px-4 py-6 md:py-8">
+        
+        {/* Stats fusionnées en une ligne */}
+        <div className="flex flex-wrap items-center justify-center gap-3 md:gap-6 mb-6 animate-fade-in">
+          <div className="flex items-center gap-2 text-sm text-aquiz-gray">
+            <Users className="w-4 h-4 text-aquiz-green" />
+            <span><strong className="text-aquiz-black">+12 000</strong> simulations</span>
+          </div>
+          <span className="hidden sm:block w-1 h-1 rounded-full bg-aquiz-gray-light" />
+          <div className="flex items-center gap-2 text-sm text-aquiz-gray">
+            <TrendingUp className="w-4 h-4 text-aquiz-green" />
+            <span>3 000€/mois → <strong className="text-aquiz-black">jusqu&apos;à 250k€</strong> d&apos;achat</span>
+          </div>
+        </div>
+
+        {/* Titre centré */}
+        <h2 className="text-center text-xl md:text-2xl font-bold text-aquiz-black mb-4 animate-fade-in">
+          Quel est votre projet ?
+        </h2>
+
+        {/* Cards des 2 modes - Mode A mis en avant */}
+        <div className="grid md:grid-cols-2 gap-4 md:gap-5">
+          
+          {/* ===== MODE A - MIS EN AVANT ===== */}
+          <Link href="/simulateur/mode-a" className="block group animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+            <Card className="h-full border border-aquiz-gray-lighter hover:border-aquiz-green bg-white hover:bg-gradient-to-br hover:from-white hover:to-emerald-50/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+              <CardContent className="p-5">
+                {/* Header compact */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-xl bg-aquiz-gray-lighter group-hover:bg-aquiz-green flex items-center justify-center group-hover:scale-105 transition-all">
+                    <Wallet className="w-5 h-5 text-aquiz-gray group-hover:text-white transition-colors" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-aquiz-black leading-tight">
+                      Ce que je peux acheter
+                    </h3>
+                    <p className="text-xs text-aquiz-gray">Budget max selon vos revenus</p>
+                  </div>
+                </div>
+                
+                {/* Tags + CTA */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Capacité
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Mensualités
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Carte IDF
+                    </span>
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-aquiz-gray-lighter group-hover:bg-aquiz-green flex items-center justify-center group-hover:scale-110 transition-all">
+                    <ArrowRight className="w-4 h-4 text-aquiz-gray group-hover:text-white transition-colors group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+
+          {/* ===== MODE B ===== */}
+          <Link href="/simulateur/mode-b" className="block group animate-fade-in-up" style={{ animationDelay: '150ms' }}>
+            <Card className="h-full border border-aquiz-gray-lighter hover:border-aquiz-green bg-white hover:bg-gradient-to-br hover:from-white hover:to-emerald-50/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+              <CardContent className="p-5">
+                {/* Header compact */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-11 h-11 rounded-xl bg-aquiz-gray-lighter flex items-center justify-center group-hover:bg-aquiz-green group-hover:scale-105 transition-all">
+                    <Home className="w-5 h-5 text-aquiz-gray group-hover:text-white transition-colors" strokeWidth={1.5} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-aquiz-black leading-tight">
+                      Ce qu&apos;il faut pour acheter
+                    </h3>
+                    <p className="text-xs text-aquiz-gray">Revenus requis pour un prix</p>
+                  </div>
+                </div>
+                
+                {/* Tags + CTA */}
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Faisabilité
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Revenus
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 text-aquiz-gray group-hover:text-aquiz-green font-medium transition-colors">
+                      Solutions
+                    </span>
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-aquiz-gray-lighter group-hover:bg-aquiz-green flex items-center justify-center group-hover:scale-110 transition-all">
+                    <ArrowRight className="w-4 h-4 text-aquiz-gray group-hover:text-white transition-colors group-hover:translate-x-0.5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+
+        {/* Témoignage + Badge - Design épuré */}
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 animate-fade-in" style={{ animationDelay: '300ms' }}>
+          {/* Témoignage */}
+          <div className="flex items-center gap-2 text-sm text-aquiz-gray">
+            <Quote className="w-4 h-4 text-aquiz-green/60" />
+            <span className="italic">&ldquo;Très utile pour y voir clair !&rdquo;</span>
+            <span className="text-aquiz-gray-light font-medium">— Marie D.</span>
+          </div>
+          
+          {/* Badge gratuit */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-aquiz-green/10 border border-aquiz-green/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-aquiz-green animate-pulse" />
+            <span className="text-xs font-medium text-aquiz-green">100% gratuit • Sans inscription</span>
+          </div>
+        </div>
+      </main>
+
+      {/* ============================================ */}
+      {/* FOOTER COMPACT                              */}
+      {/* ============================================ */}
+      <footer className="border-t border-aquiz-gray-lighter py-3">
+        <div className="max-w-4xl mx-auto px-4 text-center text-[10px] text-aquiz-gray-light">
+          © 2026 AQUIZ • Simulation indicative • Prix DVF data.gouv.fr
+        </div>
+      </footer>
+    </div>
+  )
+}

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" fill="none">
+  <!-- Bâtiment stylisé -->
+  <g transform="translate(50, 10)">
+    <!-- Lignes du bâtiment -->
+    <path d="M0 80 L100 80" stroke="#1a1a1a" stroke-width="3"/>
+    <path d="M5 70 L95 70" stroke="#1a1a1a" stroke-width="2.5"/>
+    <path d="M10 60 L90 60" stroke="#4a4a4a" stroke-width="2.5"/>
+    <path d="M15 50 L85 50" stroke="#4a4a4a" stroke-width="2"/>
+    <path d="M20 40 L80 40" stroke="#7a7a7a" stroke-width="2"/>
+    <path d="M25 30 L75 30" stroke="#9a9a9a" stroke-width="1.5"/>
+    <path d="M30 20 L70 20" stroke="#bababa" stroke-width="1.5"/>
+    <!-- Perspective -->
+    <path d="M100 80 L120 60" stroke="#1a1a1a" stroke-width="2"/>
+    <path d="M95 70 L115 50" stroke="#4a4a4a" stroke-width="2"/>
+    <path d="M90 60 L110 40" stroke="#7a7a7a" stroke-width="1.5"/>
+    <path d="M85 50 L105 30" stroke="#9a9a9a" stroke-width="1.5"/>
+  </g>
+  <!-- Texte AQUIZ -->
+  <text x="100" y="110" font-family="Arial Black, sans-serif" font-size="28" font-weight="900" text-anchor="middle" fill="#1a1a1a">AQUIZ</text>
+</svg>
