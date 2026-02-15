@@ -31,6 +31,7 @@ export function ContactForm() {
   const [errors, setErrors] = useState<FormErrors>({})
   const [status, setStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle')
   const [consent, setConsent] = useState(false)
+  const [serverErrors, setServerErrors] = useState<string[]>([])
 
   const validate = useCallback((): boolean => {
     const newErrors: FormErrors = {}
@@ -66,6 +67,7 @@ export function ContactForm() {
       if (!validate() || !consent) return
 
       setStatus('sending')
+      setServerErrors([])
 
       try {
         const res = await fetch('/api/contact', {
@@ -79,6 +81,8 @@ export function ContactForm() {
           setFormData({ nom: '', email: '', telephone: '', message: '' })
           setConsent(false)
         } else {
+          const data = await res.json().catch(() => null)
+          setServerErrors(data?.errors ?? ['Erreur inconnue'])
           setStatus('error')
         }
       } catch {
@@ -232,7 +236,15 @@ export function ContactForm() {
       {/* Erreur */}
       {status === 'error' && (
         <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
-          Une erreur est survenue. Réessayez ou appelez-nous directement.
+          {serverErrors.length > 0 ? (
+            <ul className="list-disc list-inside space-y-1">
+              {serverErrors.map((err) => (
+                <li key={err}>{err}</li>
+              ))}
+            </ul>
+          ) : (
+            'Une erreur est survenue. Réessayez ou appelez-nous directement.'
+          )}
         </div>
       )}
 

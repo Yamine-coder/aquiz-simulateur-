@@ -104,8 +104,8 @@ export async function POST(request: Request) {
       errors.push('Adresse email invalide')
     }
 
-    if (!body.message || body.message.trim().length < 10) {
-      errors.push('Le message doit contenir au moins 10 caractères')
+    if (!body.message || body.message.trim().length < 3) {
+      errors.push('Le message doit contenir au moins 3 caractères')
     }
 
     if (!body.rgpdConsent) {
