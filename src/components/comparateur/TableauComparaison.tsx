@@ -776,7 +776,7 @@ export function TableauComparaison({
                       {/* Image */}
                       <div className="relative h-20 bg-gradient-to-br from-aquiz-gray-lightest to-aquiz-gray-lighter">
                         {annonce.imageUrl ? (
-                          <img src={annonce.imageUrl} alt="" className="w-full h-full object-cover" />
+                          <img src={annonce.imageUrl} alt={`Photo du bien ${annonce.titre || 'immobilier'}`} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <IconType className="w-7 h-7 text-aquiz-gray-light" />

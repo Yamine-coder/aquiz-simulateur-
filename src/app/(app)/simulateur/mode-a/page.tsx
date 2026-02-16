@@ -947,6 +947,7 @@ function ModeAPageContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-white">
+        <h1 className="sr-only">Simulateur de capacité d&apos;achat immobilière</h1>
         {showResumeModal && pendingToResume && <ResumeModal simulation={pendingToResume} onResume={handleResume} onNew={handleNew} />}
 
         {/* === STEPPER + ACTIONS === */}
@@ -1043,7 +1044,7 @@ function ModeAPageContent() {
                     
                     {/* Header simple */}
                     <div className="mb-2">
-                      <h1 className="text-xl font-bold text-aquiz-black">Votre profil</h1>
+                      <h2 className="text-xl font-bold text-aquiz-black">Votre profil</h2>
                       <p className="text-aquiz-gray text-sm mt-0.5">Renseignez votre situation pour calculer votre capacité d&apos;emprunt</p>
                     </div>
                     
@@ -1394,7 +1395,7 @@ function ModeAPageContent() {
                       <button type="button" onClick={goToPrevEtape} className="flex items-center gap-2 text-aquiz-gray hover:text-aquiz-black transition-colors text-sm mb-3">
                         <ArrowLeft className="w-4 h-4" />Modifier mon profil
                       </button>
-                      <h1 className="text-xl font-bold text-aquiz-black">Votre simulation</h1>
+                      <h2 className="text-xl font-bold text-aquiz-black">Votre simulation</h2>
                       <p className="text-aquiz-gray text-sm mt-0.5">Définissez votre budget et les paramètres de votre projet</p>
                     </div>
                     

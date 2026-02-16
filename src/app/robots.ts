@@ -9,7 +9,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/mes-simulations'],
+        disallow: ['/api/', '/mes-simulations', '/resultats'],
       },
     ],
     sitemap: 'https://www.aquiz.eu/sitemap.xml',

@@ -18,6 +18,12 @@ export const metadata: Metadata = {
   title: 'À propos — AQUIZ, conseil en acquisition immobilière',
   description:
     'Découvrez l\'équipe AQUIZ : experts en acquisition immobilière à Paris et Île-de-France. Notre mission : accompagner les primo-accédants vers la propriété.',
+  openGraph: {
+    title: 'À propos d\'AQUIZ — Conseil en acquisition immobilière',
+    description:
+      'Une équipe d\'experts passionnés par l\'immobilier à Paris et en Île-de-France, au service des primo-accédants.',
+    url: 'https://www.aquiz.eu/a-propos',
+  },
   alternates: {
     canonical: 'https://www.aquiz.eu/a-propos',
   },

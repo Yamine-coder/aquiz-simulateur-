@@ -158,6 +158,7 @@ export default function ComparateurPage() {
   
   return (
     <div className="min-h-screen flex flex-col">
+      <h1 className="sr-only">Comparateur de biens immobiliers</h1>
       
       {/* ─── Header — même pattern que simulateur ─── */}
       <section className="relative bg-aquiz-black overflow-hidden">
@@ -185,14 +186,14 @@ export default function ComparateurPage() {
             Outil de comparaison
           </motion.p>
 
-          <motion.h1
+          <motion.h2
             className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-[1.15] tracking-tight mb-3"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             Comparateur d&apos;<span className="text-aquiz-green">annonces</span>
-          </motion.h1>
+          </motion.h2>
 
           <motion.div
             className="mx-auto w-12 h-px bg-white/20 mb-3"

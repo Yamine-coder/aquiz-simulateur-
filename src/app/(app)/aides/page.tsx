@@ -41,7 +41,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useMemo, useState } from 'react'
+import { Suspense, useCallback, useMemo, useState } from 'react'
 
 // =====================================================
 // CONSTANTS
@@ -311,7 +311,7 @@ function AideCard({ aide, expanded, onToggle }: {
 // COMPOSANT PRINCIPAL
 // =====================================================
 
-export default function AidesPage() {
+function AidesPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { zoneSelectionnee: zoneStore, profil, parametresModeA, resultats } = useSimulateurStore()
@@ -416,9 +416,9 @@ export default function AidesPage() {
           {/* Titre + badge zone */}
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-aquiz-black tracking-tight">
+              <h2 className="text-2xl md:text-3xl font-extrabold text-aquiz-black tracking-tight">
                 {zoneSelectionnee.nomCommune}
-              </h1>
+              </h2>
               <p className="text-sm text-aquiz-gray-light mt-0.5">
                 Département {zoneSelectionnee.codeDepartement}
                 {fromStore && capaciteAchat > 0 ? ` · Budget ${formatMontant(capaciteAchat)} €` : ''}
@@ -599,5 +599,13 @@ export default function AidesPage() {
         onClose={() => setShowContactModal(false)}
       />
     </div>
+  )
+}
+
+export default function AidesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <AidesPageContent />
+    </Suspense>
   )
 }

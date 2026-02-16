@@ -1,17 +1,17 @@
 'use client'
 
 import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Building,
-  CheckCircle,
-  Home,
-  Info,
-  MapPin,
-  Phone,
-  PiggyBank,
-  TrendingUp
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    Building,
+    CheckCircle,
+    Home,
+    Info,
+    MapPin,
+    Phone,
+    PiggyBank,
+    TrendingUp
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -27,18 +27,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
 } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
@@ -421,6 +421,7 @@ export default function ModeBPage() {
   return (
     <TooltipProvider>
     <div className="min-h-screen bg-white">
+      <h1 className="sr-only">Simulateur de faisabilité d&apos;achat immobilier</h1>
       {/* Modal de reprise */}
       {showResumeModal && pendingToResume && (
         <ResumeModal
@@ -519,7 +520,7 @@ export default function ModeBPage() {
           <div className="animate-fade-in">
             {/* Header simple */}
             <div className="mb-6">
-              <h1 className="text-xl font-bold text-aquiz-black">Le bien ciblé</h1>
+              <h2 className="text-xl font-bold text-aquiz-black">Le bien ciblé</h2>
               <p className="text-aquiz-gray text-sm mt-0.5">Renseignez les informations du bien que vous visez</p>
             </div>
             
@@ -854,7 +855,7 @@ export default function ModeBPage() {
 
             {/* Header simple */}
             <div className="mb-6">
-              <h1 className="text-xl font-bold text-aquiz-black">Financement souhaité</h1>
+              <h2 className="text-xl font-bold text-aquiz-black">Financement souhaité</h2>
               <p className="text-aquiz-gray text-sm mt-0.5">Apport et paramètres du prêt</p>
             </div>
 
@@ -1072,7 +1073,7 @@ export default function ModeBPage() {
 
             {/* Header résultat */}
             <div className="mb-6">
-              <h1 className="text-xl font-bold text-aquiz-black">Ce qu&apos;il faut pour ce bien</h1>
+              <h2 className="text-xl font-bold text-aquiz-black">Ce qu&apos;il faut pour ce bien</h2>
               <p className="text-aquiz-gray text-sm mt-0.5">
                 {formatMontant(prixBien)} € • {typeBien === 'neuf' ? 'Neuf' : 'Ancien'} • {dureeAns} ans
               </p>

@@ -111,7 +111,7 @@ export function VueMobileAccordeon({
                   {/* Image/Icon */}
                   <div className="w-14 h-14 rounded-lg bg-aquiz-gray-lightest flex items-center justify-center shrink-0 overflow-hidden">
                     {annonce.imageUrl ? (
-                      <img src={annonce.imageUrl} alt="" className="w-full h-full object-cover" />
+                      <img src={annonce.imageUrl} alt={`Photo du bien ${annonce.titre || 'immobilier'}`} className="w-full h-full object-cover" />
                     ) : (
                       <IconType className="w-6 h-6 text-aquiz-gray-light" />
                     )}

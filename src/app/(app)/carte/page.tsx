@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 
 // Import dynamique de la carte (Leaflet SSR)
 const CarteInteractive = dynamic(
@@ -41,7 +41,7 @@ const CarteInteractive = dynamic(
   }
 )
 
-export default function CartePage() {
+function CartePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isHydrated = useHydration()
@@ -162,6 +162,7 @@ export default function CartePage() {
 
   return (
     <div className="h-[calc(100vh-72px)] md:h-[calc(100vh-88px)] flex flex-col bg-white overflow-hidden">
+      <h1 className="sr-only">Carte des prix immobiliers en Île-de-France</h1>
       
       {/* ============================================ */}
       {/* BARRE CONTEXTUELLE PRO                      */}
@@ -513,5 +514,13 @@ export default function CartePage() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function CartePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white" />}>
+      <CartePageContent />
+    </Suspense>
   )
 }

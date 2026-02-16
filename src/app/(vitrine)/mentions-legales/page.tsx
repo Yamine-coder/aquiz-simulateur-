@@ -4,7 +4,14 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'Mentions légales — AQUIZ',
-  description: 'Mentions légales, politique de confidentialité et conditions générales d\'utilisation du site AQUIZ.',
+  description:
+    'Mentions légales, politique de confidentialité et conditions générales d\'utilisation du site AQUIZ. Informations légales, hébergement et protection des données.',
+  openGraph: {
+    title: 'Mentions légales — AQUIZ',
+    description:
+      'Informations légales, politique de confidentialité et conditions générales d\'utilisation du site AQUIZ.',
+    url: 'https://www.aquiz.eu/mentions-legales',
+  },
   alternates: { canonical: 'https://www.aquiz.eu/mentions-legales' },
   robots: { index: false },
 }
