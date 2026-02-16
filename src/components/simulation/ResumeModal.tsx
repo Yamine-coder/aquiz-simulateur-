@@ -83,6 +83,7 @@ function getEtapeLabel(etape: string, mode: 'A' | 'B'): string {
 export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
   const progress = getProgress(simulation.etape, simulation.mode)
   const etapeLabel = getEtapeLabel(simulation.etape, simulation.mode)
+  const isComplete = simulation.status === 'terminee' || progress === 100
   const revenus = simulation.profil 
     ? simulation.profil.salaire1 + simulation.profil.salaire2 + simulation.profil.autresRevenus
     : 0
@@ -124,7 +125,7 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
 
           {/* Titre */}
           <h2 className="text-lg font-semibold text-white">
-            Reprendre votre simulation ?
+            {isComplete ? 'Revoir votre simulation ?' : 'Reprendre votre simulation ?'}
           </h2>
         </div>
 
@@ -179,7 +180,7 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
             className="w-full h-11 bg-aquiz-black hover:bg-aquiz-black/90 rounded-xl font-medium text-sm"
           >
             <Play className="w-4 h-4 mr-2 fill-current" />
-            Reprendre
+            {isComplete ? 'Revoir les résultats' : 'Reprendre'}
             <ArrowRight className="w-4 h-4 ml-auto" />
           </Button>
           

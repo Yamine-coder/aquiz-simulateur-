@@ -118,24 +118,28 @@ function ModeAPageContent() {
     }
   })
 
-  // Restaurer l'étape ET les données depuis le store au chargement (si on revient de la carte)
-  // Sauf si ?new=true est présent (nouvelle simulation depuis Mode B)
+  // Restaurer l'étape ET les données depuis le store au chargement
+  // UNIQUEMENT si on revient d'une page interne (carte, aides) via ?returning=1
+  // Sinon, on laisse la modale décider (reprise ou nouvelle)
   useEffect(() => {
     // Si c'est une nouvelle simulation, ne pas restaurer et rester à l'étape 1
     if (isNewSimulation) {
+      resetStore()
       setEtapeLocal('profil')
       setEtapeStore(1)
-      setHasRestoredFromStore(true) // Marquer comme fait pour éviter la restauration
-      // Nettoyer l'URL sans recharger la page
+      setHasRestoredFromStore(true)
       window.history.replaceState({}, '', '/simulateur/mode-a')
       return
     }
     
-    if (!hasRestoredFromStore && storedResultats && storedEtape >= 2 && storedProfil && storedParametresModeA) {
-      // On a des résultats dans le store, restaurer l'étape et les données
+    // Vérifier si on revient d'une page interne (carte, aides…)
+    const params = new URLSearchParams(window.location.search)
+    const isReturning = params.get('returning') === '1'
+    
+    if (isReturning && !hasRestoredFromStore && storedResultats && storedEtape >= 2 && storedProfil && storedParametresModeA) {
+      // Retour interne : restaurer silencieusement
       setEtapeLocal(getEtapeIdFromNumber(storedEtape))
       
-      // Restaurer le profil
       setAge(storedProfil.age)
       setStatutProfessionnel(storedProfil.statutProfessionnel)
       setValue('situationFoyer', storedProfil.situationFoyer)
@@ -146,7 +150,6 @@ function ModeAPageContent() {
       setValue('creditsEnCours', storedProfil.creditsEnCours)
       setValue('autresCharges', storedProfil.autresCharges)
       
-      // Restaurer les paramètres Mode A
       setValue('mensualiteMax', storedParametresModeA.mensualiteMax)
       setValue('dureeAns', storedParametresModeA.dureeAns)
       setValue('apport', storedParametresModeA.apport)
@@ -154,9 +157,10 @@ function ModeAPageContent() {
       setValue('tauxInteret', storedParametresModeA.tauxInteret)
       
       setHasRestoredFromStore(true)
+      window.history.replaceState({}, '', window.location.pathname)
     }
    
-  }, [storedResultats, storedEtape, storedProfil, storedParametresModeA, hasRestoredFromStore, setValue, isNewSimulation, setEtapeStore])
+  }, [storedResultats, storedEtape, storedProfil, storedParametresModeA, hasRestoredFromStore, setValue, isNewSimulation, setEtapeStore, resetStore])
 
   const situationFoyer = watch('situationFoyer')
   const nombreEnfants = watch('nombreEnfants') || 0
@@ -184,18 +188,34 @@ function ModeAPageContent() {
       if (sim) { restoreSimulation(sim); setCurrentSaveId(restoreId); return }
     }
     // Ne pas afficher la modale si l'utilisateur revient d'une page interne (carte, aides…)
+    // ou si c'est une nouvelle simulation explicite
     const params = new URLSearchParams(window.location.search)
-    if (params.get('returning') === '1') {
-      // Nettoyer le param sans recharger
+    if (params.get('returning') === '1' || params.get('new') === 'true') {
       window.history.replaceState({}, '', window.location.pathname)
       return
     }
+    
+    // Chercher une simulation à reprendre :
+    // 1. D'abord une simulation en cours (non terminée)
     const pending = getPending('A')
-    if (pending && pending.profil && pending.profil.salaire1 > 0) {
-      setPendingToResume(pending)
+    // 2. Sinon, la dernière simulation Mode A (même terminée)
+    const lastSimA = simulations
+      .filter(s => s.mode === 'A' && s.profil && s.profil.salaire1 > 0)
+      .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())[0]
+    // 3. Sinon, vérifier si le Zustand store a des données
+    const hasStoreData = !!(storedProfil && (storedProfil.salaire1 > 0 || storedProfil.salaire2 > 0))
+    
+    const simulationToResume = pending || lastSimA || null
+    
+    if (simulationToResume) {
+      setPendingToResume(simulationToResume)
       setShowResumeModal(true)
+    } else if (hasStoreData) {
+      // Données dans le store mais pas de simulation sauvegardée
+      // → on reset le store pour repartir propre
+      resetStore()
     }
-  }, [isLoaded, simulations, getPending])
+  }, [isLoaded, simulations, getPending, storedProfil, resetStore])
 
   const restoreSimulation = useCallback((sim: typeof simulations[0]) => {
     if (sim.profil) {
