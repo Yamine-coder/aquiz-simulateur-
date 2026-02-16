@@ -19,6 +19,7 @@ interface DepartementData {
 interface MiniCarteIDFProps {
   departements: DepartementData[]
   className?: string
+  onExplore?: () => void
 }
 
 // Mapping code département -> nom
@@ -33,36 +34,34 @@ const DEPT_NAMES: Record<string, string> = {
   '95': "Val-d'Oise"
 }
 
-// Couleur selon prix au m² (palette avec vert pour les prix bas)
-function getPriceColor(prixM2: number): string {
-  if (prixM2 >= 12000) return '#7d1d1d'  // Rouge très foncé
-  if (prixM2 >= 10500) return '#b91c1c'  // Rouge foncé
-  if (prixM2 >= 9000) return '#dc2626'   // Rouge
-  if (prixM2 >= 7500) return '#f97316'   // Orange foncé
-  if (prixM2 >= 6000) return '#fb923c'   // Orange
-  if (prixM2 >= 4500) return '#fcd34d'   // Jaune
-  if (prixM2 >= 3500) return '#fef08a'   // Jaune clair
-  if (prixM2 >= 3000) return '#fef9c3'   // Jaune très clair
-  if (prixM2 >= 2500) return '#bbf7d0'   // Vert clair
-  return '#86efac'                        // Vert
-}
-
-// Couleur selon surface accessible (ce qui intéresse l'utilisateur)
-// 3 niveaux : vert (≥40m²), orange (25-40m²), rouge (<25m²)
+// Couleur selon surface accessible — palette moderne et contrastée
 function getSurfaceColor(surface: number): string {
-  if (surface >= 40) return '#10b981'    // Vert - T2/T3+ confortable
-  if (surface >= 25) return '#f59e0b'    // Orange - Studio/T1
-  return '#ef4444'                        // Rouge - Difficile (<25m²)
+  if (surface >= 80) return '#059669'     // Vert émeraude foncé — très grand
+  if (surface >= 40) return '#34d399'     // Vert émeraude — confortable
+  if (surface >= 25) return '#fbbf24'     // Ambre doré — studio/T1
+  return '#f87171'                         // Rouge corail — difficile
 }
 
-// Couleur de bordure selon surface
-function getSurfaceBorderColor(surface: number): string {
-  if (surface >= 40) return '#047857'    // Vert foncé
-  if (surface >= 25) return '#b45309'    // Orange foncé
-  return '#b91c1c'                        // Rouge foncé
+function getSurfaceBorderColor(_surface: number): string {
+  return '#1e4038'  // Bordure foncée uniforme — plus propre
 }
 
-export default function MiniCarteIDF({ departements, className = '' }: MiniCarteIDFProps) {
+function getSurfaceHoverColor(surface: number): string {
+  if (surface >= 80) return '#047857'
+  if (surface >= 40) return '#10b981'
+  if (surface >= 25) return '#f59e0b'
+  return '#ef4444'
+}
+
+// Opacité selon surface pour créer un effet de profondeur
+function getSurfaceOpacity(surface: number): number {
+  if (surface >= 80) return 0.65
+  if (surface >= 40) return 0.50
+  if (surface >= 25) return 0.55
+  return 0.60
+}
+
+export default function MiniCarteIDF({ departements, className = '', onExplore }: MiniCarteIDFProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
   const [map, setMap] = useState<L.Map | null>(null)
@@ -114,7 +113,7 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
         if (cancelled || !mapRef.current) return
 
         const leafletMap = L.map(mapRef.current, {
-          center: [48.8566, 2.3522],
+          center: [48.7, 2.5],
           zoom: 9,
           zoomControl: false,
           scrollWheelZoom: false,
@@ -123,8 +122,8 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
           attributionControl: false,
         })
 
-        // Fond de carte CartoDB style clair
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        // Fond de carte CartoDB Voyager (plus lisible, labels inclus)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
           maxZoom: 19,
         }).addTo(leafletMap)
 
@@ -175,52 +174,42 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
 
           return {
             fillColor: getSurfaceColor(surface),
-            fillOpacity: 0.6,
+            fillOpacity: getSurfaceOpacity(surface),
             color: getSurfaceBorderColor(surface),
-            weight: 2,
-            opacity: 1,
+            weight: 1.8,
+            opacity: 0.7,
           }
         },
         onEachFeature: (feature, layer) => {
           const code = feature.properties?.code
-          const nom = feature.properties?.nom || DEPT_NAMES[code] || code
           const data = dataByCode.get(code)
-          const prixM2 = data?.prixM2 || 0
           const surface = data?.surface || 0
 
-          // Tooltip au survol avec surface accessible - icônes SVG
-          const surfaceColor = surface >= 40 ? '#10b981' : surface >= 25 ? '#f59e0b' : '#ef4444'
-          // Icônes SVG inline (Home, Building, Box)
-          const homeIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${surfaceColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`
-          const buildingIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${surfaceColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>`
-          const boxIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${surfaceColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px;"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>`
-          const surfaceIcon = surface >= 40 ? homeIcon : surface >= 25 ? buildingIcon : boxIcon
-          
-          layer.bindTooltip(`
-            <div style="text-align:center;font-weight:700;font-size:13px;color:#1e293b;">
-              ${nom}
-            </div>
-            <div style="text-align:center;font-size:11px;color:#64748b;margin-top:2px;">
-              ${formatMontant(prixM2)} €/m²
-            </div>
-            <div style="display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid #e2e8f0;color:${surfaceColor}">
-              ${surfaceIcon} ${surface} m² accessibles
-            </div>
-          `, {
-            permanent: false,
-            direction: 'top',
-            className: 'dept-tooltip-custom',
-            offset: [0, -10]
-          })
+          // Tooltip au survol avec nom du département et infos
+          if (data) {
+            const colorDot = getSurfaceColor(surface)
+            const tooltipContent = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;">
+              <div style="width:8px;height:8px;border-radius:50%;background:${colorDot};flex-shrink:0;"></div>
+              <div>
+                <div style="font-weight:700;color:#0f172a;font-size:13px;">${DEPT_NAMES[code] || code}</div>
+                <div style="color:#64748b;font-size:11px;margin-top:1px;">${data.surface} m² • ${formatMontant(data.prixM2)}/m²</div>
+              </div>
+            </div>`
+            layer.bindTooltip(tooltipContent, {
+              direction: 'top',
+              sticky: true,
+              className: 'dept-tooltip',
+              opacity: 1,
+            })
+          }
 
           layer.on('mouseover', () => {
             setHoveredDept(code)
-            // Bordure plus foncée au hover
-            const hoverBorderColor = surface >= 40 ? '#065f46' : surface >= 25 ? '#78350f' : '#7f1d1d'
             ;(layer as L.Path).setStyle({
-              weight: 3,
-              color: hoverBorderColor,
-              fillOpacity: 0.8,
+              weight: 2.5,
+              color: '#0d9488',
+              fillColor: getSurfaceHoverColor(surface),
+              fillOpacity: 0.7,
             })
             ;(layer as L.Path).bringToFront()
           })
@@ -228,9 +217,10 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
           layer.on('mouseout', () => {
             setHoveredDept(null)
             ;(layer as L.Path).setStyle({
-              weight: 2,
+              weight: 1.8,
               color: getSurfaceBorderColor(surface),
-              fillOpacity: 0.6,
+              fillColor: getSurfaceColor(surface),
+              fillOpacity: getSurfaceOpacity(surface),
             })
           })
 
@@ -238,8 +228,51 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
         }
       }).addTo(map)
 
+      // Ajouter les noms des départements — labels intelligents
+      // Offsets manuels pour éviter le chevauchement en petite couronne
+      const LABEL_OFFSETS: Record<string, [number, number]> = {
+        '75': [0, 0],        // Paris : au centre
+        '92': [-0.06, 0.01], // Hauts-de-Seine : décalé à gauche
+        '93': [0.04, -0.03], // Seine-Saint-Denis : décalé en haut-droite
+        '94': [0.04, 0.04],  // Val-de-Marne : décalé en bas-droite
+      }
+      // Labels courts pour petite couronne
+      const SHORT_NAMES: Record<string, string> = {
+        '75': '75',
+        '92': '92',
+        '93': '93',
+        '94': '94',
+      }
+
+      geoData.features.forEach(feature => {
+        const code = feature.properties?.code;
+        const data = dataByCode.get(code);
+        if (!data) return;
+        const bounds = L.geoJSON(feature).getBounds();
+        const center = bounds.getCenter();
+        const offset = LABEL_OFFSETS[code] || [0, 0];
+        const adjustedCenter = L.latLng(center.lat + offset[1], center.lng + offset[0]);
+
+        const isSmall = ['75', '92', '93', '94'].includes(code);
+        const displayName = SHORT_NAMES[code] || DEPT_NAMES[code] || code;
+
+        const label = L.divIcon({
+          className: 'dept-label',
+          html: `<div style="text-align:center;pointer-events:none;white-space:nowrap;
+            font-size:${isSmall ? '10px' : '12px'};
+            font-weight:${isSmall ? '800' : '700'};
+            color:${isSmall ? '#374151' : '#1e293b'};
+            text-shadow:0 0 4px rgba(255,255,255,0.95), 0 0 4px rgba(255,255,255,0.95), 0 1px 2px rgba(255,255,255,0.9);
+            letter-spacing:${isSmall ? '0.5px' : '-0.2px'};
+          ">${displayName}</div>`,
+          iconSize: [isSmall ? 28 : 110, 18],
+          iconAnchor: [isSmall ? 14 : 55, 9],
+        });
+        L.marker(adjustedCenter, { icon: label, interactive: false }).addTo(map);
+      });
+
       // Ajuster la vue sur les vrais bounds du GeoJSON
-      map.fitBounds(geoJsonLayer.getBounds(), { padding: [20, 20] })
+      map.fitBounds(geoJsonLayer.getBounds(), { padding: [15, 15] })
     }
 
     addLayers()
@@ -260,114 +293,126 @@ export default function MiniCarteIDF({ departements, className = '' }: MiniCarte
   }
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative z-0 ${className}`}>
       {/* Carte Leaflet */}
       <div 
         ref={mapRef} 
-        className="w-full h-[400px] rounded-xl overflow-hidden"
-        style={{ background: '#f8fafc' }}
+        className="w-full h-[420px] overflow-hidden"
+        style={{ background: '#f1f5f9', zIndex: 0 }}
       />
 
       {/* Indicateur de chargement pendant init Leaflet */}
       {!isLoaded && (
-        <div className="absolute inset-0 bg-slate-50 rounded-xl flex items-center justify-center z-10">
+        <div className="absolute inset-0 bg-slate-50 flex items-center justify-center z-10">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-2" />
+            <div className="w-8 h-8 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin mx-auto mb-2" />
             <span className="text-xs text-slate-500">Initialisation...</span>
           </div>
         </div>
       )}
 
-      {/* Panel info au survol - enrichi */}
+      {/* Panel info au survol */}
       {hoveredData && (
-        <div className="absolute top-3 right-3 bg-white rounded-xl shadow-xl border border-slate-200 p-4 min-w-[220px] z-[1000]">
-          <div className="border-b border-slate-100 pb-3 mb-3">
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold ${
-                hoveredData.surface >= 40 ? 'bg-emerald-500' :
-                hoveredData.surface >= 25 ? 'bg-amber-500' : 'bg-rose-500'
-              }`}>{hoveredData.codeDept}</div>
-              <div>
-                <h3 className="font-bold text-slate-800 text-sm">{hoveredData.nom}</h3>
-                <p className="text-[10px] text-slate-400">Données DVF 2025</p>
-              </div>
-            </div>
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 p-3.5 z-[5] min-w-[190px] transition-all duration-200 animate-fade-in">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2.5 h-2.5 rounded-full" style={{ background: getSurfaceColor(hoveredData.surface) }} />
+            <p className="text-sm font-bold text-slate-900">{DEPT_NAMES[hoveredDept!] || hoveredDept}</p>
           </div>
-          
-          {/* Surface accessible - mis en avant */}
-          <div className={`rounded-lg p-3 mb-3 ${
-            hoveredData.surface >= 40 ? 'bg-emerald-50 border border-emerald-200' :
-            hoveredData.surface >= 25 ? 'bg-amber-50 border border-amber-200' : 'bg-rose-50 border border-rose-200'
-          }`}>
-            <p className="text-[10px] text-slate-500 mb-1">Surface accessible</p>
-            <p className={`text-2xl font-black ${
-              hoveredData.surface >= 40 ? 'text-emerald-600' :
-              hoveredData.surface >= 25 ? 'text-amber-600' : 'text-rose-600'
-            }`}>{hoveredData.surface} m²</p>
-            <p className={`text-[10px] mt-1 ${
-              hoveredData.surface >= 40 ? 'text-emerald-600' :
-              hoveredData.surface >= 25 ? 'text-amber-600' : 'text-rose-600'
-            }`}>
-              {hoveredData.surface >= 40 ? '✓ T2/T3+ confortable' :
-               hoveredData.surface >= 25 ? '→ Studio/T1' : '⚠ Surface limitée'}
-            </p>
-          </div>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-slate-500">Prix le + bas</span>
-              <span className="text-sm font-bold text-slate-800">{formatMontant(hoveredData.prixM2)} €/m²</span>
-            </div>
+          <div className="space-y-1 text-[11px] text-slate-500 pl-[18px]">
+            <p>Surface accessible : <span className="font-semibold text-slate-800">{hoveredData.surface} m²</span></p>
+            <p>Prix moyen : <span className="font-semibold text-slate-800">{formatMontant(hoveredData.prixM2)}/m²</span></p>
             {(hoveredData.nbOpportunites || 0) > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500">Opportunités</span>
-                <span className="text-xs font-semibold flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                  {hoveredData.nbOpportunites} commune{(hoveredData.nbOpportunites || 0) > 1 ? 's' : ''}
-                </span>
-              </div>
+              <p className="text-emerald-600 font-medium">{hoveredData.nbOpportunites} commune{(hoveredData.nbOpportunites || 0) > 1 ? 's' : ''}</p>
             )}
           </div>
         </div>
       )}
 
-      {/* Légende surface accessible */}
-      <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 p-3 z-[1000]">
-        <p className="text-[10px] font-semibold text-slate-700 mb-2 uppercase tracking-wide">Surface accessible</p>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded border border-emerald-700" style={{ background: '#10b981' }} />
-            <span className="text-[9px] text-slate-600">≥40m² • T2/T3+</span>
+      {/* Légende — compacte, fond glass */}
+      <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 px-3 py-2 z-[5]">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: '#059669' }} />
+            <span className="text-[9px] text-slate-600 font-medium">≥80m²</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded border border-amber-700" style={{ background: '#f59e0b' }} />
-            <span className="text-[9px] text-slate-600">25-40m² • Studio/T1</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: '#34d399' }} />
+            <span className="text-[9px] text-slate-600 font-medium">40-80m²</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded border border-red-700" style={{ background: '#ef4444' }} />
-            <span className="text-[9px] text-slate-600">&lt;25m² • Difficile</span>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: '#fbbf24' }} />
+            <span className="text-[9px] text-slate-600 font-medium">25-40m²</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ background: '#f87171' }} />
+            <span className="text-[9px] text-slate-600 font-medium">&lt;25m²</span>
           </div>
         </div>
       </div>
 
+      {/* Bouton Explorer la carte */}
+      {onExplore && (
+        <button
+          type="button"
+          onClick={onExplore}
+          className="absolute top-3 left-3 flex items-center gap-1.5 bg-gradient-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.02] active:scale-[0.97] transition-all z-[5] cursor-pointer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+          Explorer la carte
+        </button>
+      )}
+
       {/* Source */}
-      <div className="absolute bottom-3 right-3 text-[9px] text-slate-400 bg-white/80 px-2 py-1 rounded z-[1000]">
-        France-GeoJSON • Leaflet
+      <div className="absolute bottom-3 right-3 text-[8px] text-slate-400 bg-white/70 px-1.5 py-0.5 rounded z-[5]">
+        DVF • France-GeoJSON
       </div>
 
-      {/* CSS pour tooltips */}
+      {/* CSS pour tooltips et labels */}
       <style jsx global>{`
-        .dept-tooltip-custom {
-          background: white !important;
-          border: 1px solid #e2e8f0 !important;
-          border-radius: 6px !important;
-          padding: 6px 10px !important;
-          box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1) !important;
-        }
-        .dept-tooltip-custom::before {
-          display: none !important;
-        }
         .leaflet-container {
           font-family: inherit !important;
+          z-index: 0 !important;
+        }
+        .leaflet-pane {
+          z-index: 0 !important;
+        }
+        .leaflet-tile-pane {
+          z-index: 0 !important;
+        }
+        .leaflet-overlay-pane {
+          z-index: 1 !important;
+        }
+        .leaflet-marker-pane,
+        .leaflet-tooltip-pane,
+        .leaflet-popup-pane,
+        .leaflet-shadow-pane {
+          z-index: 2 !important;
+        }
+        .leaflet-top,
+        .leaflet-bottom {
+          z-index: 3 !important;
+        }
+        .dept-label {
+          background: none !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .dept-tooltip {
+          background: white !important;
+          border-radius: 10px !important;
+          border: 1px solid #e2e8f0 !important;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06) !important;
+          padding: 8px 12px !important;
+        }
+        .dept-tooltip::before {
+          border-top-color: white !important;
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.15s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

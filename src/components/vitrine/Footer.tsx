@@ -68,10 +68,16 @@ const FOOTER_LEGAL = [
  * Footer corporate du site vitrine AQUIZ
  */
 export function Footer() {
+  const pathname = usePathname()
+
+  // Masquer la bande CTA sur les pages outils (simulateur, carte, aides, résultats)
+  const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats')
+
   return (
     <footer className="bg-[#111111] text-white">
 
-      {/* ─── Bande CTA verte ─── */}
+      {/* ─── Bande CTA verte (masquée sur les pages outils) ─── */}
+      {!isToolPage && (
       <div className="bg-aquiz-green">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-sm font-semibold text-white">
@@ -96,6 +102,7 @@ export function Footer() {
           </div>
         </div>
       </div>
+      )}
 
       {/* ─── Contenu principal ─── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-14">

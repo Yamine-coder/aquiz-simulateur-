@@ -8,11 +8,14 @@ import {
     ArrowRight,
     CheckCircle,
     Clock,
+    CreditCard,
     Download,
+    Info,
     MapPin,
     Percent,
     Phone,
-    PiggyBank
+    PiggyBank,
+    Shield
 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -34,7 +37,7 @@ import {
     SelectValue
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
 import { useDVFData } from '@/hooks/useDVFData'
@@ -84,7 +87,7 @@ function ModeAPageContent() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
   const { 
-    setMode, setProfil, setParametresModeA, setResultats, 
+    setMode, setProfil, setParametresModeA, setResultats, reset: resetStore,
     resultats: storedResultats, 
     profil: storedProfil,
     parametresModeA: storedParametresModeA,
@@ -93,10 +96,11 @@ function ModeAPageContent() {
   } = useSimulateurStore()
   const { simulations, isLoaded, save, getPending } = useSimulationSave()
   
-  // Fonction setEtape qui synchronise local + store
+  // Fonction setEtape qui synchronise local + store + scroll haut
   const setEtape = useCallback((newEtape: EtapeId) => {
     setEtapeLocal(newEtape)
     setEtapeStore(getEtapeNumberFromId(newEtape))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [setEtapeStore])
   
   // Flag pour éviter double restauration
@@ -179,6 +183,13 @@ function ModeAPageContent() {
       const sim = simulations.find(s => s.id === restoreId)
       if (sim) { restoreSimulation(sim); setCurrentSaveId(restoreId); return }
     }
+    // Ne pas afficher la modale si l'utilisateur revient d'une page interne (carte, aides…)
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('returning') === '1') {
+      // Nettoyer le param sans recharger
+      window.history.replaceState({}, '', window.location.pathname)
+      return
+    }
     const pending = getPending('A')
     if (pending && pending.profil && pending.profil.salaire1 > 0) {
       setPendingToResume(pending)
@@ -215,7 +226,32 @@ function ModeAPageContent() {
     setPendingToResume(null)
   }, [pendingToResume, restoreSimulation])
 
-  const handleNew = useCallback(() => { setCurrentSaveId(null); setShowResumeModal(false); setPendingToResume(null) }, [])
+  const handleNew = useCallback(() => {
+    // Réinitialiser le store Zustand
+    resetStore()
+    // Réinitialiser le formulaire
+    setValue('situationFoyer', 'celibataire')
+    setValue('nombreEnfants', 0)
+    setValue('salaire1', 0)
+    setValue('salaire2', 0)
+    setValue('autresRevenus', 0)
+    setValue('creditsEnCours', 0)
+    setValue('autresCharges', 0)
+    setValue('mensualiteMax', 0)
+    setValue('dureeAns', 20)
+    setValue('apport', 0)
+    setValue('typeBien', 'ancien')
+    setValue('tauxInteret', 3.5)
+    // Réinitialiser l'état local
+    setAge(30)
+    setStatutProfessionnel('')
+    setCurrentSaveId(null)
+    setEtapeLocal('profil')
+    setHasRestoredFromStore(true) // Empêcher la restauration depuis le store
+    // Fermer la modale
+    setShowResumeModal(false)
+    setPendingToResume(null)
+  }, [resetStore, setValue])
 
   const handleSave = useCallback(() => {
     const isCompleted = etape === 'resultats'
@@ -227,26 +263,35 @@ function ModeAPageContent() {
     setCurrentSaveId(savedSim.id)
   }, [save, currentSaveId, etape, age, statutProfessionnel, situationFoyer, nombreEnfants, salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, mensualiteMax, dureeAns, apport, typeBien, tauxInteret])
 
-  // Mensualité max recommandée - calcul STABLE basé uniquement sur le profil
-  // Tient compte de l'assurance emprunteur pour être cohérent avec le calcul d'endettement
+  // Mensualité max recommandée - calcul EXACT incluant l'assurance
+  // Résolution de : (charges + M + assurance(M)) / revenus = 35%
+  // Avec assurance(M) = (M / facteur) * tauxAssurance / 12
+  // => M * (1 + tauxAssurance / (12 * facteur)) = revenus * 0.35 - charges
   const mensualiteRecommandee = useMemo(() => {
     const revenus = salaire1 + salaire2 + autresRevenus
     const charges = creditsEnCours + autresCharges
     if (revenus <= 0) return 0
     
-    // Calcul avec assurance : on doit résoudre l'équation
-    // (charges + mensualite + assurance) / revenus = 35%
-    // où assurance = (mensualite / facteur) * tauxAssurance / 12
-    // 
-    // Simplification : l'assurance représente environ 2-3% de la mensualité supplémentaire
-    // On applique un coefficient réducteur de ~0.97 pour compenser
-    const maxBrut = revenus * 0.35 - charges
-    const coefficientAssurance = 0.97 // ~3% pour l'assurance
-    const maxNet = Math.round(maxBrut * coefficientAssurance)
+    const tauxMensuel = tauxInteret / 100 / 12
+    const nombreMois = dureeAns * 12
+    const facteur = tauxMensuel > 0 ? tauxMensuel / (1 - Math.pow(1 + tauxMensuel, -nombreMois)) : 0
+    const tauxAssurance = SIMULATEUR_CONFIG.tauxAssuranceMoyen
     
-    // Arrondir à 10€ près pour éviter la fausse précision
-    return Math.max(0, Math.floor(maxNet / 10) * 10)
-  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges])
+    // Coefficient multiplicateur : chaque € de mensualité génère aussi de l'assurance
+    const coeffAssurance = facteur > 0 ? 1 + tauxAssurance / (12 * facteur) : 1
+    
+    const maxBrut = (revenus * 0.35 - charges) / coeffAssurance
+    
+    // Arrondir à 1€ en dessous pour garantir <= 35% tout en reflétant l'impact du taux
+    return Math.max(0, Math.floor(maxBrut))
+  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, tauxInteret, dureeAns])
+
+  // Synchroniser la mensualité max avec la recommandation HCSF
+  useEffect(() => {
+    if (mensualiteRecommandee > 0) {
+      setValue('mensualiteMax', mensualiteRecommandee)
+    }
+  }, [mensualiteRecommandee, setValue])
 
   const calculs = useMemo(() => {
     const revenusMensuelsTotal = salaire1 + salaire2 + autresRevenus
@@ -596,7 +641,7 @@ function ModeAPageContent() {
     drawDataRow('Frais de notaire', fmt(calculs.fraisNotaire) + ' EUR', rightX, rowY, halfWidth)
     rowY += 8
     const tauxColor = calculs.tauxEndettementProjet <= 33 ? C.green : calculs.tauxEndettementProjet <= 35 ? C.orange : C.red
-    drawDataRow('Taux d\'endettement', calculs.tauxEndettementProjet.toFixed(1) + '%', rightX, rowY, halfWidth, tauxColor)
+    drawDataRow('Taux d\'endettement', Math.round(calculs.tauxEndettementProjet) + '%', rightX, rowY, halfWidth, tauxColor)
     rowY += 8
     const ravColor = calculs.resteAVivre >= calculs.resteAVivreMinTotal ? C.green : C.orange
     drawDataRow('Reste a vivre', fmt(calculs.resteAVivre) + ' EUR', rightX, rowY, halfWidth, ravColor)
@@ -867,7 +912,7 @@ function ModeAPageContent() {
     const chargesMensuellesTotal = (data.creditsEnCours || 0) + (data.autresCharges || 0)
     setProfil({ age, statutProfessionnel: (statutProfessionnel || 'cdi') as 'cdi' | 'cdd' | 'fonctionnaire' | 'independant' | 'retraite' | 'autre', situationFoyer: data.situationFoyer, nombreEnfants: data.nombreEnfants, salaire1: data.salaire1, salaire2: data.salaire2 || 0, autresRevenus: data.autresRevenus || 0, creditsEnCours: data.creditsEnCours || 0, autresCharges: data.autresCharges || 0, revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel: revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0 })
     setParametresModeA({ mensualiteMax: data.mensualiteMax, dureeAns: data.dureeAns, apport: data.apport, typeBien: data.typeBien, tauxInteret: data.tauxInteret || 3.5 })
-    setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(data.mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(data.mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet * 10) / 10, resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${calculs.tauxEndettementProjet.toFixed(1)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
+    setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(data.mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(data.mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
     setEtape('resultats')
   }
 
@@ -879,11 +924,11 @@ function ModeAPageContent() {
       const chargesMensuellesTotal = creditsEnCours + autresCharges
       setProfil({ age, statutProfessionnel: (statutProfessionnel || 'cdi') as 'cdi' | 'cdd' | 'fonctionnaire' | 'independant' | 'retraite' | 'autre', situationFoyer, nombreEnfants, salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel: revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0 })
       setParametresModeA({ mensualiteMax, dureeAns, apport, typeBien, tauxInteret })
-      setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet * 10) / 10, resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${calculs.tauxEndettementProjet.toFixed(1)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
+      setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
       // Sauvegarder l'étape 3 dans le store pour pouvoir y revenir
       setEtapeStore(3)
     }
-    router.push('/carte')
+    router.push('/carte?from=simulation')
   }
 
   const etapeActuelleIndex = ETAPES.findIndex(e => e.id === etape)
@@ -894,8 +939,8 @@ function ModeAPageContent() {
     if (targetEtape === 'resultats') return calculs.revenusMensuelsTotal > 0 && mensualiteMax > 0
     return false
   }
-  const goToEtape = (targetEtape: EtapeId) => { if (canGoToEtape(targetEtape)) setEtape(targetEtape) }
-  const goToNextEtape = () => { const nextIndex = etapeActuelleIndex + 1; if (nextIndex < ETAPES.length) { const nextEtape = ETAPES[nextIndex].id; if (canGoToEtape(nextEtape)) setEtape(nextEtape) } }
+  const goToEtape = (targetEtape: EtapeId) => { if (canGoToEtape(targetEtape)) { setEtape(targetEtape) } }
+  const goToNextEtape = () => { const nextIndex = etapeActuelleIndex + 1; if (nextIndex < ETAPES.length) { const nextEtape = ETAPES[nextIndex].id; if (canGoToEtape(nextEtape)) { setEtape(nextEtape) } } }
   const goToPrevEtape = () => { const prevIndex = etapeActuelleIndex - 1; if (prevIndex >= 0) setEtape(ETAPES[prevIndex].id) }
   const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(montant)
 
@@ -905,10 +950,10 @@ function ModeAPageContent() {
         {showResumeModal && pendingToResume && <ResumeModal simulation={pendingToResume} onResume={handleResume} onNew={handleNew} />}
 
         {/* === STEPPER + ACTIONS === */}
-        <div className="border-b border-gray-100">
-          <div className="max-w-5xl mx-auto px-6">
+        <div className="border-b border-aquiz-gray-lighter/60 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Desktop - stepper + save */}
-            <div className="hidden md:flex items-center py-5">
+            <div className="hidden md:flex items-center py-4">
               {ETAPES.map((e, index) => {
                 const isActive = e.id === etape
                 const isPassed = index < etapeActuelleIndex
@@ -923,47 +968,47 @@ function ModeAPageContent() {
                       className={`group flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
                     >
                       <div className={`
-                        w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all
+                        w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
                         ${isActive 
-                          ? 'bg-black text-white shadow-md' 
+                          ? 'bg-aquiz-green text-white shadow-md shadow-aquiz-green/25' 
                           : isPassed 
-                            ? 'bg-black text-white' 
-                            : 'bg-gray-100 text-gray-400'
+                            ? 'bg-aquiz-green/15 text-aquiz-green' 
+                            : 'bg-aquiz-gray-lightest text-aquiz-gray-light'
                         }
                       `}>
-                        {isPassed ? '✓' : index + 1}
+                        {isPassed ? <CheckCircle className="w-4 h-4" /> : index + 1}
                       </div>
-                      <span className={`text-sm font-semibold transition-colors ${
-                        isActive ? 'text-black' : isPassed ? 'text-black' : 'text-gray-400'
+                      <span className={`text-sm font-medium transition-colors ${
+                        isActive ? 'text-aquiz-black' : isPassed ? 'text-aquiz-green' : 'text-aquiz-gray-light'
                       }`}>
                         {e.label}
                       </span>
                     </button>
                     
-                    {/* Connecteur simple */}
+                    {/* Connecteur */}
                     {index < ETAPES.length - 1 && (
                       <div className="flex-1 mx-4">
-                        <div className={`h-[2px] rounded-full transition-all duration-300 ${isPassed ? 'bg-black' : 'bg-gray-200'}`} />
+                        <div className={`h-0.5 rounded-full transition-all duration-300 ${isPassed ? 'bg-aquiz-green/30' : 'bg-aquiz-gray-lighter'}`} />
                       </div>
                     )}
                   </div>
                 )
               })}
-              {/* Save button - inline dans le stepper */}
+              {/* Save button */}
               <div className="shrink-0 ml-4">
                 <SaveButton onSave={handleSave} disabled={salaire1 === 0} />
               </div>
             </div>
             
             {/* Mobile */}
-            <div className="md:hidden py-4 flex items-center justify-between">
+            <div className="md:hidden py-3.5 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-black text-white text-sm font-bold flex items-center justify-center shadow-md">
+                <div className="w-8 h-8 rounded-full bg-aquiz-green text-white text-xs font-bold flex items-center justify-center shadow-md shadow-aquiz-green/25">
                   {etapeActuelleIndex + 1}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">{ETAPES[etapeActuelleIndex].label}</p>
-                  <p className="text-xs text-gray-500">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
+                  <p className="text-sm font-semibold text-aquiz-black">{ETAPES[etapeActuelleIndex].label}</p>
+                  <p className="text-[11px] text-aquiz-gray">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -972,12 +1017,12 @@ function ModeAPageContent() {
                 {ETAPES.map((_, index) => (
                   <div 
                     key={index}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                    className={`h-1 rounded-full transition-all duration-300 ${
                       index < etapeActuelleIndex 
-                        ? 'bg-black w-6' 
+                        ? 'bg-aquiz-green w-5' 
                         : index === etapeActuelleIndex 
-                          ? 'bg-black w-8' 
-                          : 'bg-gray-200 w-6'
+                          ? 'bg-aquiz-green w-7' 
+                          : 'bg-aquiz-gray-lighter w-5'
                     }`}
                   />
                 ))}
@@ -987,7 +1032,7 @@ function ModeAPageContent() {
           </div>
         </div>
 
-        <main className="max-w-5xl mx-auto px-6 py-8">
+        <main className="max-w-5xl mx-auto px-6 py-6">
           <form onSubmit={handleSubmit(onSubmit)}>
             {etape === 'profil' && (
               <div className="animate-fade-in">
@@ -1004,18 +1049,11 @@ function ModeAPageContent() {
                     
                     {/* Section 1: Situation personnelle */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">1</div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">Situation personnelle</h2>
+                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-aquiz-green">1</span>
                         </div>
-                        {/* Clin d'oeil logo - lignes horizontales building en perspective */}
-                        <div className="flex flex-col gap-[2px] items-end opacity-15">
-                          <div className="w-5 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-4 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-3 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-2 h-[2px] bg-aquiz-black rounded-full" />
-                        </div>
+                        <h2 className="font-semibold text-aquiz-black text-sm">Situation personnelle</h2>
                       </div>
                       
                       <div className="p-6">
@@ -1068,15 +1106,15 @@ function ModeAPageContent() {
                                   htmlFor={value}
                                   className={`relative flex items-center justify-center h-10 rounded-lg cursor-pointer transition-all text-sm font-medium border ${
                                     situationFoyer === value 
-                                      ? 'bg-aquiz-black text-white border-aquiz-black' 
+                                      ? 'bg-aquiz-green text-white border-aquiz-green' 
                                       : 'bg-white text-aquiz-gray-dark border-aquiz-gray-lighter hover:border-aquiz-gray-light'
                                   }`}
                                 >
                                   <RadioGroupItem value={value} id={value} className="sr-only" />
                                   {value === 'celibataire' ? 'Seul(e)' : 'En couple'}
                                   {situationFoyer === value && (
-                                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center border border-aquiz-gray-lighter shadow-sm animate-in zoom-in-50 duration-200">
-                                      <CheckCircle className="w-3.5 h-3.5 text-aquiz-black" />
+                                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center border border-aquiz-green/30 shadow-sm animate-in zoom-in-50 duration-200">
+                                      <CheckCircle className="w-3.5 h-3.5 text-aquiz-green" />
                                     </div>
                                   )}
                                 </label>
@@ -1104,17 +1142,11 @@ function ModeAPageContent() {
                     
                     {/* Section 2: Revenus */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-aquiz-gray-dark text-white text-xs font-bold flex items-center justify-center">2</div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">Revenus mensuels nets</h2>
+                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-aquiz-green">2</span>
                         </div>
-                        {/* Clin d'oeil logo - building horizontal */}
-                        <div className="flex flex-col gap-[2px] items-end opacity-15">
-                          <div className="w-4 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-5 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-3 h-[2px] bg-aquiz-black rounded-full" />
-                        </div>
+                        <h2 className="font-semibold text-aquiz-black text-sm">Revenus mensuels nets</h2>
                       </div>
                       
                       <div className="p-5">
@@ -1175,17 +1207,11 @@ function ModeAPageContent() {
                     
                     {/* Section 3: Charges */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-aquiz-gray text-white text-xs font-bold flex items-center justify-center">3</div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">Charges mensuelles</h2>
+                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-aquiz-green">3</span>
                         </div>
-                        {/* Clin d'oeil logo - building horizontal */}
-                        <div className="flex flex-col gap-[2px] items-end opacity-15">
-                          <div className="w-3 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-4 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-5 h-[2px] bg-aquiz-black rounded-full" />
-                        </div>
+                        <h2 className="font-semibold text-aquiz-black text-sm">Charges mensuelles</h2>
                       </div>
                       
                       <div className="p-5">
@@ -1219,7 +1245,7 @@ function ModeAPageContent() {
                               />
                               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-aquiz-gray text-sm">€</span>
                             </div>
-                            <p className="text-xs text-aquiz-gray">Pension, loyer actuel</p>
+                            <p className="text-xs text-aquiz-gray">Pension, crédit auto, etc.</p>
                           </div>
                         </div>
                       </div>
@@ -1229,7 +1255,7 @@ function ModeAPageContent() {
                     <div className="hidden lg:block">
                       <Button 
                         type="button" 
-                        className="w-full bg-aquiz-black hover:bg-aquiz-black-light h-11 text-sm font-semibold rounded-lg transition-all" 
+                        className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 text-sm font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all" 
                         onClick={goToNextEtape} 
                         disabled={calculs.revenusMensuelsTotal === 0}
                       >
@@ -1244,18 +1270,21 @@ function ModeAPageContent() {
                     <div className="sticky top-24 space-y-4">
                       
                       {/* Card Résultat principal */}
-                      <div className="bg-aquiz-gray-lightest rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                        <div className="px-4 py-3 border-b border-aquiz-gray-lighter">
-                          <p className="text-xs text-aquiz-gray uppercase tracking-wider font-medium">Mensualité maximale</p>
+                      <div className="rounded-xl border border-aquiz-green/20 bg-aquiz-green/5 overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-aquiz-green/15">
+                          <p className="text-[11px] text-aquiz-green uppercase tracking-wider font-semibold">Mensualité maximale</p>
                         </div>
                         <div className="px-4 py-4">
                           <p className="text-2xl font-bold text-aquiz-black tracking-tight">
-                            {calculs.revenusMensuelsTotal > 0 
-                              ? `${formatMontant(Math.max(0, calculs.revenusMensuelsTotal * 0.35 - calculs.chargesMensuellesTotal))} €`
+                            {mensualiteRecommandee > 0 
+                              ? `${formatMontant(mensualiteRecommandee)} €`
                               : '— €'
                             }
                             <span className="text-sm font-normal text-aquiz-gray">/mois</span>
                           </p>
+                          {mensualiteRecommandee > 0 && (
+                            <p className="text-[10px] text-aquiz-gray mt-1">Assurance incluse dans le calcul HCSF</p>
+                          )}
                         </div>
                       </div>
                       
@@ -1292,7 +1321,7 @@ function ModeAPageContent() {
                           {calculs.revenusMensuelsTotal > 0 && (
                             <div className="h-1.5 bg-aquiz-gray-lighter rounded-full overflow-hidden">
                               <div 
-                                className={`h-full rounded-full transition-all ${calculs.endettementActuelEleve ? 'bg-aquiz-red' : 'bg-aquiz-gray-dark'}`}
+                                className={`h-full rounded-full transition-all ${calculs.endettementActuelEleve ? 'bg-aquiz-red' : 'bg-aquiz-green'}`}
                                 style={{ width: `${Math.min((calculs.tauxEndettementActuel / 50) * 100, 100)}%` }}
                               />
                             </div>
@@ -1303,29 +1332,45 @@ function ModeAPageContent() {
                         <div className="px-4 py-4 bg-aquiz-gray-lightest">
                           <p className="text-xs text-aquiz-gray uppercase tracking-wider font-medium mb-1">Capacité d&apos;achat estimée</p>
                           <p className="text-lg font-bold text-aquiz-black">
-                            {calculs.revenusMensuelsTotal > 0 
-                              ? `~${formatMontant(Math.max(0, calculs.revenusMensuelsTotal * 0.35 - calculs.chargesMensuellesTotal) * 180)} €`
+                            {mensualiteRecommandee > 0 
+                              ? `~${formatMontant(Math.round(calculs.prixAchatMax))} €`
                               : '— €'
                             }
                           </p>
-                          <p className="text-[10px] text-aquiz-gray mt-0.5">Sur 20 ans à 3.5%</p>
+                          <p className="text-[10px] text-aquiz-gray mt-0.5">Sur {dureeAns} ans à {tauxInteret}%</p>
                         </div>
                       </div>
                       
                       {/* Info HCSF */}
-                      <p className="text-[10px] text-aquiz-gray text-center">
-                        Norme HCSF : 35% d&apos;endettement maximum
-                      </p>
+                      <div className="flex items-center justify-center gap-1 text-[10px] text-aquiz-gray">
+                        <span>Norme HCSF : 35% d&apos;endettement maximum</span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
+                              <Info className="w-3 h-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-72 text-xs leading-relaxed">
+                            <p className="font-semibold mb-1">Haut Conseil de Stabilité Financière</p>
+                            <p>Depuis janvier 2022, le HCSF impose aux banques :</p>
+                            <ul className="mt-1 space-y-0.5">
+                              <li>• <strong>Taux d&apos;endettement max : 35%</strong> des revenus nets (charges + crédit + assurance)</li>
+                              <li>• <strong>Durée max : 25 ans</strong> (27 ans en VEFA / construction)</li>
+                              <li>• Marge de flexibilité : 20% des dossiers peuvent déroger</li>
+                            </ul>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                       
                     </div>
                   </aside>
                 </div>
                 
                 {/* Bouton Mobile */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-20">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
                   <Button 
                     type="button" 
-                    className="w-full bg-aquiz-black hover:bg-gray-800 h-12 font-semibold" 
+                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
                     onClick={goToNextEtape} 
                     disabled={calculs.revenusMensuelsTotal === 0}
                   >
@@ -1355,73 +1400,91 @@ function ModeAPageContent() {
                     
                     {/* Section 1: Budget mensuel */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">1</div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">Budget mensuel</h2>
+                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-aquiz-green">1</span>
                         </div>
-                        <div className="flex flex-col gap-[2px] items-end opacity-15">
-                          <div className="w-5 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-4 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-3 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-2 h-[2px] bg-aquiz-black rounded-full" />
-                        </div>
+                        <h2 className="font-semibold text-aquiz-black text-sm">Budget mensuel</h2>
                       </div>
                       
                       <div className="p-6 space-y-5">
-                        {/* Mensualité max */}
+                        {/* Mensualité max — automatique basée sur le profil */}
                         <div className="space-y-2">
-                          <Label htmlFor="mensualiteMax" className="text-sm font-medium text-aquiz-gray-dark">Mensualité maximale souhaitée *</Label>
-                          <div className="relative">
-                            <Input 
-                              id="mensualiteMax" 
-                              type="number" 
-                              placeholder="Ex: 1200" 
-                              {...register('mensualiteMax', { valueAsNumber: true })} 
-                              className="h-11 bg-white border-aquiz-gray-lighter pr-16" 
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray text-sm">€/mois</span>
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-aquiz-gray-dark">Mensualité maximale</Label>
+                            <div className="flex items-center gap-1.5 text-[10px] text-aquiz-gray">
+                              <Shield className="w-3 h-3" />
+                              Norme HCSF
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
+                                    <Info className="w-3 h-3" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-72 text-xs leading-relaxed">
+                                  <p className="font-semibold mb-1">Haut Conseil de Stabilité Financière</p>
+                                  <p>Depuis janvier 2022, le HCSF impose aux banques :</p>
+                                  <ul className="mt-1 space-y-0.5">
+                                    <li>• <strong>Taux d&apos;endettement max : 35%</strong> des revenus nets</li>
+                                    <li>• <strong>Durée max : 25 ans</strong> (27 ans en VEFA)</li>
+                                    <li>• 20% des dossiers peuvent déroger</li>
+                                  </ul>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
                           </div>
-                          {errors.mensualiteMax && <p className="text-sm text-red-500">{errors.mensualiteMax.message}</p>}
-                          
-                          {/* Recommandation inline - valeur stable basée uniquement sur le profil */}
-                          <div className="flex items-center gap-2 px-3 py-2 bg-aquiz-gray-lightest rounded-lg">
-                            <span className="text-xs text-aquiz-gray">💡 Max selon votre profil :</span>
-                            <span className="text-xs font-semibold text-aquiz-black">~{formatMontant(mensualiteRecommandee)} €/mois</span>
-                            <span className="text-[10px] text-aquiz-gray">(norme HCSF 35%)</span>
+                          <div className="relative overflow-hidden rounded-xl border border-aquiz-green/20 bg-gradient-to-r from-aquiz-green/5 to-transparent">
+                            <div className="flex items-center gap-4 p-4">
+                              <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                                <CreditCard className="w-5 h-5 text-aquiz-green" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-2xl font-bold text-aquiz-black tracking-tight">
+                                  {formatMontant(mensualiteRecommandee)} €
+                                  <span className="text-sm font-normal text-aquiz-gray ml-1">/mois</span>
+                                </p>
+                                <p className="text-xs text-aquiz-gray mt-0.5">Assurance incluse dans le calcul HCSF ({dureeAns} ans à {tauxInteret.toFixed(1)}%)</p>
+                              </div>
+                            </div>
+                            <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-aquiz-green/5 to-transparent" />
                           </div>
                         </div>
                         
-                        {/* Apport */}
-                        <div className="space-y-2">
-                          <Label htmlFor="apportSimu" className="text-sm font-medium text-aquiz-gray-dark">Apport personnel</Label>
+                        {/* Apport personnel — mis en avant */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="apportSimu" className="text-sm font-medium text-aquiz-gray-dark flex items-center gap-2">
+                              <PiggyBank className="w-4 h-4 text-aquiz-green" />
+                              Apport personnel
+                            </Label>
+                            {apport > 0 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-green/10 text-aquiz-green font-medium">
+                                {((apport / (apport + (mensualiteRecommandee > 0 ? mensualiteRecommandee * dureeAns * 12 : 1))) * 100).toFixed(0)}% du projet
+                              </span>
+                            )}
+                          </div>
                           <div className="relative">
                             <Input 
                               id="apportSimu" 
                               type="number" 
-                              placeholder="Ex: 30000" 
+                              placeholder="Ex: 30 000" 
                               {...register('apport', { valueAsNumber: true })} 
-                              className="h-11 bg-white border-aquiz-gray-lighter pr-10" 
+                              className="h-12 text-base bg-white border-aquiz-gray-lighter pr-10 rounded-xl font-medium placeholder:text-aquiz-gray-light focus:border-aquiz-green focus:ring-aquiz-green/20" 
                             />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray text-sm">€</span>
+                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray font-medium">€</span>
                           </div>
+                          <p className="text-xs text-aquiz-gray">Épargne, donations, héritage... Plus votre apport est élevé, plus votre capacité d&apos;achat augmente.</p>
                         </div>
                       </div>
                     </div>
                     
                     {/* Section 2: Paramètres du prêt */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">2</div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
+                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                          <span className="text-[10px] font-bold text-aquiz-green">2</span>
                         </div>
-                        <div className="flex flex-col gap-[2px] items-end opacity-15">
-                          <div className="w-5 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-4 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-3 h-[2px] bg-aquiz-black rounded-full" />
-                          <div className="w-2 h-[2px] bg-aquiz-black rounded-full" />
-                        </div>
+                        <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
                       </div>
                       
                       <div className="p-6 space-y-6">
@@ -1447,72 +1510,90 @@ function ModeAPageContent() {
                           </div>
                         </div>
                         
-                        {/* Type de bien */}
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium text-aquiz-gray-dark">Type de bien</Label>
-                          <RadioGroup value={typeBien} onValueChange={(value) => setValue('typeBien', value as 'neuf' | 'ancien')}>
-                            <div className="grid grid-cols-2 gap-3">
-                              <label 
-                                htmlFor="ancien" 
-                                className={`relative flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                  typeBien === 'ancien' 
-                                    ? 'border-aquiz-black bg-aquiz-gray-lightest' 
-                                    : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+                        {/* Taux d'intérêt — mis en avant */}
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5">
+                            <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt estimé</Label>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
+                                  <Info className="w-4 h-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="max-w-72 text-xs leading-relaxed">
+                                <p className="font-semibold mb-1.5">Taux moyens constatés (fév. 2025)</p>
+                                <ul className="space-y-1">
+                                  <li><strong>3.0%</strong> — Profil premium : CDI cadre, revenus élevés, apport 20%+</li>
+                                  <li><strong>3.2%</strong> — Très bon profil : CDI stable, bon apport</li>
+                                  <li><strong>3.5%</strong> — Taux moyen du marché (tous profils)</li>
+                                  <li><strong>3.8%</strong> — Profil standard : peu d&apos;apport ou CDD</li>
+                                  <li><strong>4.0%</strong> — Profil à risques : intérimaire, découverts</li>
+                                </ul>
+                                <p className="mt-1.5 text-aquiz-gray">Source : Observatoire Crédit Logement / CSA</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                          <div className="grid grid-cols-5 gap-2">
+                            {[
+                              { value: '3.0', label: '3.0%', sub: 'Excellent' },
+                              { value: '3.2', label: '3.2%', sub: 'Très bon' },
+                              { value: '3.5', label: '3.5%', sub: 'Moyen' },
+                              { value: '3.8', label: '3.8%', sub: 'Standard' },
+                              { value: '4.0', label: '4.0%', sub: 'Risque' },
+                            ].map((t) => (
+                              <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setValue('tauxInteret', parseFloat(t.value))}
+                                className={`relative p-3 rounded-xl border-2 text-center transition-all ${
+                                  tauxInteret.toFixed(1) === t.value
+                                    ? 'border-aquiz-green bg-aquiz-green/5 shadow-sm'
+                                    : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light bg-white'
                                 }`}
                               >
-                                <RadioGroupItem value="ancien" id="ancien" className="sr-only" />
-                                <div className="flex-1">
-                                  <span className="font-medium text-sm text-aquiz-black">Ancien</span>
-                                  <span className="block text-xs text-aquiz-gray mt-0.5">Frais notaire ~8%</span>
-                                </div>
-                                {typeBien === 'ancien' && (
-                                  <div className="absolute top-2 right-2 w-5 h-5 bg-aquiz-black rounded-full flex items-center justify-center">
-                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <span className="block text-base font-bold text-aquiz-black">{t.label}</span>
+                                <span className="block text-[10px] text-aquiz-gray mt-0.5">{t.sub}</span>
+                                {tauxInteret.toFixed(1) === t.value && (
+                                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-aquiz-green rounded-full flex items-center justify-center">
+                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
                                   </div>
                                 )}
-                              </label>
-                              <label 
-                                htmlFor="neuf" 
-                                className={`relative flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                                  typeBien === 'neuf' 
-                                    ? 'border-aquiz-black bg-aquiz-gray-lightest' 
-                                    : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
-                                }`}
-                              >
-                                <RadioGroupItem value="neuf" id="neuf" className="sr-only" />
-                                <div className="flex-1">
-                                  <span className="font-medium text-sm text-aquiz-black">Neuf / VEFA</span>
-                                  <span className="block text-xs text-aquiz-gray mt-0.5">Frais notaire ~2.5%</span>
-                                </div>
-                                {typeBien === 'neuf' && (
-                                  <div className="absolute top-2 right-2 w-5 h-5 bg-aquiz-black rounded-full flex items-center justify-center">
-                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </label>
-                            </div>
-                          </RadioGroup>
+                              </button>
+                            ))}
+                          </div>
                         </div>
                         
-                        {/* Taux d'intérêt */}
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt estimé</Label>
-                          <Select value={String(tauxInteret)} onValueChange={(value) => setValue('tauxInteret', parseFloat(value))}>
-                            <SelectTrigger className="h-11 bg-white border-aquiz-gray-lighter">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="3.0">3.0% — Excellent dossier</SelectItem>
-                              <SelectItem value="3.2">3.2% — Très bon dossier</SelectItem>
-                              <SelectItem value="3.5">3.5% — Taux moyen 2025</SelectItem>
-                              <SelectItem value="3.8">3.8% — Dossier standard</SelectItem>
-                              <SelectItem value="4.0">4.0% — Dossier avec risques</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        {/* Type de bien — compact inline */}
+                        <div className="flex items-center gap-4">
+                          <Label className="text-sm font-medium text-aquiz-gray-dark whitespace-nowrap">Type de bien</Label>
+                          <RadioGroup value={typeBien} onValueChange={(value) => setValue('typeBien', value as 'neuf' | 'ancien')} className="flex gap-2 flex-1">
+                            <label 
+                              htmlFor="ancien" 
+                              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
+                                typeBien === 'ancien' 
+                                  ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-medium' 
+                                  : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
+                              }`}
+                            >
+                              <RadioGroupItem value="ancien" id="ancien" className="sr-only" />
+                              <span className="text-sm">Ancien</span>
+                              <span className="text-[10px] text-aquiz-gray">(~8%)</span>
+                            </label>
+                            <label 
+                              htmlFor="neuf" 
+                              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
+                                typeBien === 'neuf' 
+                                  ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-medium' 
+                                  : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
+                              }`}
+                            >
+                              <RadioGroupItem value="neuf" id="neuf" className="sr-only" />
+                              <span className="text-sm">Neuf / VEFA</span>
+                              <span className="text-[10px] text-aquiz-gray">(~2.5%)</span>
+                            </label>
+                          </RadioGroup>
                         </div>
                       </div>
                     </div>
@@ -1528,7 +1609,7 @@ function ModeAPageContent() {
                             <p className="font-semibold text-red-700 text-sm">Projet non finançable en l&apos;état</p>
                             <p className="text-xs text-red-600 mt-1">
                               {calculs.depasseEndettement 
-                                ? `Taux d'endettement trop élevé (${calculs.tauxEndettementProjet.toFixed(1)}% > 35%). Réduisez la mensualité.`
+                                ? `Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%). Réduisez la mensualité.`
                                 : `Reste à vivre insuffisant (${formatMontant(calculs.resteAVivre)}€ < ${formatMontant(calculs.resteAVivreMinTotal)}€ requis).`
                               }
                             </p>
@@ -1541,7 +1622,7 @@ function ModeAPageContent() {
                     <div className="hidden lg:block">
                       <Button 
                         type="button" 
-                        className="w-full bg-aquiz-black hover:bg-aquiz-black-light h-11 text-sm font-semibold rounded-lg transition-all" 
+                        className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 text-sm font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all" 
                         onClick={goToNextEtape} 
                         disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
                       >
@@ -1555,109 +1636,128 @@ function ModeAPageContent() {
                   <aside className="hidden lg:block">
                     <div className="sticky top-24 space-y-4">
                       
-                      {/* Card Résultat principal */}
-                      <div className="bg-aquiz-gray-lightest rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                        <div className="px-4 py-3 border-b border-aquiz-gray-lighter">
-                          <p className="text-xs text-aquiz-gray uppercase tracking-wider font-medium">Prix d&apos;achat maximum</p>
-                        </div>
-                        <div className="px-4 py-4">
-                          <p className="text-2xl font-bold text-aquiz-black tracking-tight">
+                      {/* Card Résultat principal — hero */}
+                      <div className="rounded-2xl overflow-hidden border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/5">
+                        <div className="p-5">
+                          <p className="text-[10px] text-aquiz-green uppercase tracking-widest font-semibold mb-3 flex items-center gap-1.5">
+                            <CheckCircle className="w-3 h-3" />
+                            Prix d&apos;achat maximum
+                          </p>
+                          <p className="text-3xl font-bold text-aquiz-black tracking-tight">
                             {mensualiteMax > 0 
                               ? `${formatMontant(calculs.prixAchatMax)} €`
                               : '— €'
                             }
                           </p>
                           {mensualiteMax > 0 && (
-                            <p className="text-xs text-aquiz-gray mt-1">
-                              Dont {formatMontant(calculs.fraisNotaire)} € de frais de notaire
+                            <p className="text-xs text-aquiz-gray mt-1.5">
+                              Dont {formatMontant(calculs.fraisNotaire)} € de frais de notaire ({typeBien === 'neuf' ? '~2.5%' : '~8%'})
                             </p>
                           )}
                         </div>
+                        {mensualiteRecommandee > 0 && (
+                          <div className="mx-5 mb-4 px-3 py-2.5 rounded-xl bg-aquiz-green/5 border border-aquiz-green/10">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Mensualité</p>
+                                <p className="text-lg font-bold text-aquiz-black">{formatMontant(mensualiteRecommandee)} €<span className="text-xs font-normal text-aquiz-gray">/mois</span></p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-aquiz-gray">sur <span className="font-semibold text-aquiz-black">{dureeAns} ans</span> à <span className="font-semibold text-aquiz-black">{tauxInteret.toFixed(1)}%</span></p>
+                                <p className="text-[10px] text-aquiz-gray mt-0.5">Assurance incluse dans le calcul HCSF</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {mensualiteRecommandee > 0 && (
+                          <div className="grid grid-cols-2 border-t border-aquiz-green/10">
+                            <div className="p-3 text-center border-r border-aquiz-green/10">
+                              <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Emprunt</p>
+                              <p className="text-sm font-bold text-aquiz-black mt-0.5">{formatMontant(calculs.capitalEmpruntable)} €</p>
+                            </div>
+                            <div className="p-3 text-center">
+                              <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Apport</p>
+                              <p className="text-sm font-bold text-aquiz-black mt-0.5">{formatMontant(apport)} €</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       
-                      {/* Card Détails */}
-                      <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                        {/* Capital empruntable */}
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-aquiz-gray-lighter">
-                          <span className="text-sm text-aquiz-gray">Capital empruntable</span>
-                          <span className="text-sm font-semibold text-aquiz-black">
-                            {mensualiteMax > 0 ? `${formatMontant(calculs.capitalEmpruntable)} €` : '—'}
-                          </span>
+                      {/* Card Indicateurs santé */}
+                      <div className="bg-white rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
+                        <div className="px-4 py-2.5 border-b border-aquiz-gray-lighter/60 bg-aquiz-gray-lightest/50">
+                          <p className="text-[10px] text-aquiz-gray uppercase tracking-wider font-medium">Indicateurs de faisabilité</p>
                         </div>
                         
-                        {/* Apport */}
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-aquiz-gray-lighter">
-                          <span className="text-sm text-aquiz-gray">+ Apport</span>
-                          <span className="text-sm font-semibold text-aquiz-black">{formatMontant(apport)} €</span>
-                        </div>
-                        
-                        {/* Taux endettement projet */}
-                        <div className="px-4 py-3 border-b border-aquiz-gray-lighter">
+                        {/* Taux endettement */}
+                        <div className="p-4 border-b border-aquiz-gray-lighter">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-aquiz-gray">Taux d&apos;endettement</span>
-                            <span className={`text-sm font-semibold ${
+                            <div className="flex items-center gap-1.5">
+                              <Percent className="w-3.5 h-3.5 text-aquiz-gray" />
+                              <span className="text-sm text-aquiz-gray">Endettement</span>
+                            </div>
+                            <span className={`text-sm font-bold px-2 py-0.5 rounded-md ${
                               mensualiteMax === 0 
                                 ? 'text-aquiz-gray-light' 
                                 : calculs.depasseEndettement 
-                                  ? 'text-red-500' 
+                                  ? 'text-red-600 bg-red-50' 
                                   : calculs.tauxEndettementProjet > 31.5 
-                                    ? 'text-amber-500'
-                                    : 'text-aquiz-green'
+                                    ? 'text-amber-600 bg-amber-50'
+                                    : 'text-aquiz-green bg-aquiz-green/10'
                             }`}>
-                              {mensualiteMax > 0 ? `${calculs.tauxEndettementProjet.toFixed(1)}%` : '—'}
+                              {mensualiteMax > 0 ? `${Math.round(calculs.tauxEndettementProjet)}%` : '—'}
                             </span>
                           </div>
                           {mensualiteMax > 0 && (
-                            <div className="h-1.5 bg-aquiz-gray-lighter rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all ${
-                                  calculs.depasseEndettement 
-                                    ? 'bg-red-500' 
-                                    : calculs.tauxEndettementProjet > 31.5 
-                                      ? 'bg-amber-500' 
-                                      : 'bg-aquiz-green'
-                                }`}
-                                style={{ width: `${Math.min((calculs.tauxEndettementProjet / 40) * 100, 100)}%` }}
-                              />
-                            </div>
+                            <>
+                              <div className="relative h-2 bg-aquiz-gray-lighter rounded-full overflow-hidden">
+                                <div 
+                                  className={`absolute inset-y-0 left-0 rounded-full transition-all ${
+                                    calculs.depasseEndettement 
+                                      ? 'bg-red-500' 
+                                      : calculs.tauxEndettementProjet > 31.5 
+                                        ? 'bg-amber-400' 
+                                        : 'bg-aquiz-green'
+                                  }`}
+                                  style={{ width: `${Math.min((calculs.tauxEndettementProjet / 35) * 100, 100)}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between mt-1">
+                                <span className="text-[9px] text-aquiz-gray">0%</span>
+                                <span className={`text-[9px] font-medium ${calculs.depasseEndettement ? 'text-red-500' : 'text-aquiz-gray'}`}>35% max HCSF</span>
+                              </div>
+                            </>
                           )}
-                          <div className="flex justify-between text-[10px] mt-1">
-                            <span className="text-aquiz-gray">0%</span>
-                            <span className="text-red-500">35% max</span>
-                          </div>
                         </div>
                         
                         {/* Reste à vivre */}
-                        <div className="px-4 py-3 border-b border-aquiz-gray-lighter">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-aquiz-gray">Reste à vivre</span>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-semibold ${
-                                mensualiteMax === 0 
-                                  ? 'text-aquiz-gray-light' 
-                                  : calculs.niveauResteAVivre === 'ok' 
-                                    ? 'text-aquiz-green' 
-                                    : calculs.niveauResteAVivre === 'limite' 
-                                      ? 'text-amber-500' 
-                                      : 'text-red-500'
-                              }`}>
-                                {mensualiteMax > 0 ? `${formatMontant(calculs.resteAVivre)} €` : '—'}
-                              </span>
-                              {mensualiteMax > 0 && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                  calculs.niveauResteAVivre === 'ok' 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : calculs.niveauResteAVivre === 'limite' 
-                                      ? 'bg-amber-100 text-amber-700' 
-                                      : 'bg-red-100 text-red-700'
-                                }`}>
-                                  {calculs.niveauResteAVivre === 'ok' ? '✓' : calculs.niveauResteAVivre === 'limite' ? '⚠' : '✕'}
-                                </span>
-                              )}
+                        <div className="p-4">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <Shield className="w-3.5 h-3.5 text-aquiz-gray" />
+                              <span className="text-sm text-aquiz-gray">Reste à vivre</span>
                             </div>
+                            <span className={`text-sm font-bold px-2 py-0.5 rounded-md ${
+                              mensualiteMax === 0 
+                                ? 'text-aquiz-gray-light' 
+                                : calculs.niveauResteAVivre === 'ok' 
+                                  ? 'text-aquiz-green bg-aquiz-green/10' 
+                                  : calculs.niveauResteAVivre === 'limite' 
+                                    ? 'text-amber-600 bg-amber-50' 
+                                    : 'text-red-600 bg-red-50'
+                            }`}>
+                              {mensualiteMax > 0 ? `${formatMontant(calculs.resteAVivre)} €` : '—'}
+                            </span>
                           </div>
                           {mensualiteMax > 0 && (
-                            <p className="text-[10px] text-aquiz-gray mt-1">Min requis : {formatMontant(calculs.resteAVivreMinTotal)} €/mois</p>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-aquiz-gray">Min requis : {formatMontant(calculs.resteAVivreMinTotal)} €/mois</span>
+                              <span className={`text-[10px] font-medium ${
+                                calculs.niveauResteAVivre === 'ok' ? 'text-aquiz-green' : calculs.niveauResteAVivre === 'limite' ? 'text-amber-500' : 'text-red-500'
+                              }`}>
+                                {calculs.niveauResteAVivre === 'ok' ? 'Confortable' : calculs.niveauResteAVivre === 'limite' ? 'Limite' : 'Insuffisant'}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1667,10 +1767,10 @@ function ModeAPageContent() {
                 </div>
                 
                 {/* Bouton Mobile */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 z-20">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
                   <Button 
                     type="button" 
-                    className="w-full bg-aquiz-black hover:bg-gray-800 h-12 font-semibold" 
+                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
                     onClick={goToNextEtape} 
                     disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
                   >
@@ -1684,72 +1784,35 @@ function ModeAPageContent() {
 
             {etape === 'resultats' && (
               <div className="animate-fade-in -mx-4 sm:mx-0">
-                
-                {/* HERO - Budget (encadré, cohérent avec la page) */}
-                <div className="px-4 sm:px-0 mb-4">
-                  <div className="bg-white rounded-2xl shadow-sm border border-aquiz-gray-lighter p-4 sm:p-5">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] sm:text-xs text-aquiz-gray uppercase tracking-wide font-medium mb-0.5">Budget total estimé</p>
-                        <p className="text-2xl sm:text-3xl font-bold text-aquiz-black tabular-nums">{formatMontant(calculs.prixAchatMax)} €</p>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium ${!calculs.depasseEndettement ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'}`}>
-                          {!calculs.depasseEndettement ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                          <span className="hidden sm:inline">{!calculs.depasseEndettement ? 'Finançable' : 'Non finançable'}</span>
-                        </div>
-                        <button 
-                          type="button"
-                          onClick={generatePDF}
-                          className="w-8 h-8 flex items-center justify-center text-aquiz-gray hover:text-aquiz-black transition-colors hover:bg-aquiz-gray-lightest rounded-lg border border-aquiz-gray-lighter"
-                          title="Télécharger PDF"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 <div className="px-4 sm:px-0 space-y-4">
                   
                   {/* CARTE IDF INTERACTIVE - EN PREMIER (Above the fold) */}
                   <div className="bg-white rounded-2xl shadow-sm border border-aquiz-gray-lighter overflow-hidden">
-                    {/* Header */}
-                    <div className="px-5 py-4 border-b border-aquiz-gray-lighter">
+                    {/* Header compact */}
+                    <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-100 to-green-50 flex items-center justify-center border border-emerald-200">
-                            <MapPin className="w-5 h-5 text-aquiz-green" />
+                          <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                            <MapPin className="w-4 h-4 text-aquiz-green" />
                           </div>
                           <div>
-                            <h2 className="font-bold text-aquiz-black">Carte des surfaces accessibles</h2>
-                            <p className="text-xs text-aquiz-gray flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-medium">DVF</span>
-                              Île-de-France • Budget {formatMontant(calculs.prixAchatMax)} €
+                            <h2 className="font-bold text-aquiz-black text-sm">Carte des surfaces accessibles</h2>
+                            <p className="text-[11px] text-aquiz-gray">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-semibold mr-1">DVF 2025</span>
+                              Budget {formatMontant(calculs.prixAchatMax)} €
                             </p>
                           </div>
                         </div>
-                        {/* Mini légende */}
-                        <div className="hidden sm:flex items-center gap-2 text-[10px]">
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-emerald-500" />
-                            <span className="text-slate-500">≥40m²</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-amber-400" />
-                            <span className="text-slate-500">25-40m²</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded bg-rose-400" />
-                            <span className="text-slate-500">&lt;25m²</span>
-                          </div>
+                        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${!calculs.depasseEndettement ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'}`}>
+                          {!calculs.depasseEndettement ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                          {!calculs.depasseEndettement ? 'Finançable' : 'Non finançable'}
                         </div>
                       </div>
                     </div>
                     
                     {/* Carte Leaflet interactive */}
-                    <MiniCarteIDF departements={calculs.apercuSurfaces} />
+                    <MiniCarteIDF departements={calculs.apercuSurfaces} onExplore={saveAndGoToCarte} />
                     
                     {/* Statistiques rapides */}
                     <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-white border-t border-slate-100">
@@ -1763,7 +1826,7 @@ function ModeAPageContent() {
                           </div>
                         </div>
                         <div className="text-slate-500">
-                          <span className="font-semibold text-emerald-600">{calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)}</span> opportunités
+                          <span className="font-semibold text-emerald-600">{calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)}</span> communes accessibles
                         </div>
                       </div>
                     </div>
@@ -1796,29 +1859,24 @@ function ModeAPageContent() {
                                 (zone.surface || 0) >= 25 ? 'text-amber-700' : 'text-slate-600'
                               }`}>jusqu&apos;à {zone.surface} m²</p>
                               {(zone.nbOpportunites || 0) > 0 && (
-                                <p className="text-[9px] text-emerald-600 font-medium">{zone.nbOpportunites} opportunité{(zone.nbOpportunites || 0) > 1 ? 's' : ''}</p>
+                                <p className="text-[9px] text-emerald-600 font-medium">{zone.nbOpportunites} commune{(zone.nbOpportunites || 0) > 1 ? 's' : ''} accessible{(zone.nbOpportunites || 0) > 1 ? 's' : ''}</p>
                               )}
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
+
+                    {/* CTA Explorer — pleine largeur, vert, en bas de la carte */}
+                    <div className="px-4 pb-4 pt-1">
+                      <button type="button" onClick={saveAndGoToCarte} className="w-full flex items-center justify-center gap-2.5 py-3 bg-gradient-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white rounded-xl shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.01] active:scale-[0.98] transition-all group cursor-pointer">
+                        <MapPin className="w-4.5 h-4.5 group-hover:animate-bounce" />
+                        <span className="text-sm font-bold tracking-tight">Explorer la carte interactive</span>
+                        <span className="text-xs text-white/70 font-medium hidden sm:inline">— {calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)} communes, PTZ, prix au m²</span>
+                        <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </div>
                     
-                    {/* CTA Explorer */}
-                    <button type="button" onClick={saveAndGoToCarte} className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-r from-slate-50 to-white hover:from-aquiz-green/10 hover:to-aquiz-green/5 transition-all border-t border-slate-100 group">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-aquiz-black group-hover:bg-aquiz-green flex items-center justify-center shadow-lg transition-colors">
-                          <MapPin className="w-5 h-5 text-white" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-sm font-bold text-aquiz-black">Explorer la carte interactive</p>
-                          <p className="text-xs text-aquiz-gray">+100 communes détaillées • Aides PTZ, PAS...</p>
-                        </div>
-                      </div>
-                      <div className="w-8 h-8 rounded-lg bg-white shadow-sm border border-slate-200 flex items-center justify-center group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-colors">
-                        <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
-                      </div>
-                    </button>
                   </div>
 
                   {/* SCORE + INDICATEURS */}
@@ -1869,7 +1927,7 @@ function ModeAPageContent() {
                           {!calculs.depasseEndettement ? <CheckCircle className="w-3.5 h-3.5 text-aquiz-green ml-auto" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500 ml-auto" />}
                         </div>
                         <p className={`text-2xl font-bold ${!calculs.depasseEndettement ? 'text-aquiz-black' : 'text-red-500'}`}>
-                          {calculs.tauxEndettementProjet.toFixed(1)}%
+                          {Math.round(calculs.tauxEndettementProjet)}%
                         </p>
                         <p className="text-[10px] text-aquiz-gray mt-0.5">Maximum autorisé : 35%</p>
                       </div>
@@ -1899,11 +1957,11 @@ function ModeAPageContent() {
                             <Clock className="w-4 h-4 text-aquiz-gray" />
                           </div>
                           <div>
-                            <p className="text-sm text-aquiz-gray">Mensualité totale</p>
-                            <p className="text-[10px] text-aquiz-gray/70">Sur {dureeAns} ans à {tauxInteret}%</p>
+                            <p className="text-sm text-aquiz-gray">Mensualité</p>
+                            <p className="text-[10px] text-aquiz-gray/70">Sur {dureeAns} ans à {tauxInteret.toFixed(1)}%</p>
                           </div>
                         </div>
-                        <p className="text-sm font-semibold text-aquiz-black">{formatMontant(mensualiteMax)} €/mois</p>
+                        <p className="text-sm font-semibold text-aquiz-black">{formatMontant(mensualiteRecommandee)} €/mois</p>
                       </div>
                       <div className="px-5 py-3.5 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -1995,6 +2053,30 @@ function ModeAPageContent() {
                       </div>
                     </div>
                   )}
+
+                  {/* CTA Télécharger PDF — consécration du projet */}
+                  <div className="relative overflow-hidden rounded-2xl border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/10">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-aquiz-green/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-aquiz-green/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                    <div className="relative p-6 sm:p-8 text-center">
+                      <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-4">
+                        <Download className="w-7 h-7 text-aquiz-green" />
+                      </div>
+                      <h3 className="text-lg font-bold text-aquiz-black mb-1">Votre rapport de simulation</h3>
+                      <p className="text-sm text-aquiz-gray mb-5 max-w-md mx-auto">
+                        Téléchargez votre étude complète au format PDF : budget, capacité d&apos;emprunt, conseils personnalisés et opportunités géographiques.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={generatePDF}
+                        className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all hover:shadow-lg hover:shadow-aquiz-green/30 hover:-translate-y-0.5"
+                      >
+                        <Download className="w-5 h-5" />
+                        Télécharger mon rapport PDF
+                      </button>
+                      <p className="text-[10px] text-aquiz-gray mt-3">Gratuit • Aucune inscription requise</p>
+                    </div>
+                  </div>
 
                   {/* Disclaimer */}
                   <p className="text-[10px] text-aquiz-gray text-center pt-2">

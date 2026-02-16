@@ -1,17 +1,17 @@
 'use client'
 
 import {
-    AlertTriangle,
-    ArrowLeft,
-    ArrowRight,
-    Building,
-    CheckCircle,
-    Home,
-    Info,
-    MapPin,
-    Phone,
-    PiggyBank,
-    TrendingUp
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Building,
+  CheckCircle,
+  Home,
+  Info,
+  MapPin,
+  Phone,
+  PiggyBank,
+  TrendingUp
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -27,18 +27,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
 } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
@@ -431,10 +431,10 @@ export default function ModeBPage() {
       )}
 
       {/* === STEPPER + ACTIONS === */}
-      <div className="border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-6">
+      <div className="border-b border-aquiz-gray-lighter/60 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Desktop */}
-          <div className="hidden md:flex items-center py-5">
+          <div className="hidden md:flex items-center py-4">
             {ETAPES.map((e, index) => {
               const isActive = e.id === etape
               const isPassed = index < etapeActuelleIndex
@@ -449,18 +449,18 @@ export default function ModeBPage() {
                     className={`group flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
                   >
                     <div className={`
-                      w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold transition-all
+                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
                       ${isActive 
-                        ? 'bg-black text-white shadow-md' 
+                        ? 'bg-aquiz-green text-white shadow-md shadow-aquiz-green/20' 
                         : isPassed 
-                          ? 'bg-black text-white' 
+                          ? 'bg-aquiz-green/15 text-aquiz-green' 
                           : 'bg-gray-100 text-gray-400'
                       }
                     `}>
-                      {isPassed ? '✓' : index + 1}
+                      {isPassed ? <CheckCircle className="w-4 h-4" /> : index + 1}
                     </div>
                     <span className={`text-sm font-semibold transition-colors ${
-                      isActive ? 'text-black' : isPassed ? 'text-black' : 'text-gray-400'
+                      isActive ? 'text-aquiz-green' : isPassed ? 'text-aquiz-green' : 'text-gray-400'
                     }`}>
                       {e.label}
                     </span>
@@ -468,7 +468,7 @@ export default function ModeBPage() {
                   
                   {index < ETAPES.length - 1 && (
                     <div className="flex-1 mx-4">
-                      <div className={`h-0.5 rounded-full transition-all duration-300 ${isPassed ? 'bg-black' : 'bg-gray-200'}`} />
+                      <div className={`h-0.5 rounded-full transition-all duration-300 ${isPassed ? 'bg-aquiz-green' : 'bg-gray-200'}`} />
                     </div>
                   )}
                 </div>
@@ -483,7 +483,7 @@ export default function ModeBPage() {
           {/* Mobile */}
           <div className="md:hidden py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-black text-white text-sm font-bold flex items-center justify-center shadow-md">
+              <div className="w-8 h-8 rounded-full bg-aquiz-green text-white text-sm font-bold flex items-center justify-center shadow-md shadow-aquiz-green/20">
                 {etapeActuelleIndex + 1}
               </div>
               <div>
@@ -499,10 +499,10 @@ export default function ModeBPage() {
                   key={index}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     index < etapeActuelleIndex 
-                      ? 'bg-black w-6' 
+                      ? 'bg-aquiz-green w-5' 
                       : index === etapeActuelleIndex 
-                        ? 'bg-black w-8' 
-                        : 'bg-gray-200 w-6'
+                        ? 'bg-aquiz-green w-7' 
+                        : 'bg-gray-200 w-5'
                   }`}
                 />
               ))}
@@ -528,7 +528,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">1</div>
+                    <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
                     <h2 className="font-semibold text-aquiz-black text-sm">Prix du bien</h2>
                   </div>
                   <Tooltip>
@@ -558,7 +558,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-aquiz-gray-dark text-white text-xs font-bold flex items-center justify-center">2</div>
+                    <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                     <h2 className="font-semibold text-aquiz-black text-sm">Type de bien</h2>
                   </div>
                 </div>
@@ -577,7 +577,7 @@ export default function ModeBPage() {
                           htmlFor={`type-${value}`}
                           className={`relative flex items-center justify-center h-12 rounded-lg cursor-pointer transition-all text-sm font-medium border ${
                             typeBien === value 
-                              ? 'bg-aquiz-black text-white border-aquiz-black' 
+                              ? 'bg-aquiz-green text-white border-aquiz-green' 
                               : 'bg-white text-aquiz-gray-dark border-aquiz-gray-lighter hover:border-aquiz-gray-light'
                           }`}
                         >
@@ -590,7 +590,7 @@ export default function ModeBPage() {
                           </div>
                           {typeBien === value && (
                             <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center border border-aquiz-gray-lighter shadow-sm">
-                              <CheckCircle className="w-3.5 h-3.5 text-aquiz-black" />
+                              <CheckCircle className="w-3.5 h-3.5 text-aquiz-green" />
                             </div>
                           )}
                         </label>
@@ -617,7 +617,7 @@ export default function ModeBPage() {
                             htmlFor={`logement-${item.value}`}
                             className={`relative flex items-center justify-center gap-2 h-12 rounded-lg cursor-pointer transition-all text-sm font-medium border ${
                               typeLogement === item.value 
-                                ? 'bg-aquiz-black text-white border-aquiz-black' 
+                                ? 'bg-aquiz-green text-white border-aquiz-green' 
                                 : 'bg-white text-aquiz-gray-dark border-aquiz-gray-lighter hover:border-aquiz-gray-light'
                             }`}
                           >
@@ -626,7 +626,7 @@ export default function ModeBPage() {
                             <span>{item.label}</span>
                             {typeLogement === item.value && (
                               <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-white rounded-full flex items-center justify-center border border-aquiz-gray-lighter shadow-sm">
-                                <CheckCircle className="w-3.5 h-3.5 text-aquiz-black" />
+                                <CheckCircle className="w-3.5 h-3.5 text-aquiz-green" />
                               </div>
                             )}
                           </label>
@@ -641,7 +641,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-aquiz-gray text-white text-xs font-bold flex items-center justify-center">3</div>
+                    <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
                     <h2 className="font-semibold text-aquiz-black text-sm">Localisation</h2>
                     <Badge variant="secondary" className="text-[10px] font-normal">Optionnel</Badge>
                   </div>
@@ -795,7 +795,7 @@ export default function ModeBPage() {
                     type="button"
                     onClick={goToNextEtape}
                     disabled={!validations.canProceed}
-                    className="group p-4 bg-aquiz-black hover:bg-aquiz-black/90 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                    className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
                   >
                     <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
                       <ArrowRight className="w-5 h-5 text-white" />
@@ -827,7 +827,7 @@ export default function ModeBPage() {
               {prixBien === 0 && (
                 <Button
                   type="button"
-                  className="w-full h-12 text-base bg-aquiz-black hover:bg-aquiz-black/90 transition-all shadow-lg"
+                  className="w-full h-12 text-base bg-aquiz-green hover:bg-aquiz-green/90 transition-all shadow-lg"
                   onClick={goToNextEtape}
                   disabled={true}
                 >
@@ -859,7 +859,7 @@ export default function ModeBPage() {
             </div>
 
             {/* Rappel du bien - style noir */}
-            <div className="flex items-center justify-between p-4 bg-aquiz-black rounded-xl mb-5">
+            <div className="flex items-center justify-between p-4 bg-aquiz-green rounded-xl mb-5">
               <div className="flex items-center gap-2">
                 <Home className="w-4 h-4 text-white/70" />
                 <span className="text-sm text-white/70">Bien ciblé</span>
@@ -872,7 +872,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">1</div>
+                    <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
                     <h2 className="font-semibold text-aquiz-black text-sm">Apport personnel</h2>
                   </div>
                   <Tooltip>
@@ -940,7 +940,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded bg-aquiz-gray-dark text-white text-xs font-bold flex items-center justify-center">2</div>
+                    <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                     <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
                   </div>
                 </div>
@@ -969,7 +969,7 @@ export default function ModeBPage() {
                   <div className="space-y-2">
                     <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt</Label>
                     <Select
-                      value={String(tauxInteret)}
+                      value={tauxInteret.toFixed(1)}
                       onValueChange={(v) => setTauxInteret(parseFloat(v))}
                     >
                       <SelectTrigger className="h-11 bg-white border border-aquiz-gray-lighter rounded-lg">
@@ -1080,7 +1080,7 @@ export default function ModeBPage() {
 
             <div className="space-y-5">
               {/* Chiffre clé : Revenus minimums */}
-              <div className="bg-aquiz-black rounded-xl p-6 text-center">
+              <div className="bg-aquiz-green rounded-xl p-6 text-center">
                 <p className="text-xs uppercase tracking-wider text-white/60 mb-2">
                   Revenus mensuels requis
                 </p>
@@ -1106,7 +1106,7 @@ export default function ModeBPage() {
               {/* Détails financiers */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-3">
-                  <div className="w-6 h-6 rounded bg-aquiz-black text-white text-xs font-bold flex items-center justify-center">1</div>
+                  <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
                   <h2 className="font-semibold text-aquiz-black text-sm">Détail du financement</h2>
                 </div>
                 <div className="divide-y divide-aquiz-gray-lighter">
@@ -1144,7 +1144,7 @@ export default function ModeBPage() {
               {/* Répartition du coût total */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
-                  <div className="w-6 h-6 rounded bg-aquiz-gray-dark text-white text-xs font-bold flex items-center justify-center">2</div>
+                  <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                   <h2 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h2>
                 </div>
               <div className="p-5">
@@ -1194,7 +1194,7 @@ export default function ModeBPage() {
               {/* GRAPHIQUE : Mensualité selon durée */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
-                  <div className="w-6 h-6 rounded bg-aquiz-gray text-white text-xs font-bold flex items-center justify-center">3</div>
+                  <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
                   <h2 className="font-semibold text-aquiz-black text-sm">Mensualité selon la durée</h2>
                 </div>
               <div className="p-5">
@@ -1247,7 +1247,7 @@ export default function ModeBPage() {
               {/* Mensualité détaillée */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
-                  <div className="w-6 h-6 rounded bg-aquiz-gray-light text-white text-xs font-bold flex items-center justify-center">4</div>
+                  <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">4</div>
                   <h2 className="font-semibold text-aquiz-black text-sm">Mensualité</h2>
                 </div>
               <div className="p-5">
@@ -1264,7 +1264,7 @@ export default function ModeBPage() {
                 {/* Barre de progression visuelle */}
                 <div className="h-2 bg-aquiz-gray-lighter rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-aquiz-black rounded-full"
+                    className="h-full bg-aquiz-green rounded-full"
                     style={{ width: `${(calculs.mensualiteCredit / calculs.mensualiteTotal) * 100}%` }}
                   />
                 </div>
@@ -1455,7 +1455,7 @@ export default function ModeBPage() {
                   type="button"
                   variant="outline"
                   onClick={() => { setEtape(1); scrollToTop() }}
-                  className="flex-1 h-12 border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-black hover:border-aquiz-black"
+                  className="flex-1 h-12 border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-green hover:border-aquiz-green"
                 >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Modifier le bien
@@ -1463,7 +1463,7 @@ export default function ModeBPage() {
                 <Button
                   type="button"
                   onClick={() => router.push('/simulateur/mode-a?new=true')}
-                  className="flex-1 h-12 bg-aquiz-black hover:bg-aquiz-black/90"
+                  className="flex-1 h-12 bg-aquiz-green hover:bg-aquiz-green/90"
                 >
                   Tester mon profil
                   <ArrowRight className="w-4 h-4 ml-2" />

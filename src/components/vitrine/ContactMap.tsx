@@ -34,7 +34,7 @@ export function ContactMap() {
       </div>
 
       {/* Barre info bas — sobre, dans la charte */}
-      <div className="absolute bottom-0 left-0 right-0 z-10 bg-aquiz-black/90 backdrop-blur-sm border-t border-white/5">
+      <div className="relative z-10 bg-aquiz-black/90 backdrop-blur-sm border-t border-white/5">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5 text-white">
             <MapPin className="w-4 h-4 text-aquiz-green" />

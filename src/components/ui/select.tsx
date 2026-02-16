@@ -1,8 +1,8 @@
 "use client"
 
-import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
+import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -53,7 +53,7 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  position = "popper",
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
@@ -71,17 +71,15 @@ function SelectContent({
         align={align}
         {...props}
       >
-        <SelectScrollUpButton />
         <SelectPrimitive.Viewport
           className={cn(
             "p-1",
             position === "popper" &&
-              "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1"
+              "w-full min-w-[var(--radix-select-trigger-width)] scroll-my-1"
           )}
         >
           {children}
         </SelectPrimitive.Viewport>
-        <SelectScrollDownButton />
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
   )
@@ -177,14 +175,15 @@ function SelectScrollDownButton({
 }
 
 export {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectScrollDownButton,
-  SelectScrollUpButton,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectScrollDownButton,
+    SelectScrollUpButton,
+    SelectSeparator,
+    SelectTrigger,
+    SelectValue
 }
+

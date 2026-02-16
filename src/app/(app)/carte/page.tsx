@@ -17,6 +17,7 @@ import { getZonePTZ } from '@/lib/utils/zonePTZ'
 import { useHydration, useSimulateurStore } from '@/stores/useSimulateurStore'
 import type { StatutZone, TypeBienCarte, ZoneCalculee } from '@/types/carte'
 import {
+    ArrowLeft,
     Building2,
     Filter,
     Home,
@@ -24,7 +25,7 @@ import {
     X,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 // Import dynamique de la carte (Leaflet SSR)
@@ -42,15 +43,21 @@ const CarteInteractive = dynamic(
 
 export default function CartePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const isHydrated = useHydration()
   const { resultats, parametresModeA, setZoneSelectionnee: saveZoneToStore } = useSimulateurStore()
   
+  // Détecter l'origine de la navigation
+  const fromSimulation = searchParams.get('from') === 'simulation'
+  const hasSimulationData = !!(resultats?.prixAchatMax && resultats.prixAchatMax > 0)
+
   // États
   const [typeBien, setTypeBien] = useState<TypeBienCarte>('appartement')
   const [filtreStatuts, setFiltreStatuts] = useState<StatutZone[]>([])
   const [filtreDepartements, setFiltreDepartements] = useState<string[]>([])
   const [zoneSelectionnee, setZoneSelectionnee] = useState<ZoneCalculee | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [customBudget, setCustomBudget] = useState<number>(300000)
 
   // DVF Data
   const departementsIDF = ['75', '77', '78', '91', '92', '93', '94', '95']
@@ -77,8 +84,11 @@ export default function CartePage() {
   // Budget utilisateur
   const budget = useMemo(() => {
     if (!isHydrated) return 300000
-    return resultats?.prixAchatMax || 300000
-  }, [isHydrated, resultats])
+    // Si on vient de la simulation, utiliser le budget calculé
+    if (fromSimulation && resultats?.prixAchatMax) return resultats.prixAchatMax
+    // Sinon, budget personnalisé
+    return customBudget
+  }, [isHydrated, fromSimulation, resultats, customBudget])
 
   // Centre de la région
   const centreRegion = CENTRES_REGIONS['ile-de-france']
@@ -151,40 +161,97 @@ export default function CartePage() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)] flex flex-col bg-white overflow-hidden">
+    <div className="h-[calc(100vh-72px)] md:h-[calc(100vh-88px)] flex flex-col bg-white overflow-hidden">
       
       {/* ============================================ */}
-      {/* BARRE CONTEXTUELLE (Budget + Filtres)       */}
+      {/* BARRE CONTEXTUELLE PRO                      */}
       {/* ============================================ */}
-      <div className="shrink-0 bg-white border-b border-aquiz-gray-lighter relative z-[1002]">
-        <div className="max-w-screen-2xl mx-auto px-4 h-12 flex items-center justify-between">
+      <div className="shrink-0 bg-white border-b border-slate-200/80 relative z-[40]">
+        <div className="px-3 sm:px-5 h-12 flex items-center justify-between gap-2">
           
-          {/* Gauche: Titre */}
-          <h1 className="text-sm font-semibold text-aquiz-black">
-            Carte des opportunités
-          </h1>
+          {/* Gauche: Retour + Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (fromSimulation) {
+                  router.push('/simulateur/mode-a?returning=1')
+                } else {
+                  router.push('/')
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all text-[11px] font-medium"
+              title={fromSimulation ? 'Retour à la simulation' : 'Retour à l\'accueil'}
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{fromSimulation ? 'Simulation' : 'Accueil'}</span>
+            </button>
+
+            <div className="w-px h-5 bg-slate-200 hidden sm:block" />
+
+            <div className="flex items-center gap-1 bg-slate-100 rounded-full p-[3px]">
+              <button
+                onClick={() => setTypeBien('appartement')}
+                className={`flex items-center gap-1.5 px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                  typeBien === 'appartement'
+                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/60'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Appartement</span>
+                <span className="sm:hidden">Appart.</span>
+              </button>
+              <button
+                onClick={() => setTypeBien('maison')}
+                className={`flex items-center gap-1.5 px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                  typeBien === 'maison'
+                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/60'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <Home className="w-3.5 h-3.5" />
+                Maison
+              </button>
+            </div>
+          </div>
 
           {/* Droite: Budget + Filtres */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-sm text-aquiz-gray">
-              <span>Budget</span>
-              <span className="font-semibold text-aquiz-black">{formatMontant(budget)} €</span>
-            </div>
-            
+          <div className="flex items-center gap-2">
+            {/* Budget: éditable si pas de simulation, badge fixe sinon */}
+            {fromSimulation ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50/80 rounded-full border border-emerald-200/50">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-bold text-emerald-700 tabular-nums">{formatMontant(budget)} €</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 rounded-full border border-slate-200">
+                <span className="text-[10px] text-slate-500 font-medium">Budget</span>
+                <input
+                  type="number"
+                  value={customBudget}
+                  onChange={(e) => setCustomBudget(Math.max(0, Number(e.target.value)))}
+                  className="w-20 text-[11px] font-bold text-slate-800 bg-transparent border-none outline-none tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  step={10000}
+                  min={0}
+                />
+                <span className="text-[10px] text-slate-500">€</span>
+              </div>
+            )}
+
             <button
               onClick={() => setShowFilters(!showFilters)}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
+                flex items-center gap-1.5 px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200
                 ${showFilters 
-                  ? 'bg-aquiz-black text-white' 
-                  : 'bg-aquiz-gray-lightest text-aquiz-black hover:bg-aquiz-gray-lighter'
+                  ? 'bg-slate-900 text-white shadow-md' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
                 }
               `}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Filtres</span>
               {(filtreStatuts.length > 0 || filtreDepartements.length > 0) && (
-                <span className="w-5 h-5 rounded-full bg-aquiz-green text-aquiz-black text-xs flex items-center justify-center font-bold">
+                <span className="w-4 h-4 rounded-full bg-aquiz-green text-slate-900 text-[10px] flex items-center justify-center font-bold -mr-0.5">
                   {filtreStatuts.length + filtreDepartements.length}
                 </span>
               )}
@@ -226,63 +293,29 @@ export default function CartePage() {
           </div>
         )}
 
-        {/* Légende discrète */}
+        {/* Légende discrète — bottom-left */}
         <div className="absolute bottom-4 left-4 z-[1000]">
-          <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-aquiz-gray-lighter p-3">
-            <div className="flex items-center gap-4 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-aquiz-green" />
-                <span className="text-aquiz-gray">Confort</span>
-                <span className="text-aquiz-black font-medium">{stats.vertes}</span>
+          <div className="bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-white/50 px-3 py-1.5">
+            <div className="flex items-center gap-3 text-[10px]">
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-1 ring-emerald-300/50" />
+                <span className="text-slate-600 font-medium">Confort <span className="font-bold text-slate-800">{stats.vertes}</span></span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-aquiz-orange" />
-                <span className="text-aquiz-gray">Accessible</span>
-                <span className="text-aquiz-black font-medium">{stats.oranges}</span>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-1 ring-amber-300/50" />
+                <span className="text-slate-600 font-medium">Accessible <span className="font-bold text-slate-800">{stats.oranges}</span></span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-aquiz-red" />
-                <span className="text-aquiz-gray">Limité</span>
+              <div className="flex items-center gap-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-400 ring-1 ring-red-300/50" />
+                <span className="text-slate-600 font-medium">Limité</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Toggle type bien */}
-        <div className="absolute top-4 left-4 z-[1000]">
-          <div className="bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter p-1 flex">
-            <button
-              onClick={() => setTypeBien('appartement')}
-              className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
-                ${typeBien === 'appartement' 
-                  ? 'bg-aquiz-black text-white' 
-                  : 'text-aquiz-gray hover:text-aquiz-black'
-                }
-              `}
-            >
-              <Building2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Appartement</span>
-            </button>
-            <button
-              onClick={() => setTypeBien('maison')}
-              className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
-                ${typeBien === 'maison' 
-                  ? 'bg-aquiz-black text-white' 
-                  : 'text-aquiz-gray hover:text-aquiz-black'
-                }
-              `}
-            >
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Maison</span>
-            </button>
-          </div>
-        </div>
-
         {/* Panel Filtres */}
         {showFilters && (
-          <div className="absolute top-4 right-4 z-[1001] w-72">
+          <div className="absolute top-4 right-4 z-[40] w-72">
             <div className="bg-white rounded-xl shadow-xl border border-aquiz-gray-lighter overflow-hidden">
               <div className="px-4 py-3 border-b border-aquiz-gray-lighter flex items-center justify-between">
                 <span className="font-semibold text-aquiz-black">Filtres</span>
@@ -462,7 +495,7 @@ export default function CartePage() {
                       prixM2: zoneSelectionnee.prixM2,
                       surfaceAccessible: zoneSelectionnee.surfaceMax,
                     })
-                    router.push('/aides')
+                    router.push('/aides?from=carte')
                   }}
                 >
                   Simuler mes aides

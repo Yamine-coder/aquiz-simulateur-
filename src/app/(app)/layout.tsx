@@ -1,3 +1,4 @@
+import { ScrollToTop } from '@/components/ScrollToTop'
 import { Footer, Navbar } from '@/components/vitrine'
 
 /**
@@ -7,8 +8,9 @@ import { Footer, Navbar } from '@/components/vitrine'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <ScrollToTop />
       <Navbar />
-      <main className="pt-[72px] md:pt-[88px]">{children}</main>
+      <main className="pt-18 md:pt-22">{children}</main>
       <Footer />
     </>
   )

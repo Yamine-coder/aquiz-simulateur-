@@ -1,3 +1,4 @@
+import { ScrollToTop } from '@/components/ScrollToTop'
 import { Footer, Navbar } from '@/components/vitrine'
 
 /**
@@ -11,6 +12,7 @@ export default function VitrineLayout({
 }>) {
   return (
     <>
+      <ScrollToTop />
       <Navbar />
       <main>{children}</main>
       <Footer />

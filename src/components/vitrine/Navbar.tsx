@@ -58,7 +58,6 @@ const TOOL_LINKS: ToolLink[] = [
     href: '/aides',
     description: 'Découvrez vos aides au logement',
     icon: Gift,
-    badge: 'Bientôt',
   },
 ]
 
@@ -206,8 +205,8 @@ export function Navbar() {
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: showSolid
-          ? 'rgba(255, 255, 255, 0.98)'
-          : 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)',
+            ? 'rgba(255, 255, 255, 0.98)'
+            : 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)',
         backdropFilter: showSolid ? 'blur(16px) saturate(180%)' : 'none',
         WebkitBackdropFilter: showSolid ? 'blur(16px) saturate(180%)' : 'none',
         boxShadow: showSolid
@@ -217,7 +216,7 @@ export function Navbar() {
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 md:h-22">
+        <div className={`flex items-center justify-between h-18 md:h-22`}>
 
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0">
@@ -225,7 +224,7 @@ export function Navbar() {
             <img
               src={showSolid ? '/logo-aquiz-dark.png' : '/logo-aquiz-white.png'}
               alt="AQUIZ"
-              className="h-16 md:h-20 lg:h-25 w-auto object-contain select-none"
+              className={`h-16 md:h-20 lg:h-25 w-auto object-contain select-none`}
               style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
               draggable={false}
             />
@@ -412,7 +411,7 @@ export function Navbar() {
         }}
       >
         <div className="px-4 py-4 space-y-1">
-          {/* Anchor links with Outils after Services */}
+          {/* Vitrine pages mobile: full nav with outils accordion */}
           {NAV_LINKS.map((link) => {
             const isActive = isNavActive(link)
             return (
@@ -479,7 +478,6 @@ export function Navbar() {
               </React.Fragment>
             )
           })}
-
           {/* Phone + CTA */}
           <div className="pt-3 border-t border-gray-100/60 space-y-2">
             <a
