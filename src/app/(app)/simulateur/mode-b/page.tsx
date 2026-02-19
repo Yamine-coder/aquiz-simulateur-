@@ -1,11 +1,13 @@
 'use client'
 
+import { pdf } from '@react-pdf/renderer'
 import {
     AlertTriangle,
     ArrowLeft,
     ArrowRight,
     Building,
     CheckCircle,
+    Download,
     Home,
     Info,
     MapPin,
@@ -18,6 +20,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ContactModal } from '@/components/contact'
+import { SimulationPDFModeB } from '@/components/pdf/SimulationPDFModeB'
 import { LocalisationSearch } from '@/components/simulateur'
 import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Badge } from '@/components/ui/badge'
@@ -329,6 +332,61 @@ export default function ModeBPage() {
     
     return () => controller.abort()
   }, [codePostal, prixBien, typeBien, typeLogement])
+
+  // Export PDF — Rapport Mode B
+  const generatePDF = useCallback(async () => {
+    const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
+
+    const blob = await pdf(
+      <SimulationPDFModeB
+        logoUrl={logoUrl}
+        prixBien={prixBien}
+        typeBien={typeBien}
+        typeLogement={typeLogement}
+        codePostal={codePostal}
+        nomCommune={nomCommune}
+        apport={apport}
+        dureeAns={dureeAns}
+        tauxInteret={tauxInteret}
+        fraisNotaire={calculs.fraisNotaire}
+        fraisAnnexes={calculs.fraisAnnexes}
+        coutTotal={calculs.coutTotal}
+        montantAEmprunter={calculs.montantAEmprunter}
+        mensualiteCredit={calculs.mensualiteCredit}
+        mensualiteAssurance={calculs.mensualiteAssurance}
+        mensualiteTotal={calculs.mensualiteTotal}
+        revenusMinimums33={calculs.revenusMinimums33}
+        revenusMinimums35={calculs.revenusMinimums35}
+        apportMinimum10={calculs.apportMinimum10}
+        apportIdeal20={calculs.apportIdeal20}
+        apportSuffisant={calculs.apportSuffisant}
+        coutTotalCredit={calculs.coutTotalCredit}
+        totalProjet={calculs.totalProjet}
+        simulationsDuree={calculs.simulationsDuree}
+        repartitionCout={calculs.repartitionCout}
+        infoLocalisation={infoLocalisation ? {
+          zonePTZ: infoLocalisation.zonePTZ,
+          descriptionZone: infoLocalisation.descriptionZone,
+          ptzEligible: infoLocalisation.ptzEligible,
+          ptzMontant: infoLocalisation.ptzMontant,
+          nomCommune: infoLocalisation.nomCommune,
+          prixLocalM2: infoLocalisation.prixLocalM2,
+          surfaceEstimee: infoLocalisation.surfaceEstimee,
+          nbVentes: infoLocalisation.nbVentes,
+        } : null}
+      />
+    ).toBlob()
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const dateFile = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
+    link.download = `AQUIZ-Etude-Achat-${dateFile}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs, infoLocalisation])
 
   // Système de sauvegarde
   const hasCheckedRef = useRef(false)
@@ -1464,6 +1522,30 @@ export default function ModeBPage() {
                   Tester mon profil
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
+              </div>
+
+              {/* CTA Télécharger PDF */}
+              <div className="relative overflow-hidden rounded-2xl border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/10 mt-6">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-aquiz-green/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-aquiz-green/5 rounded-full translate-y-1/2 -translate-x-1/2" />
+                <div className="relative p-6 sm:p-8 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-4">
+                    <Download className="w-7 h-7 text-aquiz-green" />
+                  </div>
+                  <h3 className="text-lg font-bold text-aquiz-black mb-1">Votre étude d&apos;achat</h3>
+                  <p className="text-sm text-aquiz-gray mb-5 max-w-md mx-auto">
+                    Téléchargez votre étude complète : financement détaillé, mensualités selon la durée, apport recommandé et conseils personnalisés.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={generatePDF}
+                    className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all hover:shadow-lg hover:shadow-aquiz-green/30 hover:-translate-y-0.5"
+                  >
+                    <Download className="w-5 h-5" />
+                    Télécharger mon rapport PDF
+                  </button>
+                  <p className="text-[10px] text-aquiz-gray mt-3">Gratuit • Aucune inscription requise</p>
+                </div>
               </div>
 
               {/* CTA Concrétiser mon projet */}

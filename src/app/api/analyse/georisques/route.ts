@@ -3,9 +3,13 @@
  * Appelle l'API georisques.gouv.fr côté serveur
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
+
+// Cache serveur — les risques changent rarement (TTL 12h)
+const risquesCache = new Map<string, { data: unknown; timestamp: number }>()
+const CACHE_TTL = 12 * 60 * 60 * 1000
 
 interface RisqueNaturel {
   type: string
@@ -46,26 +50,30 @@ export async function GET(request: NextRequest) {
   }
   
   try {
-    // Appel API Géorisques
+    // Vérifier le cache serveur
+    const cacheKey = `${lat}_${lon}_${rayon}`
+    const cached = risquesCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json(cached.data)
+    }
+
+    // Appel API Géorisques avec timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
+
     const response = await fetch(
       `https://georisques.gouv.fr/api/v1/gaspar/risques?latlon=${lat},${lon}&rayon=${rayon}`,
-      { headers: { 'Accept': 'application/json' } }
+      { headers: { 'Accept': 'application/json' }, signal: controller.signal }
     )
+
+    clearTimeout(timeoutId)
     
     if (!response.ok) {
-      // Retourner un résultat minimal par défaut
-      return NextResponse.json({
-        success: true,
-        data: {
-          risquesNaturels: [],
-          risquesTechnologiques: [],
-          zoneInondable: false,
-          niveauRadon: null,
-          scoreGlobal: 85,
-          synthese: 'Données non disponibles - consultez georisques.gouv.fr'
-        },
-        source: 'Géorisques (fallback)'
-      })
+      // CRITIQUE : ne jamais prétendre qu'une zone est sûre sans données
+      return NextResponse.json(
+        { success: false, error: 'API Géorisques indisponible (HTTP ' + response.status + ')' },
+        { status: 502 }
+      )
     }
     
     const result = await response.json()
@@ -133,24 +141,31 @@ export async function GET(request: NextRequest) {
       synthese = '⚠️ ' + alertes.join(' • ')
     }
     
-    return NextResponse.json({
+    const responseData = {
       success: true,
       data: {
         risquesNaturels,
         risquesTechnologiques,
         zoneInondable,
-        niveauRadon: null, // Simplification
+        niveauRadon: null, // API Radon séparée (georisques.gouv.fr/api/v1/radon) — non implémentée
         scoreGlobal,
         synthese
       },
       source: 'Géorisques'
-    })
+    }
+
+    // Stocker en cache
+    risquesCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+
+    return NextResponse.json(responseData)
     
   } catch (error) {
-    console.error('Erreur Géorisques proxy:', error)
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'API Géorisques timeout (8s)'
+      : 'Erreur de connexion Géorisques'
     return NextResponse.json(
-      { success: false, error: 'Erreur de connexion' },
-      { status: 500 }
+      { success: false, error: message },
+      { status: 502 }
     )
   }
 }

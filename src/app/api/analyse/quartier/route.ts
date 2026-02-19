@@ -3,11 +3,15 @@
  * Appelle l'API Overpass côté serveur
  */
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
+
+// Cache serveur — POIs changent rarement (TTL 24h)
+const quartierCache = new Map<string, { data: unknown; timestamp: number }>()
+const CACHE_TTL = 24 * 60 * 60 * 1000
 
 // Catégories et leur poids dans le score
 const CATEGORIES = {
@@ -87,6 +91,13 @@ export async function GET(request: NextRequest) {
   }
   
   try {
+    // Vérifier le cache serveur
+    const cacheKey = `${lat}_${lon}_${rayon}`
+    const cached = quartierCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json(cached.data)
+    }
+
     // Construire la requête Overpass
     const allAmenities = Object.values(CATEGORIES)
       .flatMap(cat => cat.amenities)
@@ -106,22 +117,23 @@ export async function GET(request: NextRequest) {
       out center;
     `
     
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // Overpass peut être lent
+
     const response = await fetch(OVERPASS_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`
+      body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal
     })
+
+    clearTimeout(timeoutId)
     
     if (!response.ok) {
-      return NextResponse.json({
-        success: true,
-        data: {
-          scoreGlobal: 50,
-          categories: [],
-          synthese: 'Données OpenStreetMap non disponibles'
-        },
-        source: 'OpenStreetMap (fallback)'
-      })
+      return NextResponse.json(
+        { success: false, error: 'API OpenStreetMap indisponible (HTTP ' + response.status + ')' },
+        { status: 502 }
+      )
     }
     
     const result = await response.json()
@@ -196,7 +208,7 @@ export async function GET(request: NextRequest) {
     // Extraire les scores simplifiés
     const getScore = (cat: string) => categories.find(c => c.categorie === cat)?.score || 0
     
-    return NextResponse.json({
+    const responseData = {
       success: true,
       data: {
         scoreGlobal,
@@ -208,13 +220,20 @@ export async function GET(request: NextRequest) {
         synthese
       },
       source: 'OpenStreetMap'
-    })
+    }
+
+    // Stocker en cache
+    quartierCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+
+    return NextResponse.json(responseData)
     
   } catch (error) {
-    console.error('Erreur Overpass proxy:', error)
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? 'API OpenStreetMap timeout (15s)'
+      : 'Erreur de connexion OpenStreetMap'
     return NextResponse.json(
-      { success: false, error: 'Erreur de connexion' },
-      { status: 500 }
+      { success: false, error: message },
+      { status: 502 }
     )
   }
 }

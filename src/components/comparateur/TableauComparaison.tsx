@@ -13,6 +13,14 @@
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAnalyseEnrichie } from '@/hooks/useAnalyseEnrichie'
+import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
+import {
+    calculerScorePro,
+    genererSyntheseComparaison,
+    RADAR_AXES,
+    scoreToRadarData,
+    type DonneesEnrichiesScoring
+} from '@/lib/comparateur/scoreComparateur'
 import type { Annonce, StatistiquesComparaison } from '@/types/annonces'
 import { COULEURS_DPE } from '@/types/annonces'
 import {
@@ -49,7 +57,8 @@ import {
     X,
     Zap
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { COULEURS_RADAR, RadarChart } from './RadarChart'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
 
 interface TableauComparaisonProps {
@@ -64,418 +73,24 @@ interface TableauComparaisonProps {
   apport?: number
 }
 
-interface PointAnalyse {
-  texte: string
-  detail?: string
-  type: 'avantage' | 'attention' | 'conseil'
-}
-
-interface AnalyseAnnonce {
-  annonceId: string
-  score: number
-  scoreEnrichi?: number // Score incluant les données enrichies (DVF, Géorisques, OSM)
-  verdict: string
-  points: PointAnalyse[]
-  conseilPerso: string
-}
-
-interface DonneesEnrichies {
-  marche?: {
-    success: boolean
-    ecartPrixM2?: number
-    verdict?: 'excellent' | 'bon' | 'correct' | 'cher' | 'tres_cher'
+/** Adaptateur : convertit AnalyseComplete (du hook) en DonneesEnrichiesScoring (pour le moteur) */
+function toEnrichiesScoring(analyse: {
+  marche: { success: boolean; ecartPrixM2?: number; verdict?: string; evolution12Mois?: number; prixM2MedianMarche?: number }
+  risques: { success: boolean; scoreRisque?: number; verdict?: string; zoneInondable?: boolean; niveauRadon?: number }
+  quartier: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number }
+} | null): DonneesEnrichiesScoring | undefined {
+  if (!analyse) return undefined
+  return {
+    marche: analyse.marche.success ? {
+      ...analyse.marche,
+      verdict: analyse.marche.verdict as DonneesEnrichiesScoring['marche'] extends { verdict?: infer V } ? V : never
+    } : undefined,
+    risques: analyse.risques.success ? {
+      ...analyse.risques,
+      verdict: analyse.risques.verdict as DonneesEnrichiesScoring['risques'] extends { verdict?: infer V } ? V : never
+    } : undefined,
+    quartier: analyse.quartier.success ? analyse.quartier : undefined,
   }
-  risques?: {
-    success: boolean
-    verdict?: 'sûr' | 'vigilance' | 'risqué'
-    zoneInondable?: boolean
-  }
-  quartier?: {
-    success: boolean
-    scoreQuartier?: number
-  }
-}
-
-/**
- * Calcule le bonus/malus à appliquer au score de base
- * en fonction des données enrichies (DVF, Géorisques, OSM)
- */
-function calculerBonusEnrichi(donnees: DonneesEnrichies): { bonus: number; details: PointAnalyse[] } {
-  let bonus = 0
-  const details: PointAnalyse[] = []
-  
-  // === DVF : Prix vs Marché ===
-  if (donnees.marche?.success && donnees.marche.ecartPrixM2 !== undefined) {
-    const ecart = donnees.marche.ecartPrixM2
-    if (ecart <= -15) {
-      // Plus de 15% sous le marché
-      bonus += 15
-      details.push({
-        type: 'avantage',
-        texte: 'Excellent prix vs marché',
-        detail: `${Math.abs(ecart).toFixed(0)}% sous la médiane du secteur`
-      })
-    } else if (ecart <= -5) {
-      // 5-15% sous le marché
-      bonus += 10
-      details.push({
-        type: 'avantage',
-        texte: 'Bon prix vs marché',
-        detail: `${Math.abs(ecart).toFixed(0)}% sous la médiane du secteur`
-      })
-    } else if (ecart <= 5) {
-      // ±5% du marché
-      bonus += 0
-    } else if (ecart <= 15) {
-      // 5-15% au-dessus du marché
-      bonus -= 5
-      details.push({
-        type: 'conseil',
-        texte: 'Prix légèrement au-dessus du marché',
-        detail: `+${ecart.toFixed(0)}% vs médiane - marge de négociation possible`
-      })
-    } else {
-      // Plus de 15% au-dessus
-      bonus -= 10
-      details.push({
-        type: 'attention',
-        texte: 'Prix élevé vs marché',
-        detail: `+${ecart.toFixed(0)}% au-dessus de la médiane du secteur`
-      })
-    }
-  }
-  
-  // === GÉORISQUES : Risques zone ===
-  if (donnees.risques?.success) {
-    if (donnees.risques.verdict === 'sûr') {
-      bonus += 10
-      details.push({
-        type: 'avantage',
-        texte: 'Zone sécurisée',
-        detail: 'Aucun risque naturel ou technologique majeur identifié'
-      })
-    } else if (donnees.risques.verdict === 'vigilance') {
-      bonus -= 5
-      details.push({
-        type: 'conseil',
-        texte: 'Zone à vigilance',
-        detail: 'Quelques risques identifiés - consultez Géorisques pour plus de détails'
-      })
-    } else if (donnees.risques.verdict === 'risqué') {
-      bonus -= 15
-      details.push({
-        type: 'attention',
-        texte: 'Zone à risques',
-        detail: 'Risques significatifs identifiés - à prendre en compte dans votre décision'
-      })
-    }
-    
-    // Malus supplémentaire zone inondable
-    if (donnees.risques.zoneInondable) {
-      bonus -= 5
-    }
-  }
-  
-  // === OPENSTREETMAP : Score quartier ===
-  if (donnees.quartier?.success && donnees.quartier.scoreQuartier !== undefined) {
-    const scoreQ = donnees.quartier.scoreQuartier
-    if (scoreQ >= 70) {
-      bonus += 10
-      details.push({
-        type: 'avantage',
-        texte: 'Quartier très bien équipé',
-        detail: `Score ${scoreQ}/100 - transports, commerces et services à proximité`
-      })
-    } else if (scoreQ >= 50) {
-      bonus += 5
-      details.push({
-        type: 'avantage',
-        texte: 'Quartier bien desservi',
-        detail: `Score ${scoreQ}/100 - bonnes commodités`
-      })
-    } else if (scoreQ >= 30) {
-      bonus += 0
-    } else {
-      bonus -= 5
-      details.push({
-        type: 'conseil',
-        texte: 'Quartier peu équipé',
-        detail: `Score ${scoreQ}/100 - véhicule conseillé`
-      })
-    }
-  }
-  
-  return { bonus, details }
-}
-
-/** Calcule une analyse détaillée et personnalisée pour chaque annonce */
-function calculerAnalyse(annonces: Annonce[], budgetMax?: number | null): { 
-  analyses: AnalyseAnnonce[]
-  syntheseGlobale: string
-  conseilGeneral: string 
-} {
-  if (annonces.length === 0) return { analyses: [], syntheseGlobale: '', conseilGeneral: '' }
-  
-  // Calculs statistiques
-  const prixMoyen = annonces.reduce((sum, a) => sum + a.prix, 0) / annonces.length
-  const surfaceMoyenne = annonces.reduce((sum, a) => sum + a.surface, 0) / annonces.length
-  const minPrix = Math.min(...annonces.map(a => a.prix))
-  const maxPrix = Math.max(...annonces.map(a => a.prix))
-  const minPrixM2 = Math.min(...annonces.map(a => a.prixM2))
-  const maxPrixM2 = Math.max(...annonces.map(a => a.prixM2))
-  const maxSurface = Math.max(...annonces.map(a => a.surface))
-  const maxPieces = Math.max(...annonces.map(a => a.pieces))
-  const scoreDPE: Record<string, number> = { 'A': 7, 'B': 6, 'C': 5, 'D': 4, 'E': 3, 'F': 2, 'G': 1, 'NC': 0 }
-  
-  const analyses: AnalyseAnnonce[] = annonces.map(annonce => {
-    const points: PointAnalyse[] = []
-    let score = 50
-    
-    // ========== ANALYSE PRIX ==========
-    if (annonce.prix === minPrix && annonces.length > 1) {
-      const economie = maxPrix - minPrix
-      points.push({
-        type: 'avantage',
-        texte: 'Prix le plus attractif',
-        detail: `${economie.toLocaleString('fr-FR')} € de moins que le bien le plus cher`
-      })
-      score += 15
-    } else if (annonce.prix === maxPrix && annonces.length > 1) {
-      const surcoût = Math.round((annonce.prix / prixMoyen - 1) * 100)
-      points.push({
-        type: 'attention',
-        texte: 'Prix le plus élevé',
-        detail: `${surcoût}% au-dessus de la moyenne de votre sélection`
-      })
-      score -= 10
-    }
-    
-    // ========== ANALYSE PRIX AU M² ==========
-    if (annonce.prixM2 === minPrixM2 && annonces.length > 1) {
-      points.push({
-        type: 'avantage',
-        texte: 'Meilleur rapport prix/surface',
-        detail: `${annonce.prixM2.toLocaleString('fr-FR')} €/m² - le plus avantageux`
-      })
-      score += 20
-    } else if (annonce.prixM2 === maxPrixM2 && annonces.length > 1) {
-      const ecartPourcent = Math.round((annonce.prixM2 / minPrixM2 - 1) * 100)
-      points.push({
-        type: 'attention',
-        texte: 'Prix au m² élevé',
-        detail: `${ecartPourcent}% plus cher au m² que le meilleur de la sélection`
-      })
-      score -= 15
-    }
-    
-    // ========== ANALYSE SURFACE ==========
-    if (annonce.surface === maxSurface && annonces.length > 1) {
-      const plusGrand = Math.round((annonce.surface / surfaceMoyenne - 1) * 100)
-      points.push({
-        type: 'avantage',
-        texte: 'Espace de vie le plus généreux',
-        detail: `${plusGrand}% plus grand que la moyenne de votre sélection`
-      })
-      score += 10
-    } else if (annonce.surface < surfaceMoyenne * 0.85) {
-      points.push({
-        type: 'conseil',
-        texte: 'Surface plus compacte',
-        detail: 'Vérifiez que l\'agencement correspond à vos besoins au quotidien'
-      })
-    }
-    
-    // ========== ANALYSE DPE (très important) ==========
-    const dpeScore = scoreDPE[annonce.dpe] || 0
-    if (dpeScore >= 6) { // A ou B
-      points.push({
-        type: 'avantage',
-        texte: `Excellente performance énergétique (${annonce.dpe})`,
-        detail: 'Factures maîtrisées, bon pour la revente, pas de travaux urgents'
-      })
-      score += 15
-    } else if (dpeScore === 5) { // C
-      points.push({
-        type: 'avantage',
-        texte: `Bonne performance énergétique (${annonce.dpe})`,
-        detail: 'Consommation raisonnable, quelques améliorations possibles'
-      })
-      score += 8
-    } else if (dpeScore === 4) { // D
-      points.push({
-        type: 'conseil',
-        texte: `DPE moyen (${annonce.dpe})`,
-        detail: 'Prévoir un budget isolation pour améliorer le confort'
-      })
-    } else if (dpeScore === 3) { // E
-      points.push({
-        type: 'attention',
-        texte: `DPE à améliorer (${annonce.dpe})`,
-        detail: 'Travaux énergétiques recommandés (5 000 - 15 000 €)'
-      })
-      score -= 8
-    } else if (dpeScore <= 2 && dpeScore > 0) { // F ou G
-      points.push({
-        type: 'attention',
-        texte: `Passoire thermique (${annonce.dpe})`,
-        detail: 'Travaux obligatoires à prévoir : 15 000 - 30 000 €. Location interdite à terme.'
-      })
-      score -= 20
-    }
-    
-    // ========== ANALYSE ÉQUIPEMENTS ==========
-    const equipements: string[] = []
-    if (annonce.balconTerrasse) equipements.push('extérieur')
-    if (annonce.parking) equipements.push('stationnement')
-    if (annonce.cave) equipements.push('cave')
-    if (annonce.ascenseur) equipements.push('ascenseur')
-    
-    if (equipements.length >= 3) {
-      points.push({
-        type: 'avantage',
-        texte: 'Bien équipé et fonctionnel',
-        detail: `Inclut ${equipements.join(', ')} - confort au quotidien`
-      })
-      score += 10
-    } else if (equipements.length === 0) {
-      points.push({
-        type: 'conseil',
-        texte: 'Équipements limités',
-        detail: 'Pas de balcon, parking ni cave. Vérifiez les solutions alternatives du quartier.'
-      })
-      score -= 5
-    }
-    
-    // ========== ANALYSE ÉTAGE (appartements) ==========
-    if (annonce.type === 'appartement' && annonce.etage !== undefined) {
-      if (annonce.etage === 0) {
-        points.push({
-          type: 'conseil',
-          texte: 'Rez-de-chaussée',
-          detail: 'Accessible mais potentiellement moins lumineux. Vérifiez la sécurité et le vis-à-vis.'
-        })
-      } else if (annonce.etage >= 4 && !annonce.ascenseur) {
-        points.push({
-          type: 'attention',
-          texte: `${annonce.etage}e étage sans ascenseur`,
-          detail: 'Impact sur le quotidien et la revente. À bien considérer.'
-        })
-        score -= 10
-      } else if (annonce.etage >= 3 && annonce.ascenseur) {
-        points.push({
-          type: 'avantage',
-          texte: 'Étage élevé avec ascenseur',
-          detail: 'Luminosité, calme et vue dégagée probables'
-        })
-        score += 5
-      }
-    }
-    
-    // ========== ANALYSE BUDGET ==========
-    if (budgetMax) {
-      const ecart = budgetMax - annonce.prix
-      const pourcent = Math.round((annonce.prix / budgetMax) * 100)
-      
-      if (pourcent <= 80) {
-        points.push({
-          type: 'avantage',
-          texte: 'Marge de manœuvre importante',
-          detail: `${ecart.toLocaleString('fr-FR')} € disponibles pour travaux, meubles ou négociation`
-        })
-        score += 15
-      } else if (pourcent <= 90) {
-        points.push({
-          type: 'avantage',
-          texte: 'Dans votre budget',
-          detail: `Marge de ${ecart.toLocaleString('fr-FR')} € pour les frais annexes`
-        })
-        score += 10
-      } else if (pourcent <= 100) {
-        points.push({
-          type: 'conseil',
-          texte: 'Budget serré',
-          detail: 'Prévoyez les frais de notaire (7-8%) en plus du prix affiché'
-        })
-      } else {
-        const depassement = annonce.prix - budgetMax
-        points.push({
-          type: 'attention',
-          texte: 'Dépasse votre budget',
-          detail: `${depassement.toLocaleString('fr-FR')} € au-dessus. Négociation ou apport supplémentaire nécessaire.`
-        })
-        score -= 25
-      }
-    }
-    
-    // ========== ANALYSE PIÈCES ==========
-    if (annonce.pieces === maxPieces && annonces.length > 1 && maxPieces >= 4) {
-      points.push({
-        type: 'avantage',
-        texte: 'Le plus de pièces',
-        detail: 'Plus de flexibilité pour l\'aménagement et l\'évolution de la famille'
-      })
-      score += 5
-    }
-    
-    // Score final
-    score = Math.max(0, Math.min(100, score))
-    
-    // Verdict
-    let verdict: string
-    if (score >= 75) verdict = 'Excellent choix'
-    else if (score >= 60) verdict = 'Bon potentiel'
-    else if (score >= 45) verdict = 'À étudier'
-    else if (score >= 30) verdict = 'Avec réserves'
-    else verdict = 'Peu recommandé'
-    
-    // Conseil personnalisé selon le profil du bien
-    let conseilPerso = ''
-    const avantages = points.filter(p => p.type === 'avantage')
-    const attentions = points.filter(p => p.type === 'attention')
-    
-    if (avantages.length >= 3 && attentions.length === 0) {
-      conseilPerso = 'Ce bien coche beaucoup de cases. Planifiez une visite rapidement !'
-    } else if (attentions.some(a => a.texte.includes('Passoire'))) {
-      conseilPerso = 'Demandez des devis rénovation avant de vous engager.'
-    } else if (attentions.some(a => a.texte.includes('budget'))) {
-      conseilPerso = 'Préparez vos arguments pour négocier le prix.'
-    } else if (avantages.length > attentions.length) {
-      conseilPerso = 'Plus de points forts que de faiblesses. Bonne option à considérer.'
-    } else if (attentions.length > avantages.length) {
-      conseilPerso = 'Plusieurs points de vigilance. Comparez bien avec les autres options.'
-    } else {
-      conseilPerso = 'Visitez le bien pour vous faire votre propre avis.'
-    }
-    
-    return { annonceId: annonce.id, score, verdict, points, conseilPerso }
-  })
-  
-  // Synthèse globale
-  const sorted = [...analyses].sort((a, b) => b.score - a.score)
-  const meilleur = sorted[0]
-  let syntheseGlobale = ''
-  
-  if (annonces.length === 1) {
-    syntheseGlobale = `Score de ${meilleur.score}/100 - ${meilleur.verdict.toLowerCase()}.`
-  } else if (sorted[0].score - sorted[1].score >= 15) {
-    const bien = annonces.find(a => a.id === meilleur.annonceId)
-    syntheseGlobale = `"${bien?.titre || bien?.ville}" se démarque clairement avec ${meilleur.score}/100.`
-  } else {
-    syntheseGlobale = `Les biens sont proches. Le meilleur score est ${meilleur.score}/100.`
-  }
-  
-  // Conseil général
-  let conseilGeneral = 'N\'hésitez pas à négocier : une marge de 3-5% est courante sur le marché actuel.'
-  
-  if (analyses.some(a => a.points.some(p => p.texte.includes('Passoire')))) {
-    conseilGeneral = 'Attention : certains biens ont un DPE F/G. Prévoyez 15-30k€ de travaux énergétiques obligatoires.'
-  } else if (budgetMax && analyses.every(a => a.points.some(p => p.texte.includes('Dépasse')))) {
-    conseilGeneral = 'Tous les biens dépassent votre budget. Envisagez de négocier ou d\'élargir votre zone de recherche.'
-  } else if (analyses.every(a => a.score >= 60)) {
-    conseilGeneral = 'Bonne sélection ! Tous les biens présentent un profil intéressant. La visite fera la différence.'
-  }
-  
-  return { analyses, syntheseGlobale, conseilGeneral }
 }
 
 /** Ligne de comparaison - Design épuré */
@@ -555,33 +170,7 @@ function LigneComparaison({
   )
 }
 
-/**
- * Calcule la mensualité de crédit pour un bien immobilier
- * Formule : M = (C × t) / (1 - (1 + t)^(-n))
- * où C = capital emprunté, t = taux mensuel, n = nombre de mensualités
- */
-function calculerMensualite(
-  prixBien: number,
-  apport: number,
-  tauxAnnuel: number,
-  dureeAns: number
-): number {
-  const capitalEmprunte = prixBien - apport
-  if (capitalEmprunte <= 0) return 0
-  
-  const tauxMensuel = tauxAnnuel / 100 / 12
-  const nombreMensualites = dureeAns * 12
-  
-  // Cas limite : taux à 0%
-  if (tauxMensuel === 0) {
-    return capitalEmprunte / nombreMensualites
-  }
-  
-  const mensualite = (capitalEmprunte * tauxMensuel) / 
-    (1 - Math.pow(1 + tauxMensuel, -nombreMensualites))
-  
-  return Math.round(mensualite)
-}
+// calculerMensualite importé depuis @/lib/comparateur/financier
 
 export function TableauComparaison({
   annonces,
@@ -593,11 +182,7 @@ export function TableauComparaison({
   dureeAns,
   apport
 }: TableauComparaisonProps) {
-  // Calcul des analyses pour chaque annonce
-  const { analyses: analysesBase, syntheseGlobale, conseilGeneral } = useMemo(
-    () => calculerAnalyse(annonces, budgetMax),
-    [annonces, budgetMax]
-  )
+  const [showRadar, setShowRadar] = useState(false)
   
   // Hook pour l'analyse enrichie avec les APIs (DVF, Géorisques, OSM)
   const { 
@@ -606,47 +191,39 @@ export function TableauComparaison({
     loadingIds
   } = useAnalyseEnrichie(annonces)
   
-  // Calcul des scores enrichis (score de base + bonus des données enrichies)
-  const analysesEnrichies = useMemo(() => {
-    return analysesBase.map(analyseBase => {
-      const enrichie = getAnalyseEnrichie(analyseBase.annonceId)
-      
-      if (!enrichie) {
-        return { ...analyseBase, scoreEnrichi: undefined }
-      }
-      
-      const { bonus, details } = calculerBonusEnrichi({
-        marche: enrichie.marche,
-        risques: enrichie.risques,
-        quartier: enrichie.quartier
-      })
-      
-      // Score enrichi = score de base + bonus (clampé entre 0 et 100)
-      const scoreEnrichi = Math.max(0, Math.min(100, analyseBase.score + bonus))
-      
-      // Ajouter les points d'analyse enrichis
-      const pointsEnrichis = [...analyseBase.points, ...details]
-      
-      // Recalculer le verdict avec le score enrichi
-      let verdictEnrichi: string
-      if (scoreEnrichi >= 75) verdictEnrichi = 'Excellent choix'
-      else if (scoreEnrichi >= 60) verdictEnrichi = 'Bon potentiel'
-      else if (scoreEnrichi >= 45) verdictEnrichi = 'À étudier'
-      else if (scoreEnrichi >= 30) verdictEnrichi = 'Avec réserves'
-      else verdictEnrichi = 'Peu recommandé'
-      
-      return {
-        ...analyseBase,
-        scoreEnrichi,
-        points: pointsEnrichis,
-        verdict: verdictEnrichi
-      }
+  // === MOTEUR DE SCORING PRO UNIFIÉ ===
+  const scoresPro = useMemo(() => {
+    return annonces.map(annonce => {
+      const enrichie = getAnalyseEnrichie(annonce.id)
+      const enrichiScoring = toEnrichiesScoring(enrichie ?? null)
+      return calculerScorePro(annonce, annonces, enrichiScoring, budgetMax)
     })
-  }, [analysesBase, getAnalyseEnrichie])
+  }, [annonces, budgetMax, getAnalyseEnrichie])
   
-  // Utiliser le score enrichi si disponible, sinon le score de base
-  const getAnalyse = (id: string) => analysesEnrichies.find(a => a.annonceId === id)
-  const meilleurScore = Math.max(...analysesEnrichies.map(a => a.scoreEnrichi ?? a.score), 0)
+  const { syntheseGlobale, conseilGeneral } = useMemo(
+    () => genererSyntheseComparaison(scoresPro),
+    [scoresPro]
+  )
+  
+  const getScorePro = (id: string) => scoresPro.find(s => s.annonceId === id)
+  const getAnalyse = getScorePro // Alias pour les sections points forts/attention/conseils
+  const meilleurScore = Math.max(...scoresPro.map(s => s.scoreGlobal), 0)
+  
+  // Adaptateur pour compatibilité VueMobileAccordeon (anciens types)
+  const analysesEnrichies = useMemo(() => {
+    return scoresPro.map(sp => ({
+      annonceId: sp.annonceId,
+      score: sp.scoreGlobal,
+      scoreEnrichi: sp.scoreGlobal,
+      verdict: sp.verdict,
+      points: sp.points.map(p => ({
+        texte: p.texte,
+        detail: p.detail,
+        type: p.type
+      })),
+      conseilPerso: sp.conseilPerso
+    }))
+  }, [scoresPro])
   
   // Préparer les enrichissements pour la vue mobile
   const enrichissementsMap = useMemo(() => {
@@ -840,6 +417,60 @@ export function TableauComparaison({
               values={annonces.map((a) => a.taxeFonciere ? `${a.taxeFonciere} €` : undefined)}
             />
           )}
+
+          {/* Frais de notaire estimés */}
+          <tr className="border-b border-aquiz-gray-lightest">
+            <td className="py-3 px-4 text-sm text-aquiz-gray flex items-center gap-2">
+              <span>Frais de notaire estimés</span>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs">
+                  <p>Neuf (&lt;5 ans) : ~2,5% • Ancien : ~7,5%</p>
+                </TooltipContent>
+              </Tooltip>
+            </td>
+            {annonces.map((a) => {
+              const { montant, isNeuf } = estimerFraisNotaire(a.prix, a.anneeConstruction)
+              return (
+                <td key={a.id} className="py-3 px-4 text-center text-sm">
+                  <span className="font-medium text-aquiz-black">{montant.toLocaleString('fr-FR')} €</span>
+                  <div className="text-[10px] text-aquiz-gray">{isNeuf ? 'Neuf' : 'Ancien'}</div>
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Coût total d'acquisition */}
+          <tr className="border-b border-aquiz-gray-lightest bg-aquiz-green/5">
+            <td className="py-3 px-4 text-sm font-medium text-aquiz-black flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-aquiz-green" />
+              <span>Coût total d&apos;acquisition</span>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs text-xs">
+                  <p>Prix + frais de notaire + travaux estimés</p>
+                </TooltipContent>
+              </Tooltip>
+            </td>
+            {annonces.map((a) => {
+              const sp = getScorePro(a.id)
+              const { montant: notaire } = estimerFraisNotaire(a.prix, a.anneeConstruction)
+              const travaux = sp?.estimations.budgetTravauxEstime || 0
+              const total = calculerCoutTotal(a.prix, notaire, travaux)
+              return (
+                <td key={a.id} className="py-3 px-4 text-center text-sm">
+                  <span className="font-bold text-aquiz-black text-base">{total.toLocaleString('fr-FR')} €</span>
+                  {travaux > 0 && (
+                    <div className="text-[10px] text-orange-600">dont ~{travaux.toLocaleString('fr-FR')} € travaux</div>
+                  )}
+                </td>
+              )
+            })}
+          </tr>
           
           {/* Section Caractéristiques */}
           <tr className="bg-aquiz-gray-lightest/50">
@@ -883,6 +514,27 @@ export function TableauComparaison({
             )}
             muted={!annonces.some(a => a.type === 'appartement')}
           />
+
+          {annonces.some((a) => a.anneeConstruction) && (
+            <LigneComparaison
+              label="Année de construction"
+              values={annonces.map((a) => a.anneeConstruction ? String(a.anneeConstruction) : undefined)}
+            />
+          )}
+
+          {annonces.some((a) => a.orientation) && (
+            <LigneComparaison
+              label="Orientation"
+              values={annonces.map((a) => a.orientation || undefined)}
+            />
+          )}
+
+          {annonces.some((a) => a.nbSallesBains) && (
+            <LigneComparaison
+              label="Salles de bains"
+              values={annonces.map((a) => a.nbSallesBains || undefined)}
+            />
+          )}
           
           {/* Section Performance */}
           <tr className="bg-aquiz-gray-lightest/50">
@@ -894,27 +546,29 @@ export function TableauComparaison({
             </td>
           </tr>
           
-          <LigneComparaison
-            label="Diagnostic DPE"
-            values={annonces.map((a) => (
-              <Badge key={a.id} className={`${COULEURS_DPE[a.dpe]} text-white text-xs`}>
-                Classe {a.dpe}
-              </Badge>
+          <tr className="border-b border-aquiz-gray-lightest">
+            <td className="py-3 px-4 text-sm text-aquiz-gray">Diagnostic DPE</td>
+            {annonces.map((a) => (
+              <td key={a.id} className="py-3 px-4 text-center">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Badge className={`${COULEURS_DPE[a.dpe]} text-white text-xs cursor-help`}>
+                        Classe {a.dpe}
+                      </Badge>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs">
+                    {a.ges ? (
+                      <p>Émissions GES : classe {a.ges}</p>
+                    ) : (
+                      <p>GES non renseigné</p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </td>
             ))}
-            format="dpe"
-          />
-          
-          {annonces.some((a) => a.ges) && (
-            <LigneComparaison
-              label="Émissions GES"
-              values={annonces.map((a) => a.ges ? (
-                <Badge key={a.id} className={`${COULEURS_DPE[a.ges]} text-white text-xs`}>
-                  {a.ges}
-                </Badge>
-              ) : undefined)}
-              format="dpe"
-            />
-          )}
+          </tr>
           
           {/* Section Équipements */}
           <tr className="bg-aquiz-gray-lightest/50">
@@ -1018,7 +672,7 @@ export function TableauComparaison({
                 <Building2 className="w-4 h-4 text-blue-600" />
                 Prix vs Marché
               </span>
-              <span className="text-[9px] text-aquiz-gray block mt-0.5">Source: DVF (data.gouv.fr)</span>
+              <span className="text-[9px] text-aquiz-gray block mt-0.5">Basé sur les ventes récentes du secteur</span>
             </td>
             {annonces.map((annonce) => {
               const analyseE = getAnalyseEnrichie(annonce.id)
@@ -1110,7 +764,7 @@ export function TableauComparaison({
                   </TooltipContent>
                 </Tooltip>
               </span>
-              <span className="text-[9px] text-aquiz-gray block mt-0.5">Source: Géorisques (gouv.fr)</span>
+              <span className="text-[9px] text-aquiz-gray block mt-0.5">Données gouvernementales (georisques.gouv.fr)</span>
             </td>
             {annonces.map((annonce) => {
               const analyseE = getAnalyseEnrichie(annonce.id)
@@ -1221,7 +875,7 @@ export function TableauComparaison({
                   </TooltipContent>
                 </Tooltip>
               </span>
-              <span className="text-[9px] text-aquiz-gray block mt-0.5">Source: OpenStreetMap</span>
+              <span className="text-[9px] text-aquiz-gray block mt-0.5">Commodités dans un rayon de 800m</span>
             </td>
             {annonces.map((annonce) => {
               const analyseE = getAnalyseEnrichie(annonce.id)
@@ -1319,18 +973,18 @@ export function TableauComparaison({
             })}
           </tr>
           
-          {/* === SECTION VERDICT === */}
+          {/* === SECTION ANALYSE AQUIZ === */}
           <tr className="bg-gradient-to-r from-aquiz-green/5 to-aquiz-green/10">
             <td colSpan={annonces.length + 1} className="py-2 px-4">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase tracking-wider">
                 <Sparkles className="w-3.5 h-3.5 text-aquiz-green" />
-                Verdict & Analyse
+                Analyse AQUIZ
               </div>
               <div className="text-[11px] text-aquiz-gray mt-0.5">{syntheseGlobale}</div>
             </td>
           </tr>
           
-          {/* Score global */}
+          {/* Score global pro */}
           <tr className="border-b border-aquiz-gray-lightest">
             <td className="py-4 px-4 text-sm font-medium text-aquiz-black">
               <div className="flex items-center gap-1.5">
@@ -1340,24 +994,17 @@ export function TableauComparaison({
                     <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent side="right" className="max-w-[220px] text-xs">
-                    <p className="font-medium mb-1">Score intégrant :</p>
-                    <ul className="space-y-0.5 text-[10px]">
-                      <li>• Caractéristiques du bien</li>
-                      <li>• Prix vs marché (DVF)</li>
-                      <li>• Risques zone (Géorisques)</li>
-                      <li>• Score quartier (OSM)</li>
-                    </ul>
+                    <p>Score basé sur le prix du marché, l’énergie, l’emplacement, les risques, l’état du bien et les équipements.</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
             </td>
             {annonces.map((annonce) => {
-              const analyse = getAnalyse(annonce.id)
+              const sp = getScorePro(annonce.id)
               const isLoadingThis = loadingIds.has(annonce.id)
-              if (!analyse) return <td key={annonce.id} className="py-4 px-4 text-center">-</td>
+              if (!sp) return <td key={annonce.id} className="py-4 px-4 text-center">-</td>
               
-              const scoreFinal = analyse.scoreEnrichi ?? analyse.score
-              const isBest = scoreFinal === meilleurScore && annonces.length > 1
+              const isBest = sp.scoreGlobal === meilleurScore && annonces.length > 1
               
               return (
                 <td key={annonce.id} className="py-4 px-4 text-center">
@@ -1365,24 +1012,24 @@ export function TableauComparaison({
                     {isLoadingThis ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="w-5 h-5 animate-spin text-aquiz-gray" />
-                        <span className="text-xs text-aquiz-gray">Enrichissement...</span>
+                        <span className="text-xs text-aquiz-gray">Analyse...</span>
                       </div>
                     ) : (
                       <>
                         <div className={`text-3xl font-bold ${
-                          scoreFinal >= 70 ? 'text-aquiz-green' :
-                          scoreFinal >= 50 ? 'text-orange-500' :
+                          sp.scoreGlobal >= 70 ? 'text-aquiz-green' :
+                          sp.scoreGlobal >= 50 ? 'text-orange-500' :
                           'text-red-500'
                         }`}>
-                          {scoreFinal}
+                          {sp.scoreGlobal}
                           <span className="text-xs text-aquiz-gray font-normal ml-0.5">/100</span>
                         </div>
                         <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                          scoreFinal >= 70 ? 'bg-aquiz-green/10 text-aquiz-green' :
-                          scoreFinal >= 50 ? 'bg-orange-100 text-orange-700' :
+                          sp.scoreGlobal >= 70 ? 'bg-aquiz-green/10 text-aquiz-green' :
+                          sp.scoreGlobal >= 50 ? 'bg-orange-100 text-orange-700' :
                           'bg-red-100 text-red-600'
                         }`}>
-                          {analyse.verdict}
+                          {sp.verdict}
                         </span>
                         {isBest && (
                           <span className="text-[10px] font-semibold text-white bg-aquiz-green px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -1390,8 +1037,132 @@ export function TableauComparaison({
                             Meilleur choix
                           </span>
                         )}
+                        {/* Analyse partielle si peu de données */}
+                        {sp.confiance < 60 && (
+                          <span className="text-[9px] text-aquiz-gray italic">Analyse partielle</span>
+                        )}
                       </>
                     )}
+                  </div>
+                </td>
+              )
+            })}
+          </tr>
+          
+          {/* Coût énergie estimé */}
+          <tr className="border-b border-aquiz-gray-lightest">
+            <td className="py-3 px-4 text-sm text-aquiz-gray">
+              <div className="flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-yellow-500" />
+                Coût énergie estimé
+              </div>
+            </td>
+            {annonces.map((annonce) => {
+              const sp = getScorePro(annonce.id)
+              if (!sp?.estimations.coutEnergieAnnuel) return <td key={annonce.id} className="py-3 px-4 text-center">-</td>
+              return (
+                <td key={annonce.id} className="py-3 px-4 text-center">
+                  <span className="text-sm font-medium text-aquiz-black">
+                    {sp.estimations.coutEnergieAnnuel.toLocaleString('fr-FR')} €/an
+                  </span>
+                  <div className="text-[10px] text-aquiz-gray">
+                    ~{Math.round(sp.estimations.coutEnergieAnnuel / 12)} €/mois
+                  </div>
+                </td>
+              )
+            })}
+          </tr>
+          
+          {scoresPro.some(sp => sp.estimations.budgetTravauxEstime) && (
+            <tr className="border-b border-aquiz-gray-lightest">
+              <td className="py-3 px-4 text-sm text-aquiz-gray">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                  Budget travaux estimé
+                </div>
+              </td>
+              {annonces.map((annonce) => {
+                const sp = getScorePro(annonce.id)
+                const travaux = sp?.estimations.budgetTravauxEstime
+                return (
+                  <td key={annonce.id} className="py-3 px-4 text-center">
+                    {travaux ? (
+                      <span className={`text-sm font-bold ${travaux > 20000 ? 'text-red-500' : travaux > 5000 ? 'text-orange-500' : 'text-aquiz-gray'}`}>
+                        ~{travaux.toLocaleString('fr-FR')} €
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-aquiz-green font-medium flex items-center gap-1 justify-center">
+                        <CircleCheck className="w-3 h-3" /> Aucun
+                      </span>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          )}
+
+          {/* Radar Chart */}
+          {annonces.length >= 2 && (
+            <tr className="border-b border-aquiz-gray-lightest">
+              <td colSpan={annonces.length + 1} className="py-4 px-4">
+                <button 
+                  onClick={() => setShowRadar(!showRadar)}
+                  className="flex items-center gap-2 text-xs font-medium text-aquiz-green hover:text-aquiz-green-dark transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {showRadar ? 'Masquer' : 'Voir'} le radar comparatif
+                </button>
+                {showRadar && (
+                  <div className="mt-4 flex justify-center">
+                    <RadarChart
+                      data={annonces.map((a, i) => {
+                        const sp = getScorePro(a.id)
+                        return {
+                          id: a.id,
+                          nom: a.titre || a.ville,
+                          couleur: COULEURS_RADAR[i % COULEURS_RADAR.length],
+                          valeurs: sp ? scoreToRadarData(sp) : RADAR_AXES.map(ax => ({ label: ax.key, value: 50 }))
+                        }
+                      })}
+                      size={300}
+                    />
+                  </div>
+                )}
+              </td>
+            </tr>
+          )}
+          
+          {/* Détail axes scoring (condensé) */}
+          <tr className="border-b border-aquiz-gray-lightest">
+            <td className="py-3 px-4 text-sm text-aquiz-gray">
+              <span className="text-[10px] uppercase tracking-wider font-semibold">Détail par axe</span>
+            </td>
+            {annonces.map((annonce) => {
+              const sp = getScorePro(annonce.id)
+              if (!sp) return <td key={annonce.id} className="py-3 px-3">-</td>
+              
+              const axesDispo = sp.axes.filter(a => a.disponible)
+              return (
+                <td key={annonce.id} className="py-3 px-3 align-top">
+                  <div className="space-y-1.5">
+                    {axesDispo.map(axe => (
+                      <div key={axe.axe} className="flex items-center gap-2">
+                        <div className="w-16 text-[9px] text-aquiz-gray truncate">{axe.label}</div>
+                        <div className="flex-1 h-1.5 bg-aquiz-gray-lightest rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${
+                              axe.score >= 70 ? 'bg-aquiz-green' : axe.score >= 45 ? 'bg-orange-400' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${axe.score}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] font-medium w-6 text-right ${
+                          axe.score >= 70 ? 'text-aquiz-green' : axe.score >= 45 ? 'text-orange-600' : 'text-red-500'
+                        }`}>
+                          {axe.score}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </td>
               )

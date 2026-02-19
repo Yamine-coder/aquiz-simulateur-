@@ -7,10 +7,15 @@
  * 3. Fallback: Données locales statiques ZONES_ILE_DE_FRANCE
  */
 
-import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
-import { NextRequest, NextResponse } from 'next/server'
+import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf';
+import { fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
+
+// Cache département (partagé avec dvf-real mais dédupliqué ici pour la route)
+const deptCache = new Map<string, { data: DVFDepartementStats; timestamp: number }>()
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 heures
 
 interface DVFRawTransaction {
   valeur_fonciere?: number
@@ -43,31 +48,48 @@ function getFallbackData(codePostal: string, typeBien: string) {
 }
 
 /**
- * Appelle l'API interne DVF par code postal (données complètes IDF)
+ * Charge les données DVF directement (sans HTTP vers soi-même)
  */
-async function fetchFromInternalAPI(codePostal: string, typeBien: string, baseUrl: string) {
+async function fetchFromInternalData(codePostal: string, typeBien: string) {
   try {
-    const response = await fetch(`${baseUrl}/api/dvf/codepostal/${codePostal}`, {
-      headers: { 'Accept': 'application/json' },
-    })
-    
-    if (!response.ok) return null
-    
-    const data = await response.json()
-    
-    if (data.error) return null
-    
-    // Extraire le prix selon le type de bien
-    const prixM2Median = typeBien === 'Appartement' 
-      ? data.prixM2Appartement 
-      : data.prixM2Maison
-    
-    const nbTransactions = typeBien === 'Appartement'
-      ? data.nbVentesAppart
-      : data.nbVentesMaison
-    
+    // Extraire le département
+    let codeDept = codePostal.substring(0, 2)
+    if (codePostal.startsWith('75')) codeDept = '75'
+    else if (codePostal.startsWith('92')) codeDept = '92'
+    else if (codePostal.startsWith('93')) codeDept = '93'
+    else if (codePostal.startsWith('94')) codeDept = '94'
+
+    // Vérifier le cache département
+    const cacheKey = `dvf_dept_${codeDept}`
+    let deptData = deptCache.get(cacheKey)
+
+    if (!deptData || Date.now() - deptData.timestamp >= CACHE_TTL) {
+      const data = await fetchDVFDepartement(codeDept)
+      deptData = { data, timestamp: Date.now() }
+      deptCache.set(cacheKey, deptData)
+    }
+
+    // Chercher les communes avec ce code postal
+    const communes = deptData.data.communes.filter(c => c.codePostal === codePostal)
+    if (communes.length === 0) return null
+
+    // Calculer le prix pondéré
+    const items = communes
+      .filter(c => typeBien === 'Appartement' ? c.prixM2MedianAppart > 0 : c.prixM2MedianMaison > 0)
+      .map(c => ({
+        prix: typeBien === 'Appartement' ? c.prixM2MedianAppart : c.prixM2MedianMaison,
+        nb: typeBien === 'Appartement' ? c.nbVentesAppart : c.nbVentesMaison
+      }))
+
+    if (items.length === 0) return null
+
+    const totalVentes = items.reduce((sum, d) => sum + d.nb, 0)
+    const prixM2Median = totalVentes > 0
+      ? Math.round(items.reduce((sum, d) => sum + d.prix * d.nb, 0) / totalVentes)
+      : items[0].prix
+
     if (!prixM2Median || prixM2Median === 0) return null
-    
+
     return {
       prixMedian: null,
       prixMoyen: null,
@@ -75,11 +97,10 @@ async function fetchFromInternalAPI(codePostal: string, typeBien: string, baseUr
       prixMax: null,
       prixM2Median,
       prixM2Moyen: prixM2Median,
-      nbTransactions: nbTransactions || 50,
+      nbTransactions: totalVentes || 50,
       evolution12Mois: null,
     }
-  } catch (error) {
-    console.error('[DVF] Erreur API interne:', error)
+  } catch {
     return null
   }
 }
@@ -187,17 +208,9 @@ export async function GET(request: NextRequest) {
     )
   }
   
-  console.log(`[DVF API] Code postal: ${codePostal}, Type: ${typeBien}`)
-  
-  // Construire l'URL de base pour les appels internes
-  const protocol = request.headers.get('x-forwarded-proto') || 'http'
-  const host = request.headers.get('host') || 'localhost:3000'
-  const baseUrl = `${protocol}://${host}`
-  
-  // 1. Essayer l'API interne (données complètes IDF)
-  const internalData = await fetchFromInternalAPI(codePostal, typeBien, baseUrl)
+  // 1. Essayer les données DVF directes (départementales)
+  const internalData = await fetchFromInternalData(codePostal, typeBien)
   if (internalData) {
-    console.log(`[DVF API] ✓ Données trouvées via API interne pour ${codePostal}`)
     return NextResponse.json({ 
       success: true, 
       data: internalData,
@@ -208,7 +221,6 @@ export async function GET(request: NextRequest) {
   // 2. Essayer l'API externe cquest.org
   const cquestData = await fetchFromCquest(codePostal, typeBien, surfaceMin || undefined, surfaceMax || undefined)
   if (cquestData) {
-    console.log(`[DVF API] ✓ Données trouvées via cquest.org pour ${codePostal}`)
     return NextResponse.json({ 
       success: true, 
       data: cquestData,
@@ -219,7 +231,6 @@ export async function GET(request: NextRequest) {
   // 3. Fallback sur données locales statiques
   const fallbackData = getFallbackData(codePostal, typeBien)
   if (fallbackData) {
-    console.log(`[DVF API] ✓ Données trouvées via fallback local pour ${codePostal}`)
     return NextResponse.json({ 
       success: true, 
       data: fallbackData,
@@ -228,7 +239,6 @@ export async function GET(request: NextRequest) {
   }
   
   // Aucune donnée trouvée
-  console.log(`[DVF API] ✗ Aucune donnée pour ${codePostal}`)
   return NextResponse.json(
     { success: false, error: `Pas de données DVF pour le code postal ${codePostal}` }
   )

@@ -112,13 +112,28 @@ export const useComparateurStore = create<ComparateurState>()(
       
       ajouterAnnonce: (nouvelleAnnonce) => {
         const id = generateId()
+        
+        // Déduire le département depuis le code postal si absent
+        let departement = nouvelleAnnonce.departement
+        if (!departement && nouvelleAnnonce.codePostal) {
+          const cp = nouvelleAnnonce.codePostal
+          if (cp.startsWith('97')) {
+            departement = cp.substring(0, 3) // DOM-TOM
+          } else if (cp.startsWith('20')) {
+            departement = parseInt(cp) < 20200 ? '2A' : '2B'
+          } else {
+            departement = cp.substring(0, 2)
+          }
+        }
+        
         const annonce: Annonce = {
           id,
           source: detecterSource(nouvelleAnnonce.url),
           prixM2: Math.round(nouvelleAnnonce.prix / nouvelleAnnonce.surface),
           dateAjout: new Date(),
           favori: false,
-          ...nouvelleAnnonce
+          ...nouvelleAnnonce,
+          ...(departement ? { departement } : {}),
         }
         
         set((state) => ({

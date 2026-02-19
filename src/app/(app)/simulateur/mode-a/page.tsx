@@ -1,12 +1,13 @@
-'use client'
+﻿'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { jsPDF } from 'jspdf'
+import { pdf } from '@react-pdf/renderer'
 import {
     AlertCircle,
     ArrowLeft,
     ArrowRight,
     CheckCircle,
+    ChevronDown,
     Clock,
     CreditCard,
     Download,
@@ -24,6 +25,7 @@ import { useForm } from 'react-hook-form'
 import MiniCarteIDF from '@/components/carte/MiniCarteIDF'
 import { ConseilsAvances } from '@/components/conseils'
 import { ContactModal } from '@/components/contact'
+import { SimulationPDF } from '@/components/pdf/SimulationPDF'
 import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,6 +44,7 @@ import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
 import { useDVFData } from '@/hooks/useDVFData'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
+import { calculerScoreFaisabilite } from '@/lib/calculs/scoreFaisabilite'
 import { genererConseilsAvances } from '@/lib/conseils/genererConseilsAvances'
 import { modeASchema, type ModeAFormData } from '@/lib/validators/schemas'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
@@ -85,6 +88,7 @@ function ModeAPageContent() {
   const [statutProfessionnel, setStatutProfessionnel] = useState('')
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
+  const [showScoreDetail, setShowScoreDetail] = useState(false)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
   const { 
     setMode, setProfil, setParametresModeA, setResultats, reset: resetStore,
@@ -465,20 +469,24 @@ function ModeAPageContent() {
     return { revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel, endettementActuelEleve, tauxEndettementProjet, depasseEndettement, mensualiteMaxRecommandee, resteAVivre, resteAVivreMinTotal, niveauResteAVivre, capitalEmpruntable, mensualiteAssurance, prixAchatMax, fraisNotaire, budgetTotal, coutTotalCredit, surfaceParis, surfacePetiteCouronne, surfaceGrandeCouronne, surfaceProvince, zonesCompatibles, apercuSurfaces }
   }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, mensualiteMax, dureeAns, apport, typeBien, tauxInteret, situationFoyer, nombreEnfants, zonesReelles])
 
-  // Score de faisabilité (0-100)
-  const scoreFaisabilite = useMemo(() => {
-    let score = 100
-    if (calculs.tauxEndettementProjet > 35) score -= 50
-    else if (calculs.tauxEndettementProjet > 33) score -= 20
-    else if (calculs.tauxEndettementProjet > 31) score -= 10
-    if (calculs.niveauResteAVivre === 'risque') score -= 30
-    else if (calculs.niveauResteAVivre === 'limite') score -= 15
-    const pourcentageApport = calculs.prixAchatMax > 0 ? (apport / calculs.prixAchatMax) * 100 : 0
-    if (pourcentageApport >= 20) score += 10
-    else if (pourcentageApport >= 10) score += 5
-    else if (pourcentageApport < 5) score -= 10
-    return Math.max(0, Math.min(100, score))
-  }, [calculs, apport])
+  // Score de faisabilité multicritère (0-100) — 7 critères pondérés
+  const scoreResult = useMemo(() => {
+    return calculerScoreFaisabilite({
+      tauxEndettementProjet: calculs.tauxEndettementProjet,
+      niveauResteAVivre: calculs.niveauResteAVivre,
+      resteAVivre: calculs.resteAVivre,
+      resteAVivreMin: calculs.resteAVivreMinTotal,
+      apport,
+      prixAchat: calculs.prixAchatMax,
+      statutProfessionnel,
+      age,
+      dureeAns,
+      chargesMensuelles: calculs.chargesMensuellesTotal,
+      revenusMensuels: calculs.revenusMensuelsTotal,
+    })
+  }, [calculs, apport, statutProfessionnel, age, dureeAns])
+  const scoreFaisabilite = scoreResult.score
+  const scoreDetails = scoreResult.details
 
   // Données répartition budget
   const pieData = useMemo(() => {
@@ -494,7 +502,7 @@ function ModeAPageContent() {
     }
   }, [apport, calculs])
 
-  // Export PDF Premium - Design professionnel avec conseils avancés
+  // Export PDF Premium - Design professionnel avec @react-pdf/renderer
   const generatePDF = useCallback(async () => {
     // Génération des conseils pour le PDF
     const resultatsConseils = genererConseilsAvances({
@@ -522,453 +530,44 @@ function ModeAPageContent() {
       surfaceGrandeCouronne: calculs.surfaceGrandeCouronne
     })
 
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const marginLeft = 15
-    const marginRight = 15
-    const contentWidth = pageWidth - marginLeft - marginRight
+    const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
-    const fmt = (n: number): string => {
-      const str = Math.round(n).toString()
-      let result = ''
-      for (let i = 0; i < str.length; i++) {
-        if (i > 0 && (str.length - i) % 3 === 0) result += ' '
-        result += str[i]
-      }
-      return result
-    }
+    const blob = await pdf(
+      <SimulationPDF
+        logoUrl={logoUrl}
+        age={age}
+        statutProfessionnel={statutProfessionnel}
+        situationFoyer={situationFoyer}
+        nombreEnfants={nombreEnfants}
+        revenusMensuelsTotal={calculs.revenusMensuelsTotal}
+        chargesMensuellesTotal={calculs.chargesMensuellesTotal}
+        capitalEmpruntable={calculs.capitalEmpruntable}
+        prixAchatMax={calculs.prixAchatMax}
+        fraisNotaire={calculs.fraisNotaire}
+        tauxEndettementProjet={calculs.tauxEndettementProjet}
+        resteAVivre={calculs.resteAVivre}
+        mensualiteAssurance={calculs.mensualiteAssurance}
+        mensualiteMax={mensualiteMax}
+        dureeAns={dureeAns}
+        tauxInteret={tauxInteret}
+        apport={apport}
+        scoreFaisabilite={scoreFaisabilite}
+        scoreDetails={scoreDetails}
+        pieData={pieData}
+        conseils={resultatsConseils}
+      />
+    ).toBlob()
 
-    const C = {
-      black: [26, 26, 26] as [number, number, number],
-      white: [255, 255, 255] as [number, number, number],
-      gray: [100, 100, 100] as [number, number, number],
-      grayLight: [150, 150, 150] as [number, number, number],
-      grayBg: [245, 247, 250] as [number, number, number],
-      green: [34, 197, 94] as [number, number, number],
-      greenLight: [220, 252, 231] as [number, number, number],
-      greenDark: [22, 163, 74] as [number, number, number],
-      orange: [249, 115, 22] as [number, number, number],
-      red: [239, 68, 68] as [number, number, number],
-      blue: [59, 130, 246] as [number, number, number],
-    }
-
-    // Utilitaires
-    const drawSectionTitle = (title: string, x: number, y: number, width: number) => {
-      doc.setFillColor(...C.black)
-      doc.roundedRect(x, y, width, 8, 1, 1, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...C.white)
-      doc.text(title, x + 4, y + 5.5)
-    }
-
-    const drawDataRow = (label: string, value: string, x: number, y: number, w: number, highlight?: [number, number, number]) => {
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8)
-      doc.setTextColor(...C.gray)
-      doc.text(label, x + 4, y)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(...(highlight || C.black))
-      doc.text(value, x + w - 4, y, { align: 'right' })
-    }
-
-    const addFooter = (pageNum: number, totalPages: number) => {
-      doc.setFillColor(...C.black)
-      doc.rect(0, pageHeight - 20, pageWidth, 20, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      doc.setTextColor(...C.white)
-      doc.text('AQUIZ', marginLeft, pageHeight - 10)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
-      doc.setTextColor(120, 120, 120)
-      doc.text('Simulation indicative - Ne constitue pas une offre de pret', pageWidth / 2, pageHeight - 10, { align: 'center' })
-      doc.setFontSize(7)
-      doc.setTextColor(150, 150, 150)
-      doc.text(`Page ${pageNum}/${totalPages}`, pageWidth - marginRight, pageHeight - 10, { align: 'right' })
-    }
-
-    let y = 0
-
-    // =====================================================
-    // PAGE 1 : RÉSUMÉ CAPACITÉ
-    // =====================================================
-    
-    // Header noir
-    doc.setFillColor(...C.black)
-    doc.rect(0, 0, pageWidth, 48, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(24)
-    doc.setTextColor(...C.white)
-    doc.text('AQUIZ', marginLeft, 16)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(180, 180, 180)
-    doc.text('Etude de capacite d\'achat immobilier', marginLeft, 23)
-    const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-    doc.setFontSize(7)
-    doc.setTextColor(150, 150, 150)
-    doc.text(dateStr, pageWidth - marginRight, 15, { align: 'right' })
-    
-    // Badge score dans header
-    const scoreColor = scoreFaisabilite >= 80 ? C.green : scoreFaisabilite >= 60 ? C.orange : C.red
-    doc.setFillColor(...scoreColor)
-    doc.roundedRect(pageWidth - marginRight - 28, 22, 28, 18, 2, 2, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(14)
-    doc.setTextColor(...C.white)
-    doc.text(scoreFaisabilite.toString(), pageWidth - marginRight - 14, 32, { align: 'center' })
-    doc.setFontSize(6)
-    doc.text('/100', pageWidth - marginRight - 14, 37, { align: 'center' })
-    y = 56
-
-    // Grande carte capacité
-    doc.setFillColor(...C.grayBg)
-    doc.roundedRect(marginLeft, y, contentWidth, 36, 3, 3, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...C.gray)
-    doc.text('VOTRE CAPACITE D\'ACHAT MAXIMALE', marginLeft + 8, y + 10)
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(28)
-    doc.setTextColor(...C.black)
-    doc.text(fmt(calculs.prixAchatMax) + ' EUR', marginLeft + 8, y + 26)
-    // Probabilité à droite
-    doc.setFillColor(...C.black)
-    doc.roundedRect(pageWidth - marginRight - 45, y + 6, 38, 24, 2, 2, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(180, 180, 180)
-    doc.text('PROBABILITE', pageWidth - marginRight - 26, y + 13, { align: 'center' })
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9)
-    doc.setTextColor(...C.white)
-    const probaText = resultatsConseils.diagnostic.probabiliteAcceptation.toUpperCase()
-    doc.text(probaText.length > 12 ? probaText.substring(0, 12) : probaText, pageWidth - marginRight - 26, y + 22, { align: 'center' })
-    y += 44
-
-    // 3 Colonnes métriques clés
-    const col3Width = (contentWidth - 8) / 3
-    const metrics = [
-      { label: 'MENSUALITE', value: fmt(mensualiteMax + calculs.mensualiteAssurance) + ' EUR', sub: 'Crédit + Assurance' },
-      { label: 'DUREE', value: dureeAns + ' ans', sub: 'Soit ' + (dureeAns * 12) + ' mensualités' },
-      { label: 'TAUX', value: tauxInteret + '%', sub: 'Hors assurance' }
-    ]
-    metrics.forEach((m, i) => {
-      const mx = marginLeft + i * (col3Width + 4)
-      doc.setFillColor(...C.white)
-      doc.roundedRect(mx, y, col3Width, 26, 2, 2, 'F')
-      doc.setDrawColor(220, 220, 220)
-      doc.setLineWidth(0.3)
-      doc.roundedRect(mx, y, col3Width, 26, 2, 2, 'S')
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
-      doc.setTextColor(...C.gray)
-      doc.text(m.label, mx + col3Width / 2, y + 7, { align: 'center' })
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(12)
-      doc.setTextColor(...C.black)
-      doc.text(m.value, mx + col3Width / 2, y + 16, { align: 'center' })
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6)
-      doc.setTextColor(...C.grayLight)
-      doc.text(m.sub, mx + col3Width / 2, y + 22, { align: 'center' })
-    })
-    y += 34
-
-    // 2 Colonnes : Profil & Paramètres
-    const halfWidth = (contentWidth - 6) / 2
-    drawSectionTitle('PROFIL EMPRUNTEUR', marginLeft, y, halfWidth)
-    doc.setFillColor(...C.grayBg)
-    doc.roundedRect(marginLeft, y + 9, halfWidth, 40, 1, 1, 'F')
-    let rowY = y + 17
-    drawDataRow('Age', age + ' ans', marginLeft, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Statut', (statutProfessionnel || 'CDI').toUpperCase(), marginLeft, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Situation', situationFoyer === 'couple' ? 'En couple' : 'Celibataire', marginLeft, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Revenus nets', fmt(calculs.revenusMensuelsTotal) + ' EUR/mois', marginLeft, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Charges', fmt(calculs.chargesMensuellesTotal) + ' EUR/mois', marginLeft, rowY, halfWidth)
-
-    const rightX = marginLeft + halfWidth + 6
-    drawSectionTitle('FINANCEMENT', rightX, y, halfWidth)
-    doc.setFillColor(...C.grayBg)
-    doc.roundedRect(rightX, y + 9, halfWidth, 40, 1, 1, 'F')
-    rowY = y + 17
-    drawDataRow('Capital empruntable', fmt(calculs.capitalEmpruntable) + ' EUR', rightX, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Apport personnel', fmt(apport) + ' EUR', rightX, rowY, halfWidth)
-    rowY += 8
-    drawDataRow('Frais de notaire', fmt(calculs.fraisNotaire) + ' EUR', rightX, rowY, halfWidth)
-    rowY += 8
-    const tauxColor = calculs.tauxEndettementProjet <= 33 ? C.green : calculs.tauxEndettementProjet <= 35 ? C.orange : C.red
-    drawDataRow('Taux d\'endettement', Math.round(calculs.tauxEndettementProjet) + '%', rightX, rowY, halfWidth, tauxColor)
-    rowY += 8
-    const ravColor = calculs.resteAVivre >= calculs.resteAVivreMinTotal ? C.green : C.orange
-    drawDataRow('Reste a vivre', fmt(calculs.resteAVivre) + ' EUR', rightX, rowY, halfWidth, ravColor)
-    y += 58
-
-    // Répartition budget (barres)
-    drawSectionTitle('REPARTITION DU BUDGET', marginLeft, y, contentWidth)
-    y += 12
-    const items = [
-      { label: 'Apport personnel', value: pieData.apport, pct: pieData.pourcentageApport, color: C.blue },
-      { label: 'Pret bancaire', value: pieData.pret, pct: pieData.pourcentagePret, color: C.black },
-      { label: 'Frais de notaire', value: pieData.frais, pct: pieData.pourcentageFrais, color: C.grayLight },
-    ]
-    items.forEach((item, i) => {
-      const by = y + i * 11
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
-      doc.setTextColor(...C.gray)
-      doc.text(item.label, marginLeft, by)
-      doc.text(fmt(item.value) + ' EUR (' + item.pct + '%)', pageWidth - marginRight, by, { align: 'right' })
-      doc.setFillColor(230, 230, 230)
-      doc.roundedRect(marginLeft, by + 2, contentWidth, 5, 1, 1, 'F')
-      if (item.pct > 0) {
-        doc.setFillColor(...item.color)
-        doc.roundedRect(marginLeft, by + 2, Math.max(3, contentWidth * item.pct / 100), 5, 1, 1, 'F')
-      }
-    })
-    y += 35
-    doc.setDrawColor(200, 200, 200)
-    doc.line(marginLeft, y, pageWidth - marginRight, y)
-    y += 4
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(...C.black)
-    doc.text('BUDGET TOTAL', marginLeft, y)
-    doc.text(fmt(pieData.total) + ' EUR', pageWidth - marginRight, y, { align: 'right' })
-    
-    addFooter(1, 2)
-
-    // =====================================================
-    // PAGE 2 : DIAGNOSTIC BANCAIRE & CONSEILS
-    // =====================================================
-    doc.addPage()
-    y = 15
-
-    // Header léger
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(12)
-    doc.setTextColor(...C.black)
-    doc.text('DIAGNOSTIC BANCAIRE', marginLeft, y)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...C.gray)
-    doc.text('Analyse de votre dossier', marginLeft + 52, y)
-    y += 8
-
-    // Carte score diagnostic
-    doc.setFillColor(...C.black)
-    doc.roundedRect(marginLeft, y, contentWidth, 32, 2, 2, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(32)
-    doc.setTextColor(...C.white)
-    doc.text(resultatsConseils.diagnostic.scoreGlobal.toString(), marginLeft + 20, y + 20, { align: 'center' })
-    doc.setFontSize(10)
-    doc.text('/100', marginLeft + 32, y + 20)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(180, 180, 180)
-    doc.text('Score global', marginLeft + 8, y + 28)
-    // Probabilité
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(11)
-    doc.setTextColor(...C.green)
-    doc.text('Probabilite: ' + resultatsConseils.diagnostic.probabiliteAcceptation, marginLeft + 60, y + 14)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(180, 180, 180)
-    doc.text('Delai estime: ' + resultatsConseils.diagnostic.delaiEstime, marginLeft + 60, y + 22)
-    if (resultatsConseils.diagnostic.banquesRecommandees.length > 0) {
-      doc.text('Banques ciblees: ' + resultatsConseils.diagnostic.banquesRecommandees.join(', '), marginLeft + 60, y + 28)
-    }
-    y += 40
-
-    // Points forts & vigilance
-    const pfWidth = (contentWidth - 6) / 2
-    doc.setFillColor(...C.greenLight)
-    doc.roundedRect(marginLeft, y, pfWidth, 6, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...C.greenDark)
-    doc.text('POINTS FORTS', marginLeft + 4, y + 4.5)
-    doc.setFillColor(...C.grayBg)
-    const pfHeight = Math.max(24, resultatsConseils.diagnostic.pointsForts.length * 8 + 6)
-    doc.roundedRect(marginLeft, y + 7, pfWidth, pfHeight, 1, 1, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C.black)
-    resultatsConseils.diagnostic.pointsForts.forEach((pf, i) => {
-      const maxChars = 42
-      const pfText = '• ' + (pf.length > maxChars ? pf.substring(0, maxChars - 3) + '...' : pf)
-      doc.text(pfText, marginLeft + 3, y + 14 + i * 8)
-    })
-
-    const pvX = marginLeft + pfWidth + 6
-    doc.setFillColor(255, 243, 224)
-    doc.roundedRect(pvX, y, pfWidth, 6, 1, 1, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...C.orange)
-    doc.text('POINTS D\'ATTENTION', pvX + 4, y + 4.5)
-    doc.setFillColor(...C.grayBg)
-    const pvHeight = Math.max(24, resultatsConseils.diagnostic.pointsVigilance.length * 8 + 6)
-    doc.roundedRect(pvX, y + 7, pfWidth, pvHeight, 1, 1, 'F')
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    doc.setTextColor(...C.black)
-    resultatsConseils.diagnostic.pointsVigilance.forEach((pv, i) => {
-      const maxChars = 42
-      const pvText = '• ' + (pv.length > maxChars ? pv.substring(0, maxChars - 3) + '...' : pv)
-      doc.text(pvText, pvX + 3, y + 14 + i * 8)
-    })
-    y += Math.max(pfHeight, pvHeight) + 16
-
-    // Résumé exécutif - en plusieurs lignes avec bullets
-    const resumeHeight = 28
-    doc.setFillColor(...C.grayBg)
-    doc.roundedRect(marginLeft, y, contentWidth, resumeHeight, 2, 2, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.setTextColor(...C.black)
-    doc.text('RESUME', marginLeft + 4, y + 6)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(...C.gray)
-    // Découper le résumé en points clés (max 55 chars par ligne)
-    const maxCharsPerLine = 55
-    const resumeFull = resultatsConseils.resumeExecutif
-    const resumeBullets: string[] = []
-    let remaining = resumeFull
-    while (remaining.length > 0 && resumeBullets.length < 3) {
-      if (remaining.length <= maxCharsPerLine) {
-        resumeBullets.push('• ' + remaining)
-        break
-      }
-      // Trouver le dernier espace avant la limite
-      let cutPoint = remaining.lastIndexOf(' ', maxCharsPerLine)
-      if (cutPoint <= 0) cutPoint = maxCharsPerLine
-      resumeBullets.push('• ' + remaining.substring(0, cutPoint))
-      remaining = remaining.substring(cutPoint + 1)
-    }
-    resumeBullets.forEach((line, i) => {
-      doc.text(line, marginLeft + 4, y + 12 + i * 5)
-    })
-    y += resumeHeight + 8
-
-    // CONSEILS PERSONNALISES
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(...C.black)
-    doc.text('RECOMMANDATIONS PERSONNALISEES', marginLeft, y)
-    y += 8
-
-    resultatsConseils.conseils.slice(0, 4).forEach((conseil, idx) => {
-      if (y > pageHeight - 50) return
-      const conseilHeight = 20
-      doc.setFillColor(...C.grayBg)
-      doc.roundedRect(marginLeft, y, contentWidth, conseilHeight, 1, 1, 'F')
-      // Numéro
-      doc.setFillColor(...C.black)
-      doc.roundedRect(marginLeft + 3, y + 4, 12, 12, 1, 1, 'F')
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(9)
-      doc.setTextColor(...C.white)
-      doc.text((idx + 1).toString(), marginLeft + 9, y + 12, { align: 'center' })
-      // Titre & conseil
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(8)
-      doc.setTextColor(...C.black)
-      const titreMax = 50
-      const titreTronque = conseil.titre.length > titreMax ? conseil.titre.substring(0, titreMax - 3) + '...' : conseil.titre
-      doc.text(titreTronque, marginLeft + 20, y + 8)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.5)
-      doc.setTextColor(...C.gray)
-      const conseilMax = 85
-      const conseilText = conseil.conseil.length > conseilMax ? conseil.conseil.substring(0, conseilMax - 3) + '...' : conseil.conseil
-      doc.text(conseilText, marginLeft + 20, y + 15)
-      y += conseilHeight + 3
-    })
-    y += 8
-
-    // SCENARIOS ALTERNATIFS
-    if (resultatsConseils.scenarios.length > 0 && y < pageHeight - 70) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10)
-      doc.setTextColor(...C.black)
-      doc.text('SCENARIOS ALTERNATIFS', marginLeft, y)
-      y += 8
-
-      resultatsConseils.scenarios.slice(0, 2).forEach((scenario) => {
-        if (y > pageHeight - 45) return
-        const scenHeight = 24
-        doc.setFillColor(...(scenario.recommande ? C.greenLight : C.grayBg))
-        doc.roundedRect(marginLeft, y, contentWidth, scenHeight, 1, 1, 'F')
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(8)
-        doc.setTextColor(...C.black)
-        const scenTitreMax = 40
-        const scenTitre = scenario.titre.length > scenTitreMax ? scenario.titre.substring(0, scenTitreMax - 3) + '...' : scenario.titre
-        doc.text(scenTitre, marginLeft + 4, y + 7)
-        if (scenario.recommande) {
-          doc.setFillColor(...C.green)
-          const badgeX = marginLeft + 4 + doc.getTextWidth(scenTitre) + 4
-          doc.roundedRect(badgeX, y + 3, 22, 6, 1, 1, 'F')
-          doc.setFontSize(5)
-          doc.setTextColor(...C.white)
-          doc.text('RECOMMANDE', badgeX + 11, y + 7, { align: 'center' })
-        }
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6.5)
-        doc.setTextColor(...C.gray)
-        const descMax = 70
-        const descText = scenario.description.length > descMax ? scenario.description.substring(0, descMax - 3) + '...' : scenario.description
-        doc.text(descText, marginLeft + 4, y + 14)
-        // Impact
-        const isPositif = scenario.resultats.economieOuCout > 0
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(9)
-        doc.setTextColor(...(isPositif ? C.green : C.black))
-        const impactText = (isPositif ? '+' : '-') + fmt(Math.abs(scenario.resultats.economieOuCout)) + ' EUR'
-        doc.text(impactText, pageWidth - marginRight - 4, y + 10, { align: 'right' })
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6)
-        doc.setTextColor(...C.grayLight)
-        doc.text('sur le budget', pageWidth - marginRight - 4, y + 17, { align: 'right' })
-        y += scenHeight + 4
-      })
-    }
-
-    // CTA Contact
-    y = pageHeight - 50
-    doc.setFillColor(...C.black)
-    doc.roundedRect(marginLeft, y, contentWidth, 24, 2, 2, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(...C.white)
-    doc.text('Besoin d\'accompagnement ?', marginLeft + 8, y + 9)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(180, 180, 180)
-    doc.text('Un conseiller AQUIZ peut negocier votre taux et optimiser votre financement.', marginLeft + 8, y + 16)
-    doc.setFillColor(...C.green)
-    doc.roundedRect(pageWidth - marginRight - 38, y + 5, 34, 14, 2, 2, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...C.white)
-    doc.text('www.aquiz.fr', pageWidth - marginRight - 21, y + 13.5, { align: 'center' })
-
-    addFooter(2, 2)
-
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
     const dateFile = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
-    doc.save(`AQUIZ-Simulation-${dateFile}.pdf`)
-  }, [calculs, mensualiteMax, mensualiteRecommandee, dureeAns, apport, typeBien, tauxInteret, age, statutProfessionnel, situationFoyer, nombreEnfants, scoreFaisabilite, pieData])
+    link.download = `AQUIZ-Simulation-${dateFile}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, [calculs, mensualiteMax, mensualiteRecommandee, dureeAns, apport, typeBien, tauxInteret, age, statutProfessionnel, situationFoyer, nombreEnfants, scoreFaisabilite, scoreDetails, pieData])
 
   const onSubmit = (data: ModeAFormData) => {
     setMode('A')
@@ -2008,6 +1607,69 @@ function ModeAPageContent() {
                           {formatMontant(calculs.resteAVivre)} €
                         </p>
                         <p className="text-[10px] text-aquiz-gray mt-0.5">Minimum requis : {formatMontant(calculs.resteAVivreMinTotal)} €</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DÉTAIL DU SCORE — 7 critères (accordéon) */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-aquiz-gray-lighter overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowScoreDetail(!showScoreDetail)}
+                      className="w-full px-5 py-3.5 flex items-center justify-between cursor-pointer hover:bg-aquiz-gray-lightest/40 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-aquiz-gray-lightest flex items-center justify-center">
+                          <Shield className="w-4 h-4 text-aquiz-gray" />
+                        </div>
+                        <div className="text-left">
+                          <h2 className="text-sm font-semibold text-aquiz-black">Analyse détaillée du score</h2>
+                          <p className="text-[10px] text-aquiz-gray mt-0.5">
+                            7 critères bancaires — <span className={`font-semibold ${
+                              scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'
+                            }`}>{scoreDetails.filter(d => (d.max > 0 ? (d.score / d.max) * 100 : 0) >= 75).length}/7 validés</span>
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-5 h-5 text-aquiz-gray transition-transform duration-300 ${showScoreDetail ? 'rotate-180' : ''}`} />
+                    </button>
+                    <div className={`grid transition-all duration-300 ease-in-out ${showScoreDetail ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                      <div className="overflow-hidden">
+                        <div className="divide-y divide-aquiz-gray-lighter border-t border-aquiz-gray-lighter">
+                          {scoreDetails.map((d) => {
+                            const pct = d.max > 0 ? (d.score / d.max) * 100 : 0
+                            const isGood = pct >= 75
+                            const isMedium = pct >= 50 && pct < 75
+                            const barColor = isGood ? 'bg-aquiz-green' : isMedium ? 'bg-amber-400' : pct >= 25 ? 'bg-orange-400' : 'bg-red-400'
+                            const iconEl = isGood
+                              ? <CheckCircle className="w-4 h-4 text-aquiz-green" />
+                              : isMedium
+                                ? <AlertCircle className="w-4 h-4 text-amber-500" />
+                                : <AlertCircle className="w-4 h-4 text-red-400" />
+                            return (
+                              <div key={d.critere} className="px-5 py-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isGood ? 'bg-aquiz-green/10' : isMedium ? 'bg-amber-50' : 'bg-red-50'}`}>
+                                    {iconEl}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-sm text-aquiz-black">{d.critere}</span>
+                                      <span className={`text-xs font-semibold ${isGood ? 'text-aquiz-green' : isMedium ? 'text-amber-500' : 'text-red-400'}`}>{d.score}/{d.max}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-aquiz-gray-lightest rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <p className="text-[10px] text-aquiz-gray mt-1">{d.commentaire}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>

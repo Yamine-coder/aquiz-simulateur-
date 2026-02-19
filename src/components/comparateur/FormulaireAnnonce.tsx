@@ -66,7 +66,12 @@ const annonceSchema = z.object({
   taxeFonciere: z.union([z.number().min(0), z.nan()]).optional().nullable(),
   titre: z.string().max(200).optional(),
   notes: z.string().max(1000).optional(),
-  imageUrl: z.string().url().optional().or(z.literal(''))
+  imageUrl: z.string().url().optional().or(z.literal('')),
+  ges: z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'NC'] as const).optional(),
+  description: z.string().max(1000).optional(),
+  anneeConstruction: z.union([z.number().min(1800).max(2030), z.nan()]).optional().nullable(),
+  nbSallesBains: z.union([z.number().min(0).max(10), z.nan()]).optional().nullable(),
+  orientation: z.string().max(30).optional(),
 })
 
 type AnnonceFormData = z.infer<typeof annonceSchema>
@@ -147,6 +152,11 @@ export function FormulaireAnnonce({
     if (data.ascenseur !== undefined) setValue('ascenseur', data.ascenseur as boolean)
     if (data.url) setValue('url', data.url as string)
     if (data.imageUrl) setValue('imageUrl', data.imageUrl as string)
+    if (data.ges) setValue('ges', data.ges as ClasseDPE)
+    if (data.description) setValue('description', data.description as string)
+    if (data.anneeConstruction) setValue('anneeConstruction', data.anneeConstruction as number)
+    if (data.nbSallesBains) setValue('nbSallesBains', data.nbSallesBains as number)
+    if (data.orientation) setValue('orientation', data.orientation as string)
   }
 
   // ===== EXTRACTION DEPUIS URL (via API + Jina Reader) =====
@@ -224,9 +234,14 @@ export function FormulaireAnnonce({
       etage: cleanNumber(data.etage),
       chargesMensuelles: cleanNumber(data.chargesMensuelles),
       taxeFonciere: cleanNumber(data.taxeFonciere),
+      anneeConstruction: cleanNumber(data.anneeConstruction),
+      nbSallesBains: cleanNumber(data.nbSallesBains),
       titre: data.titre || undefined,
+      description: data.description || undefined,
       notes: data.notes || undefined,
-      imageUrl: data.imageUrl || undefined
+      imageUrl: data.imageUrl || undefined,
+      ges: data.ges || undefined,
+      orientation: data.orientation || undefined,
     } as NouvelleAnnonce)
   }
   
@@ -591,6 +606,29 @@ export function FormulaireAnnonce({
                     </Select>
                   </div>
                   
+                  {/* GES */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">GES</Label>
+                    <Select
+                      value={watch('ges') || ''}
+                      onValueChange={(val) => setValue('ges', val as ClasseDPE)}
+                    >
+                      <SelectTrigger className="h-10 text-sm rounded-lg">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-300" /> A</span></SelectItem>
+                        <SelectItem value="B"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-400" /> B</span></SelectItem>
+                        <SelectItem value="C"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-500" /> C</span></SelectItem>
+                        <SelectItem value="D"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-600" /> D</span></SelectItem>
+                        <SelectItem value="E"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-700" /> E</span></SelectItem>
+                        <SelectItem value="F"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-800" /> F</span></SelectItem>
+                        <SelectItem value="G"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-violet-900" /> G</span></SelectItem>
+                        <SelectItem value="NC"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300" /> NC</span></SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
                   {/* Étage (si appartement) */}
                   {type === 'appartement' && (
                     <div className="space-y-1.5">
@@ -700,6 +738,28 @@ export function FormulaireAnnonce({
                     className="w-full px-3 py-2.5 border border-aquiz-gray-lighter rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-aquiz-green/20 focus:border-aquiz-green"
                     {...register('notes')}
                   />
+                </div>
+                
+                {/* Année construction, SDB, Orientation */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="anneeConstruction" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
+                      Année construction
+                    </Label>
+                    <Input id="anneeConstruction" type="number" placeholder="ex: 1985" className="h-10 text-sm rounded-lg" {...register('anneeConstruction', { valueAsNumber: true })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="nbSallesBains" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
+                      Salles de bains
+                    </Label>
+                    <Input id="nbSallesBains" type="number" min={0} max={10} placeholder="—" className="h-10 text-sm rounded-lg" {...register('nbSallesBains', { valueAsNumber: true })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="orientation" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
+                      Orientation
+                    </Label>
+                    <Input id="orientation" type="text" placeholder="Sud" className="h-10 text-sm rounded-lg" {...register('orientation')} />
+                  </div>
                 </div>
               </div>
             </details>

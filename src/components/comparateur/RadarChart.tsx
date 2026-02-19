@@ -34,7 +34,8 @@ const DIMENSIONS = [
   { key: 'quartier', label: 'Quartier' },
   { key: 'risques', label: 'Sécurité' },
   { key: 'energie', label: 'Énergie' },
-  { key: 'equipements', label: 'Équipements' }
+  { key: 'confort', label: 'Confort' },
+  { key: 'budget', label: 'Budget' }
 ]
 
 /**

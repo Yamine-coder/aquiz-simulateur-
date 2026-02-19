@@ -19,14 +19,20 @@ export interface DonneesExtraites {
   ville?: string
   codePostal?: string
   dpe?: ClasseDPE
+  ges?: ClasseDPE
   etage?: number
+  etagesTotal?: number
   chargesMensuelles?: number
   taxeFonciere?: number
   titre?: string
+  description?: string
   ascenseur?: boolean
   balconTerrasse?: boolean
   parking?: boolean
   cave?: boolean
+  anneeConstruction?: number
+  nbSallesBains?: number
+  orientation?: string
 }
 
 // ============================================
@@ -214,6 +220,143 @@ function extraireDPE(texte: string): ClasseDPE | undefined {
   return undefined
 }
 
+function extraireGES(texte: string): ClasseDPE | undefined {
+  const patterns = [
+    /GES\s*:?\s*([A-G])\b/i,
+    /gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*:?\s*([A-G])\b/i,
+    /classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i,
+    /étiquette\s*climat\s*:?\s*([A-G])\b/i,
+    /émissions?\s*(?:de\s*)?(?:GES|CO2?)\s*:?\s*([A-G])\b/i,
+  ]
+
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) {
+      // Le groupe de capture est en position 1 pour le pattern #1, 
+      // mais peut être en position 1 ou plus loin pour les autres.
+      // On prend le dernier groupe non-undefined.
+      const letter = [...m].reverse().find(g => g && /^[A-G]$/i.test(g))
+      if (letter) return letter.toUpperCase() as ClasseDPE
+    }
+  }
+  return undefined
+}
+
+function extraireEtagesTotal(texte: string): number | undefined {
+  const patterns = [
+    /(?:immeuble|bâtiment|résidence)\s*(?:de\s*)?(?:R\+)?(\d+)\s*étages?/i,
+    /(\d+)\s*étages?\s*(?:au\s*total|en\s*tout)/i,
+    /sur\s*(\d+)\s*étages?/i,
+    /(?:nombre\s*d'?étages?|étages?\s*total)\s*:?\s*(\d+)/i,
+  ]
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) {
+      const n = parseInt(m[1])
+      if (n >= 1 && n <= 60) return n
+    }
+  }
+  return undefined
+}
+
+function extraireAnneeConstruction(texte: string): number | undefined {
+  const patterns = [
+    // Patterns explicites (les plus fiables)
+    /(?:année\s*(?:de\s*)?construction)\s*:?\s*((?:19|20)\d{2})/i,
+    /(?:date\s*(?:de\s*)?construction)\s*:?\s*((?:19|20)\d{2})/i,
+    /(?:construit|construction)\s*(?:en\s*)?:?\s*((?:19|20)\d{2})/i,
+    /(?:bâti|b[aâ]tie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:19|20)\d{2})/i,
+    // "Immeuble de 1972", "Résidence de 1985", "Copropriété de 1974"
+    /(?:immeuble|résidence|r[eé]sidence|copropri[eé]t[eé]|programme|b[aâ]timent)\s+(?:de|du)\s+((?:19|20)\d{2})/i,
+    // "Livraison 2024", "Livraison prévue T3 2025", "Livraison prévue 2025"
+    /livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i,
+    // "Neuf - livré en 2024"
+    /livr[eé]e?\s+(?:en\s+)?((?:19|20)\d{2})/i,
+    // "Année : 1985", "Année de construction : 1985"
+    /ann[eé]e\s*:?\s*((?:19|20)\d{2})/i,
+    // "Construction year: 1985" (Jina/Firecrawl can return English)
+    /(?:construction\s*year|year\s*(?:of\s*)?(?:construction|built))\s*:?\s*((?:19|20)\d{2})/i,
+    // "Période de construction : 1970-1980" → prend la 1ère année
+    /p[eé]riode\s*(?:de\s*)?construction\s*:?\s*((?:19|20)\d{2})/i,
+    // "datant de 1975", "datant des années 70"
+    /datant\s+(?:de\s+|des\s+ann[eé]es\s+)?((?:19|20)\d{2})/i,
+    // Tableau markdown : "| Année | 1985 |" ou "| Construction | 1985 |"
+    /\|\s*(?:année|ann[eé]e\s*(?:de\s*)?construction|construction|date\s*construction)\s*\|\s*((?:19|20)\d{2})\s*\|/i,
+    // "Built in 1985" (Jina anglais)
+    /built\s+in\s+((?:19|20)\d{2})/i,
+  ]
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) {
+      const annee = parseInt(m[1])
+      if (annee >= 1800 && annee <= 2030) return annee
+    }
+  }
+  
+  // Dernier recours : "années 70" → 1970, "années 60" → 1960
+  const decennieMatch = texte.match(/(?:ann[eé]es|d[eé]cennie)\s+(\d{2})(?:\b|[^\d])/i)
+  if (decennieMatch) {
+    const dec = parseInt(decennieMatch[1])
+    if (dec >= 50 && dec <= 99) return 1900 + dec
+    if (dec >= 0 && dec <= 30) return 2000 + dec
+  }
+  
+  return undefined
+}
+
+function extraireNbSallesBains(texte: string): number | undefined {
+  const patterns = [
+    /(\d+)\s*salles?\s*(?:de\s*)?bains?/i,
+    /salles?\s*(?:de\s*)?bains?\s*:?\s*(\d+)/i,
+    /(\d+)\s*(?:SDB|sdb)/i,
+  ]
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) {
+      // Groupe de capture peut être en position 1 ou 2 selon le pattern
+      const val = m[1] || m[2]
+      const n = parseInt(val)
+      if (n >= 1 && n <= 10) return n
+    }
+  }
+  return undefined
+}
+
+function extraireOrientation(texte: string): string | undefined {
+  // "Orientation sud", "Exposé plein sud", "Double exposition est/ouest"
+  const patterns = [
+    /(?:orientation|orienté|exposé|exposition)\s*:?\s*((?:plein\s*)?(?:nord|sud|est|ouest)(?:\s*[/\-]\s*(?:nord|sud|est|ouest))?)/i,
+    /(?:double\s*exposition)\s*:?\s*((?:nord|sud|est|ouest)\s*[/\-]\s*(?:nord|sud|est|ouest))/i,
+  ]
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) {
+      return m[1].trim().substring(0, 30)
+    }
+  }
+  return undefined
+}
+
+function extraireDescription(texte: string): string | undefined {
+  // Chercher un bloc de texte descriptif (phrases longues, contient des mots-clés immo)
+  const lignes = texte.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+  const descLines: string[] = []
+  
+  for (const ligne of lignes) {
+    // Lignes de 50+ chars avec des mots-clés immobiliers
+    if (ligne.length >= 50 && ligne.length <= 2000 &&
+        /appartement|maison|séjour|cuisine|chambre|salle|lumineu|calme|proche|quartier|situé|idéal|rénov|état|vue|jardin|parking|cave|balcon|terrasse|étage|résidence|copropriété|bien|immeuble/i.test(ligne)) {
+      descLines.push(ligne)
+      if (descLines.length >= 3) break
+    }
+  }
+  
+  if (descLines.length > 0) {
+    return descLines.join(' ').substring(0, 1000)
+  }
+  return undefined
+}
+
 function extraireEtage(texte: string): number | undefined {
   const patterns = [
     /(\d+)(?:er?|e|ème)?\s*étage/i,
@@ -317,10 +460,16 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
     ville: localisation.ville,
     codePostal: localisation.codePostal,
     dpe: extraireDPE(texte),
+    ges: extraireGES(texte),
     etage: extraireEtage(texte),
+    etagesTotal: extraireEtagesTotal(texte),
     chargesMensuelles: extraireCharges(texte),
     taxeFonciere: extraireTaxeFonciere(texte),
     titre: extraireTitre(texte),
+    description: extraireDescription(texte),
+    anneeConstruction: extraireAnneeConstruction(texte),
+    nbSallesBains: extraireNbSallesBains(texte),
+    orientation: extraireOrientation(texte),
     ...equipements,
   }
 
@@ -349,8 +498,14 @@ export function compterChampsExtraits(data: DonneesExtraites): number {
   if (data.ville) count++
   if (data.codePostal) count++
   if (data.dpe && data.dpe !== 'NC') count++
+  if (data.ges && data.ges !== 'NC') count++
   if (data.etage !== undefined) count++
+  if (data.etagesTotal) count++
   if (data.chargesMensuelles) count++
   if (data.taxeFonciere) count++
+  if (data.description) count++
+  if (data.anneeConstruction) count++
+  if (data.nbSallesBains) count++
+  if (data.orientation) count++
   return count
 }

@@ -423,6 +423,87 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     data.dpe = 'NC'
   }
   
+  // ===== GES =====
+  const gesMatch = html.match(/(?:ges|greenHouseGas|ghg|emissionClass)["\s:]*"?([A-G])"?/i) ||
+                   html.match(/gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre["\s:]*([A-G])/i) ||
+                   html.match(/classe\s*(?:GES|climat)["\s:]*([A-G])/i) ||
+                   html.match(/"ges"\s*:\s*"?([A-G])"?/i)
+  if (gesMatch) {
+    data.ges = gesMatch[1].toUpperCase() as ClasseDPE
+  }
+  
+  // ===== DESCRIPTION =====
+  // JSON-LD description (la plus riche)
+  const descJsonMatch = html.match(/"description"\s*:\s*"([^"]{50,2000})"/i)
+  if (descJsonMatch) {
+    data.description = descJsonMatch[1]
+      .replace(/\\n/g, ' ')
+      .replace(/\\r/g, '')
+      .replace(/\\t/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 1000)
+  }
+  // Fallback: og:description
+  if (!data.description) {
+    const ogDescMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]{50,})"/i)
+    if (ogDescMatch) {
+      data.description = ogDescMatch[1].substring(0, 1000)
+    }
+  }
+  
+  // ===== ANNÉE CONSTRUCTION =====
+  const anneePatterns = [
+    // JSON-LD / Schema.org / structured data
+    /"yearBuilt"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"constructionYear"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"yearOfConstruction"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"dateBuilt"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"buildYear"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"anneeConstruction"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"anneeDeCnstruction"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    // Bien'ici: buildPeriod, SeLoger: yearOfConstruction
+    /"buildPeriod"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    // LeBonCoin: {"key": "construction_year", "value": "1985"}
+    /"construction_year"[^}]*"value"\s*:\s*"?((?:19|20)\d{2})"?/i,
+    /"value"\s*:\s*"?((?:19|20)\d{2})"?[^}]*"construction_year"/i,
+    // Attributs HTML data-*
+    /data-(?:year|annee|construction)[^"]*="((?:19|20)\d{2})"/i,
+    // Texte libre dans le HTML
+    /(?:construit|construction|année)\s*(?:en\s*)?:?\s*((?:19|20)\d{2})/i,
+    /(?:bâti|édifié|livré)\s*(?:en\s*)?((?:19|20)\d{2})/i,
+    /(?:immeuble|résidence|copropriété|bâtiment)\s+(?:de|du)\s+((?:19|20)\d{2})/i,
+    /livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i,
+  ]
+  for (const pattern of anneePatterns) {
+    const match = html.match(pattern)
+    if (match) {
+      const annee = parseInt(match[1])
+      if (annee >= 1800 && annee <= 2030) {
+        data.anneeConstruction = annee
+        break
+      }
+    }
+  }
+  
+  // ===== ÉTAGES TOTAL =====
+  const etagesTotalPatterns = [
+    /"nbFloors"\s*:\s*"?(\d+)"?/i,
+    /"numberOfFloors"\s*:\s*"?(\d+)"?/i,
+    /"totalFloors"\s*:\s*"?(\d+)"?/i,
+    /(?:immeuble|bâtiment)\s*(?:de\s*)?(?:R\+)?(\d+)\s*étages?/i,
+  ]
+  for (const pattern of etagesTotalPatterns) {
+    const match = html.match(pattern)
+    if (match) {
+      const n = parseInt(match[1])
+      if (n >= 1 && n <= 60) {
+        data.etagesTotal = n
+        break
+      }
+    }
+  }
+  
   // ===== CHARGES MENSUELLES =====
   // Priorité aux formats les plus explicites
   const chargesPatterns = [

@@ -11,7 +11,7 @@
 
 import { analyserBien, type AnalyseComplete, type BienAnalyse } from '@/lib/api/analyseIntelligente'
 import type { Annonce } from '@/types/annonces'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseAnalyseEnrichieReturn {
   analyses: Map<string, AnalyseComplete>
@@ -33,9 +33,6 @@ function annonceToBienAnalyse(annonce: Annonce): BienAnalyse {
   if (!codePostal || codePostal.length !== 5) {
     codePostal = extraireCodePostal(annonce.ville)
   }
-  
-  // Log pour déboguer
-  console.log(`[Analyse] Annonce ${annonce.id}: ville="${annonce.ville}", codePostal="${codePostal}", type="${annonce.type}", prix=${annonce.prix}, surface=${annonce.surface}, prixM2=${annonce.prixM2}`)
   
   return {
     id: annonce.id,
@@ -69,7 +66,6 @@ function extraireCodePostal(ville: string): string {
   }
   
   // Si pas trouvé, retourner vide (pas de défaut à Paris qui fausserait les données)
-  console.warn(`[Analyse] Impossible d'extraire le code postal de: "${ville}"`)
   return ''
 }
 
@@ -80,6 +76,9 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
   const [analyses, setAnalyses] = useState<Map<string, AnalyseComplete>>(new Map())
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  // Ref pour lire les analyses sans les mettre dans les deps du useEffect
+  const analysesRef = useRef(analyses)
+  analysesRef.current = analyses
   
   // Analyser les annonces quand elles changent
   useEffect(() => {
@@ -89,7 +88,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
     }
     
     // Identifier les annonces qui n'ont pas encore été analysées
-    const annoncesSansAnalyse = annonces.filter(a => !analyses.has(a.id))
+    const annoncesSansAnalyse = annonces.filter(a => !analysesRef.current.has(a.id))
     
     if (annoncesSansAnalyse.length === 0) return
     
@@ -142,7 +141,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
     }
     
     analyserTout()
-  }, [annonces, analyses])
+  }, [annonces]) // analyses retiré des deps — utilise analysesRef pour éviter le re-render cycle
   
   // Nettoyer les analyses des annonces supprimées
   useEffect(() => {

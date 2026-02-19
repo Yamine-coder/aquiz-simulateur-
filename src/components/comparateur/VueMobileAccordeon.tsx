@@ -7,6 +7,7 @@
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
+import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import { COULEURS_DPE, type Annonce } from '@/types/annonces'
 import {
     AlertTriangle,
@@ -56,21 +57,7 @@ interface VueMobileAccordeonProps {
   onRequestHelp?: () => void
 }
 
-function calculerMensualite(
-  prixBien: number,
-  apport: number,
-  tauxAnnuel: number,
-  dureeAns: number
-): number {
-  const capitalEmprunte = prixBien - apport
-  if (capitalEmprunte <= 0) return 0
-  const tauxMensuel = tauxAnnuel / 100 / 12
-  const nombreMensualites = dureeAns * 12
-  if (tauxMensuel === 0) return capitalEmprunte / nombreMensualites
-  const mensualite = (capitalEmprunte * tauxMensuel) / 
-    (1 - Math.pow(1 + tauxMensuel, -nombreMensualites))
-  return Math.round(mensualite)
-}
+// calculerMensualite importé depuis @/lib/comparateur/financier
 
 export function VueMobileAccordeon({
   annonces,
@@ -214,6 +201,35 @@ export function VueMobileAccordeon({
                       </div>
                     )}
                   </div>
+
+                  {/* Frais de notaire + Coût total */}
+                  <div className="bg-aquiz-green/5 rounded-lg p-3 border border-aquiz-green/20">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
+                      <CreditCard className="w-3.5 h-3.5" />
+                      Coût total
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-aquiz-gray text-xs">Frais notaire</span>
+                        <div className="font-medium">
+                          {(() => {
+                            const { montant, isNeuf } = estimerFraisNotaire(annonce.prix, annonce.anneeConstruction)
+                            return <>{montant.toLocaleString('fr-FR')} € <span className="text-[10px] text-aquiz-gray">({isNeuf ? 'neuf' : 'ancien'})</span></>
+                          })()}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-aquiz-gray text-xs">Coût total</span>
+                        <div className="font-bold text-aquiz-green">
+                          {(() => {
+                            const { montant: notaire } = estimerFraisNotaire(annonce.prix, annonce.anneeConstruction)
+                            const travaux = analyse?.points.find(p => p.texte.includes('travaux'))?.detail ? 0 : 0
+                            return calculerCoutTotal(annonce.prix, notaire, travaux).toLocaleString('fr-FR')
+                          })()} €
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   
                   {/* Caractéristiques */}
                   <div className="bg-aquiz-gray-lightest/50 rounded-lg p-3">
@@ -234,6 +250,18 @@ export function VueMobileAccordeon({
                         <div className="font-medium">{annonce.chambres}ch</div>
                         <span className="text-[10px] text-aquiz-gray">Chambres</span>
                       </div>
+                      {annonce.anneeConstruction && (
+                        <div className="text-center">
+                          <div className="font-medium">{annonce.anneeConstruction}</div>
+                          <span className="text-[10px] text-aquiz-gray">Construction</span>
+                        </div>
+                      )}
+                      {annonce.orientation && (
+                        <div className="text-center">
+                          <div className="font-medium">{annonce.orientation}</div>
+                          <span className="text-[10px] text-aquiz-gray">Orientation</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   

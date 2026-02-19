@@ -107,6 +107,17 @@ export interface Annonce {
   /** Taxe foncière annuelle */
   taxeFonciere?: number
   
+  // --- Infos complémentaires ---
+  
+  /** Année de construction du bâtiment */
+  anneeConstruction?: number
+  
+  /** Nombre de salles de bains */
+  nbSallesBains?: number
+  
+  /** Orientation du bien (sud, nord/sud, etc.) */
+  orientation?: string
+  
   // --- Métadonnées ---
   
   /** Titre de l'annonce */
@@ -149,7 +160,9 @@ export interface NouvelleAnnonce {
   
   // Optionnels
   adresse?: string
+  departement?: string
   etage?: number
+  etagesTotal?: number
   ascenseur?: boolean
   balconTerrasse?: boolean
   parking?: boolean
@@ -161,6 +174,9 @@ export interface NouvelleAnnonce {
   imageUrl?: string
   notes?: string
   ges?: ClasseDPE
+  anneeConstruction?: number
+  nbSallesBains?: number
+  orientation?: string
 }
 
 // ============================================
