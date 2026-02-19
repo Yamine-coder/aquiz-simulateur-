@@ -3,6 +3,7 @@
  */
 
 export { ResumeModal } from './ResumeModal'
-export { SaveButton } from './SaveButton'
+export { AutoSaveIndicator, SaveButton, useAutoSave } from './SaveButton'
+export type { SaveButtonRef } from './SaveButton'
 export { SimulationCard } from './SimulationCard'
 

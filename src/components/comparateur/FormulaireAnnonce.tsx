@@ -26,6 +26,7 @@ import {
     Building2,
     Check,
     ClipboardPaste,
+    Download,
     Euro,
     Home,
     Link2,
@@ -33,7 +34,7 @@ import {
     MapPin,
     Plus,
     Save,
-    Sparkles,
+    ScanSearch,
     Zap,
 } from 'lucide-react'
 import { useState } from 'react'
@@ -77,6 +78,7 @@ type AnnonceFormData = z.infer<typeof annonceSchema>
 interface FormulaireAnnonceProps {
   editMode?: boolean
   initialValues?: Partial<NouvelleAnnonce>
+  initialTab?: 'url' | 'coller' | 'manuel'
   onSubmit: (data: NouvelleAnnonce) => void
   onCancel?: () => void
 }
@@ -84,6 +86,7 @@ interface FormulaireAnnonceProps {
 export function FormulaireAnnonce({
   editMode = false,
   initialValues,
+  initialTab = 'url',
   onSubmit,
   onCancel
 }: FormulaireAnnonceProps) {
@@ -94,7 +97,7 @@ export function FormulaireAnnonce({
   const [extractError, setExtractError] = useState<string | null>(null)
   const [extractSuccess, setExtractSuccess] = useState(false)
   const [extractCount, setExtractCount] = useState(0)
-  const [activeTab, setActiveTab] = useState<'url' | 'coller' | 'manuel'>('url')
+  const [activeTab, setActiveTab] = useState<'url' | 'coller' | 'manuel'>(editMode ? 'manuel' : initialTab)
   
   const {
     register,
@@ -230,27 +233,18 @@ export function FormulaireAnnonce({
   return (
     <div className="space-y-5">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-3 h-auto p-1.5 bg-aquiz-gray-lightest rounded-2xl">
-          <TabsTrigger value="url" className="gap-2 py-3 rounded-xl data-[state=active]:bg-aquiz-green data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-            <Link2 className="h-4 w-4" />
-            <div className="text-left">
-              <div className="font-semibold text-xs sm:text-sm">Lien</div>
-              <div className="text-[9px] opacity-70 font-normal hidden sm:block">Coller l&apos;URL</div>
-            </div>
+        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-aquiz-gray-lightest/60 rounded-xl border border-aquiz-gray-lighter">
+          <TabsTrigger value="url" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+            <Link2 className="h-3.5 w-3.5" />
+            <span className="font-medium">Lien</span>
           </TabsTrigger>
-          <TabsTrigger value="coller" className="gap-2 py-3 rounded-xl data-[state=active]:bg-aquiz-green data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-            <ClipboardPaste className="h-4 w-4" />
-            <div className="text-left">
-              <div className="font-semibold text-xs sm:text-sm">Contenu</div>
-              <div className="text-[9px] opacity-70 font-normal hidden sm:block">Coller le texte</div>
-            </div>
+          <TabsTrigger value="coller" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+            <ClipboardPaste className="h-3.5 w-3.5" />
+            <span className="font-medium">Contenu</span>
           </TabsTrigger>
-          <TabsTrigger value="manuel" className="gap-2 py-3 rounded-xl data-[state=active]:bg-aquiz-green data-[state=active]:text-white data-[state=active]:shadow-sm transition-all">
-            <Plus className="h-4 w-4" />
-            <div className="text-left">
-              <div className="font-semibold text-xs sm:text-sm">Manuel</div>
-              <div className="text-[9px] opacity-70 font-normal hidden sm:block">Saisir les champs</div>
-            </div>
+          <TabsTrigger value="manuel" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+            <Plus className="h-3.5 w-3.5" />
+            <span className="font-medium">Manuel</span>
           </TabsTrigger>
         </TabsList>
         
@@ -273,13 +267,13 @@ export function FormulaireAnnonce({
                 type="button"
                 onClick={handleExtractUrl}
                 disabled={isExtracting || !urlInput.trim()}
-                className="bg-aquiz-green hover:bg-aquiz-green/90 h-12 px-6 rounded-xl text-white font-medium shadow-sm"
+                className="bg-aquiz-green hover:bg-aquiz-green/85 active:scale-[0.97] h-11 px-6 rounded-lg text-white text-sm font-semibold shadow-sm transition-all duration-150 disabled:opacity-35 disabled:pointer-events-none"
               >
                 {isExtracting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4 mr-2" />
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
                     Importer
                   </>
                 )}
@@ -353,9 +347,9 @@ export function FormulaireAnnonce({
               type="button"
               onClick={handleExtractFromText}
               disabled={!pastedText.trim()}
-              className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-12 rounded-xl text-white font-medium shadow-sm"
+              className="w-full bg-aquiz-green hover:bg-aquiz-green/85 active:scale-[0.98] h-11 rounded-lg text-white text-sm font-semibold shadow-sm transition-all duration-150 disabled:opacity-35 disabled:pointer-events-none"
             >
-              <Sparkles className="h-4 w-4 mr-2" />
+              <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
               Extraire les données
             </Button>
           </div>
@@ -396,56 +390,54 @@ export function FormulaireAnnonce({
         
         {/* ===== TAB SAISIE MANUELLE ===== */}
         <TabsContent value="manuel" className="mt-5">
-          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-0">
+          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
             
-            {/* ========== SECTION 1 : INFORMATIONS ESSENTIELLES ========== */}
-            <div className="border border-aquiz-gray-lighter rounded-2xl overflow-hidden">
-              <div className="bg-aquiz-gray-lightest px-5 py-3.5 border-b border-aquiz-gray-lighter">
-                <h4 className="font-semibold text-aquiz-black text-sm flex items-center gap-2">
-                  <Home className="h-4 w-4 text-aquiz-green" />
-                  Informations essentielles
-                </h4>
+            {/* ═══════════ SECTION 1 : Informations essentielles ═══════════ */}
+            <div className="rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+              <div className="bg-aquiz-gray-lightest/50 px-5 py-3 border-b border-aquiz-gray-lighter flex items-center gap-2.5">
+                <Home className="h-4 w-4 text-aquiz-green" />
+                <span className="text-sm font-semibold text-aquiz-black">Informations essentielles</span>
               </div>
               <div className="p-5 space-y-4">
-                {/* Type de bien */}
+                {/* Type de bien — full width cards */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-aquiz-gray uppercase tracking-wide">Type de bien</Label>
+                  <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">Type de bien</Label>
                   <RadioGroup
                     value={type}
                     onValueChange={(val) => setValue('type', val as TypeBienAnnonce)}
-                    className="flex gap-3"
+                    className="grid grid-cols-2 gap-3"
                   >
                     <label 
                       htmlFor="type-appart"
-                      className={`flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                      className={`flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all text-sm ${
                         type === 'appartement' 
-                          ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black shadow-sm' 
-                          : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+                          ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-semibold' 
+                          : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
                       }`}
                     >
                       <RadioGroupItem value="appartement" id="type-appart" className="sr-only" />
                       <Building2 className={`h-4 w-4 ${type === 'appartement' ? 'text-aquiz-green' : 'text-aquiz-gray'}`} />
-                      <span className="text-sm font-medium">Appartement</span>
+                      Appartement
                     </label>
                     <label 
                       htmlFor="type-maison"
-                      className={`flex-1 flex items-center gap-2.5 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                      className={`flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all text-sm ${
                         type === 'maison' 
-                          ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black shadow-sm' 
-                          : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+                          ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-semibold' 
+                          : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
                       }`}
                     >
                       <RadioGroupItem value="maison" id="type-maison" className="sr-only" />
                       <Home className={`h-4 w-4 ${type === 'maison' ? 'text-aquiz-green' : 'text-aquiz-gray'}`} />
-                      <span className="text-sm font-medium">Maison</span>
+                      Maison
                     </label>
                   </RadioGroup>
                 </div>
                 
-                {/* Prix et Surface sur une ligne */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Prix + Surface — 2 colonnes */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="prix" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="prix" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Prix
                     </Label>
                     <div className="relative">
@@ -453,55 +445,49 @@ export function FormulaireAnnonce({
                         id="prix"
                         type="number"
                         placeholder="250 000"
-                        className="pr-8"
+                        className={`pr-8 h-10 text-sm rounded-lg ${errors.prix ? 'border-red-400 focus:ring-red-200 focus:border-red-400' : ''}`}
                         {...register('prix', { valueAsNumber: true })}
                       />
-                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-aquiz-gray-light" />
+                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-aquiz-gray-light" />
                     </div>
-                    {errors.prix && (
-                      <p className="text-xs text-red-500">{errors.prix.message}</p>
-                    )}
+                    {errors.prix && <p className="text-[10px] text-red-500">{errors.prix.message}</p>}
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label htmlFor="surface" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="surface" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Surface
                     </Label>
                     <div className="relative">
                       <Input
                         id="surface"
                         type="number"
-                        placeholder="65"
-                        className="pr-10"
+                        step="any"
+                        placeholder="65,7"
+                        className={`pr-8 h-10 text-sm rounded-lg ${errors.surface ? 'border-red-400 focus:ring-red-200 focus:border-red-400' : ''}`}
                         {...register('surface', { valueAsNumber: true })}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-aquiz-gray-light">m²</span>
                     </div>
-                    {errors.surface && (
-                      <p className="text-xs text-red-500">{errors.surface.message}</p>
-                    )}
+                    {errors.surface && <p className="text-[10px] text-red-500">{errors.surface.message}</p>}
                   </div>
                 </div>
                 
-                {/* Prix au m² calculé */}
+                {/* Prix au m² */}
                 {prixM2 > 0 && (
-                  <div className="bg-aquiz-green/5 rounded-xl px-4 py-2.5 flex items-center justify-between">
-                    <span className="text-xs text-aquiz-gray font-medium">Prix au m²</span>
-                    <span className="font-bold text-aquiz-green text-sm">
-                      {prixM2.toLocaleString('fr-FR')} €/m²
-                    </span>
-                  </div>
+                  <p className="text-xs text-aquiz-green font-medium">
+                    → {prixM2.toLocaleString('fr-FR')} €/m²
+                  </p>
                 )}
                 
-                {/* Pièces et Chambres */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* Pièces + Chambres — 2 colonnes */}
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-aquiz-gray uppercase tracking-wide">Pièces</Label>
+                    <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">Pièces</Label>
                     <Select
                       value={String(watch('pieces'))}
                       onValueChange={(val) => setValue('pieces', parseInt(val))}
                     >
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger className="h-10 text-sm rounded-lg">
                         <SelectValue placeholder="Pièces" />
                       </SelectTrigger>
                       <SelectContent>
@@ -515,18 +501,18 @@ export function FormulaireAnnonce({
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-aquiz-gray uppercase tracking-wide">Chambres</Label>
+                    <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">Chambres</Label>
                     <Select
                       value={String(watch('chambres'))}
                       onValueChange={(val) => setValue('chambres', parseInt(val))}
                     >
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger className="h-10 text-sm rounded-lg">
                         <SelectValue placeholder="Chambres" />
                       </SelectTrigger>
                       <SelectContent>
                         {[0, 1, 2, 3, 4, 5, 6].map((n) => (
                           <SelectItem key={n} value={String(n)}>
-                            {n === 0 ? 'Studio' : `${n} ch.`}
+                            {n === 0 ? 'Studio' : `${n} chambre${n > 1 ? 's' : ''}`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -536,142 +522,115 @@ export function FormulaireAnnonce({
               </div>
             </div>
             
-            {/* ========== SECTION 2 : LOCALISATION ========== */}
-            <div className="border border-aquiz-gray-lighter rounded-2xl overflow-hidden mt-4">
-              <div className="bg-aquiz-gray-lightest px-5 py-3.5 border-b border-aquiz-gray-lighter">
-                <h4 className="font-semibold text-aquiz-black text-sm flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-aquiz-green" />
-                  Localisation
-                </h4>
+            {/* ═══════════ SECTION 2 : Localisation ═══════════ */}
+            <div className="rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+              <div className="bg-aquiz-gray-lightest/50 px-5 py-3 border-b border-aquiz-gray-lighter flex items-center gap-2.5">
+                <MapPin className="h-4 w-4 text-aquiz-green" />
+                <span className="text-sm font-semibold text-aquiz-black">Localisation</span>
               </div>
               <div className="p-5">
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2 space-y-1.5">
-                    <Label htmlFor="ville" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ville" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Ville
                     </Label>
                     <Input
                       id="ville"
                       placeholder="Paris"
+                      className={`h-10 text-sm rounded-lg ${errors.ville ? 'border-red-400 focus:ring-red-200 focus:border-red-400' : ''}`}
                       {...register('ville')}
                     />
-                    {errors.ville && (
-                      <p className="text-xs text-red-500">{errors.ville.message}</p>
-                    )}
+                    {errors.ville && <p className="text-[10px] text-red-500">{errors.ville.message}</p>}
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label htmlFor="codePostal" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="codePostal" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Code postal
                     </Label>
                     <Input
                       id="codePostal"
                       placeholder="75001"
                       maxLength={5}
+                      className={`h-10 text-sm rounded-lg ${errors.codePostal ? 'border-red-400 focus:ring-red-200 focus:border-red-400' : ''}`}
                       {...register('codePostal')}
                     />
-                    {errors.codePostal && (
-                      <p className="text-xs text-red-500">{errors.codePostal.message}</p>
-                    )}
+                    {errors.codePostal && <p className="text-[10px] text-red-500">{errors.codePostal.message}</p>}
                   </div>
                 </div>
               </div>
             </div>
             
-            {/* ========== SECTION 3 : ÉNERGIE & ÉQUIPEMENTS ========== */}
-            <div className="border border-aquiz-gray-lighter rounded-2xl overflow-hidden mt-4">
-              <div className="bg-aquiz-gray-lightest px-5 py-3.5 border-b border-aquiz-gray-lighter">
-                <h4 className="font-semibold text-aquiz-black text-sm flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-aquiz-green" />
-                  Énergie & Équipements
-                </h4>
+            {/* ═══════════ SECTION 3 : Énergie & Équipements ═══════════ */}
+            <div className="rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+              <div className="bg-aquiz-gray-lightest/50 px-5 py-3 border-b border-aquiz-gray-lighter flex items-center gap-2.5">
+                <Zap className="h-4 w-4 text-aquiz-green" />
+                <span className="text-sm font-semibold text-aquiz-black">Énergie & Équipements</span>
               </div>
               <div className="p-5 space-y-4">
-                {/* DPE */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-aquiz-gray uppercase tracking-wide">DPE</Label>
-                  <Select
-                    value={watch('dpe')}
-                    onValueChange={(val) => setValue('dpe', val as ClasseDPE)}
-                  >
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="DPE" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-emerald-500" /> A - Excellent</span></SelectItem>
-                      <SelectItem value="B"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-green-500" /> B - Très bon</span></SelectItem>
-                      <SelectItem value="C"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-lime-500" /> C - Bon</span></SelectItem>
-                      <SelectItem value="D"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-yellow-500" /> D - Moyen</span></SelectItem>
-                      <SelectItem value="E"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-orange-500" /> E - Passable</span></SelectItem>
-                      <SelectItem value="F"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-500" /> F - Mauvais</span></SelectItem>
-                      <SelectItem value="G"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-red-700" /> G - Très mauvais</span></SelectItem>
-                      <SelectItem value="NC"><span className="inline-flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-gray-300" /> Non communiqué</span></SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Étage (appartement uniquement) */}
-                {type === 'appartement' && (
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* DPE */}
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">DPE</Label>
+                    <Select
+                      value={watch('dpe')}
+                      onValueChange={(val) => setValue('dpe', val as ClasseDPE)}
+                    >
+                      <SelectTrigger className="h-10 text-sm rounded-lg">
+                        <SelectValue placeholder="DPE" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="A"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> A</span></SelectItem>
+                        <SelectItem value="B"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-green-500" /> B</span></SelectItem>
+                        <SelectItem value="C"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-lime-500" /> C</span></SelectItem>
+                        <SelectItem value="D"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-yellow-500" /> D</span></SelectItem>
+                        <SelectItem value="E"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-orange-500" /> E</span></SelectItem>
+                        <SelectItem value="F"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-red-500" /> F</span></SelectItem>
+                        <SelectItem value="G"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-red-700" /> G</span></SelectItem>
+                        <SelectItem value="NC"><span className="inline-flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-sm bg-gray-300" /> NC</span></SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Étage (si appartement) */}
+                  {type === 'appartement' && (
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-aquiz-gray uppercase tracking-wide">Étage</Label>
+                      <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">Étage</Label>
                       <Select
                         value={watch('etage') !== undefined && watch('etage') !== null ? String(watch('etage')) : ''}
                         onValueChange={(val) => setValue('etage', val ? parseInt(val) : undefined)}
                       >
-                        <SelectTrigger className="h-10">
+                        <SelectTrigger className="h-10 text-sm rounded-lg">
                           <SelectValue placeholder="—" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="0">RDC</SelectItem>
                           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20].map((n) => (
                             <SelectItem key={n} value={String(n)}>
-                              {n}{n === 1 ? 'er' : 'e'}
+                              {n}{n === 1 ? 'er' : 'e'} étage
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-                    
-                    <div className="flex items-end">
-                      <label className={`flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
-                        watch('ascenseur') 
-                          ? 'border-aquiz-green bg-aquiz-green/5 shadow-sm' 
-                          : 'border-aquiz-gray-lighter'
-                      }`}>
-                        <input
-                          type="checkbox"
-                          {...register('ascenseur')}
-                          className="sr-only"
-                        />
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                          watch('ascenseur') 
-                            ? 'bg-aquiz-green border-aquiz-green' 
-                            : 'border-aquiz-gray-light'
-                        }`}>
-                          {watch('ascenseur') && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="text-sm">Ascenseur</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
                 
-                {/* Équipements */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-aquiz-gray uppercase tracking-wide">Équipements</Label>
-                  <div className="grid grid-cols-3 gap-2">
+                {/* Équipements — toggles */}
+                <div>
+                  <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium mb-2 block">Équipements</Label>
+                  <div className="flex flex-wrap gap-2">
                     {[
-                      { key: 'balconTerrasse', label: 'Balcon' },
+                      { key: 'ascenseur', label: 'Ascenseur', show: type === 'appartement' },
+                      { key: 'balconTerrasse', label: 'Balcon / Terrasse' },
                       { key: 'parking', label: 'Parking' },
                       { key: 'cave', label: 'Cave' },
-                    ].map((item) => (
+                    ].filter(item => item.show !== false).map((item) => (
                       <label 
                         key={item.key}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer transition-all text-center justify-center ${
+                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
                           watch(item.key as keyof AnnonceFormData)
-                            ? 'border-aquiz-green bg-aquiz-green/5 shadow-sm' 
-                            : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+                            ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-green font-medium' 
+                            : 'border-aquiz-gray-lighter text-aquiz-gray hover:border-aquiz-gray-light'
                         }`}
                       >
                         <input
@@ -679,14 +638,8 @@ export function FormulaireAnnonce({
                           {...register(item.key as keyof AnnonceFormData)}
                           className="sr-only"
                         />
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-                          watch(item.key as keyof AnnonceFormData)
-                            ? 'bg-aquiz-green border-aquiz-green' 
-                            : 'border-aquiz-gray-light'
-                        }`}>
-                          {watch(item.key as keyof AnnonceFormData) && <Check className="w-3 h-3 text-white" />}
-                        </div>
-                        <span className="text-sm">{item.label}</span>
+                        {watch(item.key as keyof AnnonceFormData) && <Check className="w-3.5 h-3.5" />}
+                        {item.label}
                       </label>
                     ))}
                   </div>
@@ -694,92 +647,73 @@ export function FormulaireAnnonce({
               </div>
             </div>
             
-            {/* ========== SECTION 4 : INFORMATIONS COMPLÉMENTAIRES (collapsible) ========== */}
-            <details className="border border-aquiz-gray-lighter rounded-2xl overflow-hidden mt-4 group">
-              <summary className="bg-aquiz-gray-lightest px-5 py-3.5 cursor-pointer list-none flex items-center justify-between">
-                <h4 className="font-semibold text-aquiz-black text-sm flex items-center gap-2">
-                  <Plus className="h-4 w-4 text-aquiz-gray" />
-                  Informations complémentaires
-                </h4>
-                <span className="text-xs text-aquiz-gray-light font-medium">Optionnel</span>
+            {/* ═══════════ SECTION 4 : Complémentaire (collapsible) ═══════════ */}
+            <details className="rounded-xl border border-aquiz-gray-lighter overflow-hidden group">
+              <summary className="cursor-pointer list-none bg-aquiz-gray-lightest/50 px-5 py-3 flex items-center gap-2.5 hover:bg-aquiz-gray-lightest transition-colors">
+                <Plus className="h-4 w-4 text-aquiz-green" />
+                <span className="text-sm font-semibold text-aquiz-black">Infos complémentaires</span>
+                <span className="text-xs text-aquiz-gray-light ml-1">· optionnel</span>
               </summary>
               <div className="p-5 space-y-4 border-t border-aquiz-gray-lighter">
-                {/* URL (optionnel, visible seulement en mode création) */}
+                {/* URL (optionnel) */}
                 {!editMode && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="url" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="url" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       URL de l&apos;annonce
                     </Label>
-                    <Input
-                      id="url"
-                      type="url"
-                      placeholder="https://www.seloger.com/..."
-                      {...register('url')}
-                    />
+                    <Input id="url" type="url" placeholder="https://www.seloger.com/..." className="h-10 text-sm rounded-lg" {...register('url')} />
                   </div>
                 )}
                 
                 {/* Charges */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="chargesMensuelles" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="chargesMensuelles" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Charges /mois
                     </Label>
                     <div className="relative">
-                      <Input
-                        id="chargesMensuelles"
-                        type="number"
-                        placeholder="—"
-                        className="pr-8"
-                        {...register('chargesMensuelles', { valueAsNumber: true })}
-                      />
-                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-aquiz-gray-light" />
+                      <Input id="chargesMensuelles" type="number" step="any" placeholder="—" className="pr-8 h-10 text-sm rounded-lg" {...register('chargesMensuelles', { valueAsNumber: true })} />
+                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-aquiz-gray-light" />
                     </div>
                   </div>
                   
                   <div className="space-y-1.5">
-                    <Label htmlFor="taxeFonciere" className="text-xs text-aquiz-gray uppercase tracking-wide">
+                    <Label htmlFor="taxeFonciere" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
                       Taxe foncière /an
                     </Label>
                     <div className="relative">
-                      <Input
-                        id="taxeFonciere"
-                        type="number"
-                        placeholder="—"
-                        className="pr-8"
-                        {...register('taxeFonciere', { valueAsNumber: true })}
-                      />
-                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-aquiz-gray-light" />
+                      <Input id="taxeFonciere" type="number" step="any" placeholder="—" className="pr-8 h-10 text-sm rounded-lg" {...register('taxeFonciere', { valueAsNumber: true })} />
+                      <Euro className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-aquiz-gray-light" />
                     </div>
                   </div>
                 </div>
                 
                 {/* Notes */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="notes" className="text-xs text-aquiz-gray uppercase tracking-wide">
-                    Notes personnelles
+                  <Label htmlFor="notes" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
+                    Notes
                   </Label>
                   <textarea
                     id="notes"
                     rows={2}
                     placeholder="Points forts, à vérifier..."
-                    className="w-full px-3 py-2.5 border border-aquiz-gray-lighter rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-aquiz-green/20 focus:border-aquiz-green"
+                    className="w-full px-3 py-2.5 border border-aquiz-gray-lighter rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-aquiz-green/20 focus:border-aquiz-green"
                     {...register('notes')}
                   />
                 </div>
               </div>
             </details>
             
-            {/* ========== BOUTONS ========== */}
-            <div className="flex gap-3 pt-6">
+            {/* ═══════════ BOUTON ═══════════ */}
+            <div className="flex gap-3 pt-4 mt-2 border-t border-aquiz-gray-lighter">
               {onCancel && (
-                <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-12 rounded-xl border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-black">
+                <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-11 rounded-xl border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-black text-sm">
                   Annuler
                 </Button>
               )}
               <Button 
                 type="submit" 
-                className="flex-1 h-12 rounded-xl bg-aquiz-green hover:bg-aquiz-green/90 text-white font-medium shadow-sm"
+                className="flex-1 h-11 rounded-xl bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold text-sm shadow-sm"
                 disabled={isSubmitting}
               >
                 {editMode ? (

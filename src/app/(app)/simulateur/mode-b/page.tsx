@@ -19,8 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ContactModal } from '@/components/contact'
 import { LocalisationSearch } from '@/components/simulateur'
-import { ResumeModal, SaveButton } from '@/components/simulation'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -402,6 +401,18 @@ export default function ModeBPage() {
     setCurrentSaveId(savedSim.id)
   }, [save, currentSaveId, etape, prixBien, typeBien, codePostal, apport, dureeAns, tauxInteret, calculs.mensualiteTotal])
 
+  // Auto-save : Ctrl+S + auto-save au changement d'étape
+  const autoSave = useAutoSave(handleSave, prixBien === 0)
+
+  // Re-sauvegarder après chaque changement d'étape pour que la progression soit à jour
+  useEffect(() => {
+    if (prixBien > 0) {
+      const timer = setTimeout(() => autoSave.triggerSave(), 100)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etape])
+
   // Étapes pour la barre de progression
   const ETAPES = [
     { id: 1, label: 'Le bien' },
@@ -475,10 +486,7 @@ export default function ModeBPage() {
                 </div>
               )
             })}
-              {/* Save button - inline dans le stepper */}
-              <div className="shrink-0 ml-4">
-                <SaveButton onSave={handleSave} disabled={prixBien === 0} />
-              </div>
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="ml-auto" />
           </div>
           
           {/* Mobile */}
@@ -493,7 +501,7 @@ export default function ModeBPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <SaveButton onSave={handleSave} disabled={prixBien === 0} />
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
               <div className="flex gap-1.5">
               {ETAPES.map((_, index) => (
                 <div 
@@ -716,7 +724,7 @@ export default function ModeBPage() {
                               )}
                             </>
                           ) : (
-                            <div className="text-xs text-amber-600">
+                            <div className="text-xs text-orange-500">
                               Pas de données DVF pour ce code postal
                             </div>
                           )}
@@ -768,59 +776,56 @@ export default function ModeBPage() {
                   {validations.alerts.filter(a => 
                     a.message.includes('Prix') || a.message.includes('bas')
                   ).map((alert, i) => (
-                    <Alert key={i} className={`
-                      ${alert.type === 'error' ? 'border-red-200 bg-red-50' : ''}
-                      ${alert.type === 'warning' ? 'border-amber-200 bg-amber-50' : ''}
-                      ${alert.type === 'info' ? 'border-blue-200 bg-blue-50' : ''}
-                    `}>
-                      <AlertTriangle className={`w-4 h-4 ${
-                        alert.type === 'error' ? 'text-red-600' :
-                        alert.type === 'warning' ? 'text-amber-600' : 'text-blue-600'
+                    <div key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
+                      alert.type === 'error' ? 'bg-red-50 text-red-700' :
+                      alert.type === 'warning' ? 'bg-orange-50 text-orange-700' :
+                      'bg-aquiz-gray-lightest text-aquiz-gray'
+                    }`}>
+                      <AlertTriangle className={`w-4 h-4 shrink-0 ${
+                        alert.type === 'error' ? 'text-red-500' :
+                        alert.type === 'warning' ? 'text-orange-500' : 'text-aquiz-gray'
                       }`} />
-                      <AlertDescription className={`text-sm ${
-                        alert.type === 'error' ? 'text-red-700' :
-                        alert.type === 'warning' ? 'text-amber-700' : 'text-blue-700'
-                      }`}>
-                        {alert.message}
-                      </AlertDescription>
-                    </Alert>
+                      <span>{alert.message}</span>
+                    </div>
                   ))}
                 </div>
               )}
 
               {/* Choix : Continuer ou Être accompagné */}
               {prixBien > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Option 1 : Continuer la simulation */}
-                  <button
-                    type="button"
-                    onClick={goToNextEtape}
-                    disabled={!validations.canProceed}
-                    className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                      <ArrowRight className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-semibold text-white">Continuer ma simulation</p>
-                      <p className="text-xs text-white/60 mt-0.5">Voir les mensualités et revenus requis</p>
-                    </div>
-                  </button>
-                  
-                  {/* Option 2 : Être accompagné */}
-                  <button
-                    type="button"
-                    onClick={() => setShowContactModal(true)}
-                    className="group p-4 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all flex items-center gap-4"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green/20 transition-colors">
-                      <Phone className="w-5 h-5 text-aquiz-green" />
-                    </div>
-                    <div className="text-left">
-                      <p className="font-semibold text-aquiz-green">Je veux être accompagné</p>
-                      <p className="text-xs text-aquiz-gray mt-0.5">Un conseiller me rappelle gratuitement</p>
-                    </div>
-                  </button>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Option 1 : Continuer la simulation */}
+                    <button
+                      type="button"
+                      onClick={goToNextEtape}
+                      disabled={!validations.canProceed}
+                      className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+                        <ArrowRight className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-white">Continuer ma simulation</p>
+                        <p className="text-xs text-white/60 mt-0.5">Voir les mensualités et revenus requis</p>
+                      </div>
+                    </button>
+                    
+                    {/* Option 2 : Être accompagné */}
+                    <button
+                      type="button"
+                      onClick={() => setShowContactModal(true)}
+                      className="group p-4 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all flex items-center gap-4"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green/20 transition-colors">
+                        <Phone className="w-5 h-5 text-aquiz-green" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-aquiz-green">Je veux être accompagné</p>
+                        <p className="text-xs text-aquiz-gray mt-0.5">Un conseiller me rappelle gratuitement</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -898,20 +903,20 @@ export default function ModeBPage() {
                   </div>
 
                   {/* Indicateur de suffisance */}
-                  <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${
+                  <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
                     calculs.apportSuffisant
                       ? 'bg-aquiz-green/10 text-aquiz-green'
-                      : 'bg-amber-50 text-amber-700'
+                      : 'bg-orange-50 text-orange-700'
                   }`}>
                     {calculs.apportSuffisant ? (
                       <>
-                        <CheckCircle className="w-4 h-4" />
-                        Apport suffisant ({((apport / prixBien) * 100).toFixed(0)}% du prix)
+                        <CheckCircle className="w-4 h-4 shrink-0" />
+                        <span>Apport suffisant ({((apport / prixBien) * 100).toFixed(0)}% du prix)</span>
                       </>
                     ) : (
                       <>
-                        <Info className="w-4 h-4" />
-                        Recommandé : min {formatMontant(calculs.apportMinimum10)} € (10%)
+                        <Info className="w-4 h-4 shrink-0 text-orange-500" />
+                        <span>Recommandé : min {formatMontant(calculs.apportMinimum10)} € (10%)</span>
                       </>
                     )}
                   </div>
@@ -926,13 +931,13 @@ export default function ModeBPage() {
 
                   {/* Message si apport excédentaire */}
                   {calculs.apportExcedentaire && (
-                    <Alert className="bg-blue-50 border-blue-200">
-                      <Info className="w-4 h-4 text-blue-600" />
-                      <AlertDescription className="text-sm text-blue-700">
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm bg-aquiz-gray-lightest text-aquiz-gray">
+                      <Info className="w-4 h-4 shrink-0 text-aquiz-gray" />
+                      <span>
                         Votre apport ({formatMontant(apport)} €) couvre plus que le coût total.
                         Excédent : <strong>{formatMontant(Math.round(calculs.excedentApport))} €</strong>
-                      </AlertDescription>
-                    </Alert>
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1025,30 +1030,25 @@ export default function ModeBPage() {
                     a.message.includes('Taux') ||
                     a.message.includes('dépasse')
                   ).map((alert, i) => (
-                    <Alert key={i} className={`
-                      ${alert.type === 'error' ? 'border-red-200 bg-red-50' : ''}
-                      ${alert.type === 'warning' ? 'border-amber-200 bg-amber-50' : ''}
-                      ${alert.type === 'info' ? 'border-blue-200 bg-blue-50' : ''}
-                    `}>
-                      <AlertTriangle className={`w-4 h-4 ${
-                        alert.type === 'error' ? 'text-red-600' :
-                        alert.type === 'warning' ? 'text-amber-600' : 'text-blue-600'
+                    <div key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
+                      alert.type === 'error' ? 'bg-red-50 text-red-700' :
+                      alert.type === 'warning' ? 'bg-orange-50 text-orange-700' :
+                      'bg-aquiz-gray-lightest text-aquiz-gray'
+                    }`}>
+                      <AlertTriangle className={`w-4 h-4 shrink-0 ${
+                        alert.type === 'error' ? 'text-red-500' :
+                        alert.type === 'warning' ? 'text-orange-500' : 'text-aquiz-gray'
                       }`} />
-                      <AlertDescription className={`text-sm ${
-                        alert.type === 'error' ? 'text-red-700' :
-                        alert.type === 'warning' ? 'text-amber-700' : 'text-blue-700'
-                      }`}>
-                        {alert.message}
-                      </AlertDescription>
-                    </Alert>
+                      <span>{alert.message}</span>
+                    </div>
                   ))}
                 </div>
               )}
 
-              {/* Bouton Voir les résultats */}
+              {/* Actions */}
               <Button
                 type="button"
-                className="w-full h-12 text-base bg-aquiz-green hover:bg-aquiz-green/90 transition-all shadow-lg"
+                className="w-full h-12 text-base bg-aquiz-green hover:bg-aquiz-green/90 transition-all shadow-lg rounded-xl"
                 onClick={goToNextEtape}
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
@@ -1430,22 +1430,17 @@ export default function ModeBPage() {
                     a.message.includes('Mensualité') ||
                     a.message.includes('épargne')
                   ).map((alert, i) => (
-                    <Alert key={i} className={`
-                      ${alert.type === 'error' ? 'border-red-200 bg-red-50' : ''}
-                      ${alert.type === 'warning' ? 'border-amber-200 bg-amber-50' : ''}
-                      ${alert.type === 'info' ? 'border-blue-200 bg-blue-50' : ''}
-                    `}>
-                      <Info className={`w-4 h-4 ${
-                        alert.type === 'error' ? 'text-red-600' :
-                        alert.type === 'warning' ? 'text-amber-600' : 'text-blue-600'
+                    <div key={i} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
+                      alert.type === 'error' ? 'bg-red-50 text-red-700' :
+                      alert.type === 'warning' ? 'bg-orange-50 text-orange-700' :
+                      'bg-aquiz-gray-lightest text-aquiz-gray'
+                    }`}>
+                      <Info className={`w-4 h-4 shrink-0 ${
+                        alert.type === 'error' ? 'text-red-500' :
+                        alert.type === 'warning' ? 'text-orange-500' : 'text-aquiz-gray'
                       }`} />
-                      <AlertDescription className={`text-sm ${
-                        alert.type === 'error' ? 'text-red-700' :
-                        alert.type === 'warning' ? 'text-amber-700' : 'text-blue-700'
-                      }`}>
-                        {alert.message}
-                      </AlertDescription>
-                    </Alert>
+                      <span>{alert.message}</span>
+                    </div>
                   ))}
                 </div>
               )}
@@ -1472,29 +1467,30 @@ export default function ModeBPage() {
               </div>
 
               {/* CTA Concrétiser mon projet */}
-              <div className="mt-6 p-5 bg-aquiz-black rounded-2xl">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="mt-6 bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+                <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-aquiz-green/20 flex items-center justify-center shrink-0">
-                      <Home className="w-5 h-5 text-aquiz-green" />
+                    <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                      <Phone className="w-5 h-5 text-aquiz-green" />
                     </div>
                     <div>
-                      <h3 className="text-white font-semibold">
+                      <h3 className="text-aquiz-black font-semibold text-sm">
                         Prêt à concrétiser votre projet ?
                       </h3>
-                      <p className="text-white/60 text-sm">
-                        Un conseiller vous accompagne gratuitement
+                      <p className="text-aquiz-gray text-xs">
+                        Réservez un créneau avec un conseiller — 100% gratuit
                       </p>
                     </div>
                   </div>
-                  <Button
-                    type="button"
-                    onClick={() => setShowContactModal(true)}
-                    className="w-full sm:w-auto h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold rounded-xl px-6 gap-2"
+                  <a
+                    href="https://calendly.com/contact-aquiz/30min"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
                   >
-                    <Phone className="w-4 h-4" />
-                    Être rappelé
-                  </Button>
+                    Prendre rendez-vous
+                    <ArrowRight className="w-4 h-4" />
+                  </a>
                 </div>
               </div>
 

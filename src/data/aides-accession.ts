@@ -69,6 +69,11 @@ export interface AideAccession {
   urlOfficielle: string
   delaiTraitement?: string
   
+  // Références juridiques
+  sourceJuridique?: string  // Ex: "Art. L31-10-2 CCH"
+  sourceLegifrance?: string // URL Légifrance ou BOFIP
+  dateVerification?: string // YYYY-MM-DD de dernière vérification humaine
+  
   // Disponibilité géographique
   disponibilite: 'nationale' | 'regionale' | 'departementale' | 'communale'
   zonesDisponibles?: string[] // Codes départements ou régions
@@ -115,6 +120,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['pas', 'pret_conventionné', 'action_logement', 'pel', 'cel', 'pret_employeur'],
     organisme: 'Banques conventionnées',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F10871',
+    sourceJuridique: 'Art. L31-10-1 à L31-10-16 du CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006074096/LEGISCTA000020459218',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -145,6 +153,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'action_logement', 'pel', 'cel', 'pret_employeur'],
     organisme: 'Banques conventionnées',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F22158',
+    sourceJuridique: 'Art. L312-1 CCH · Décret n°93-376',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000727553',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -170,6 +181,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'action_logement', 'pel', 'cel'],
     organisme: 'Banques conventionnées',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F10793',
+    sourceJuridique: 'Art. L312-1 CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006824655',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -201,6 +215,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'pret_conventionne', 'pel'],
     organisme: 'Action Logement Services',
     urlOfficielle: 'https://www.actionlogement.fr/le-pret-accession',
+    sourceJuridique: 'Art. R313-19-1 CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000038878282',
+    dateVerification: '2026-01-15',
     delaiTraitement: '25 jours ouvrés',
     disponibilite: 'nationale',
     actif: true,
@@ -230,6 +247,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement', 'cel'],
     organisme: 'Banque du PEL',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F16142',
+    sourceJuridique: 'Art. L315-1 Code monétaire et financier',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006652062',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -257,6 +277,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement', 'pel'],
     organisme: 'Banque du CEL',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F16139',
+    sourceJuridique: 'Art. L315-2 Code monétaire et financier',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000006652066',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -287,6 +310,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'ma_prime_renov', 'action_logement'],
     organisme: 'Banques conventionnées',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F19905',
+    sourceJuridique: 'Art. 244 quater U du CGI',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000037992858',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -318,6 +344,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement'],
     organisme: 'Promoteur immobilier',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F31151',
+    sourceJuridique: 'Art. 278 sexies du CGI',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044988498',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -342,6 +371,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'tva_reduite_anru'],
     organisme: 'Service des impôts',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F59',
+    sourceJuridique: 'Art. 1383 du CGI',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000044988216',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -374,6 +406,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'action_logement'],
     organisme: 'Opérateurs agréés HLM',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F32274',
+    sourceJuridique: 'Décret n°2004-286 · Art. L443-1 CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000432457',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -402,6 +437,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement'],
     organisme: 'Organismes de Foncier Solidaire (OFS)',
     urlOfficielle: 'https://www.ecologie.gouv.fr/bail-reel-solidaire',
+    sourceJuridique: 'Art. L255-1 à L255-19 CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006074096/LEGISCTA000031209977',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -428,6 +466,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'action_logement', 'pas'],
     organisme: 'Bailleurs sociaux',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F2040',
+    sourceJuridique: 'Art. L443-7 à L443-15-7 CCH',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043978302',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -459,6 +500,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['eco_ptz', 'cee'],
     organisme: 'ANAH (Agence nationale de l\'habitat)',
     urlOfficielle: 'https://www.maprimerenov.gouv.fr/',
+    sourceJuridique: 'Décret n°2020-26 du 14 janvier 2020',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000041400376',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -484,6 +528,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ma_prime_renov', 'eco_ptz'],
     organisme: 'Fournisseurs d\'énergie',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F35584',
+    sourceJuridique: 'Art. L221-1 Code de l\'énergie',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000043215121',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -513,6 +560,9 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas'],
     organisme: 'Mutuelles fonction publique',
     urlOfficielle: 'https://www.service-public.fr/particuliers/vosdroits/F1652',
+    sourceJuridique: 'Décret n°60-1089 du 6 octobre 1960',
+    sourceLegifrance: 'https://www.legifrance.gouv.fr/loda/id/JORFTEXT000000879989',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -541,6 +591,8 @@ export const AIDES_NATIONALES: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement'],
     organisme: 'Réseau Procivis',
     urlOfficielle: 'https://www.procivis.fr/',
+    sourceJuridique: 'Convention État-Procivis',
+    dateVerification: '2026-01-15',
     disponibilite: 'nationale',
     actif: true,
     dateMAJ: '2025-01'
@@ -580,6 +632,8 @@ export const AIDES_ILE_DE_FRANCE: AideAccession[] = [
     cumulable: ['ptz', 'pas', 'action_logement'],
     organisme: 'Ville de Paris',
     urlOfficielle: 'https://www.paris.fr/pages/les-aides-a-l-accession-3261',
+    sourceJuridique: 'Délibération Conseil de Paris 2014-606',
+    dateVerification: '2026-01-15',
     disponibilite: 'communale',
     zonesDisponibles: ['75'],
     actif: true,
@@ -609,6 +663,8 @@ export const AIDES_ILE_DE_FRANCE: AideAccession[] = [
     cumulable: ['ptz', 'ppl_0', 'action_logement'],
     organisme: 'Région Île-de-France',
     urlOfficielle: 'https://www.iledefrance.fr/aides-et-appels-projets',
+    sourceJuridique: 'Délibération CR 2023-069',
+    dateVerification: '2026-01-15',
     disponibilite: 'regionale',
     zonesDisponibles: ['75', '77', '78', '91', '92', '93', '94', '95'],
     actif: true,
@@ -636,6 +692,8 @@ export const AIDES_ILE_DE_FRANCE: AideAccession[] = [
     cumulable: ['ptz', 'action_logement'],
     organisme: 'Département des Hauts-de-Seine',
     urlOfficielle: 'https://www.hauts-de-seine.fr/',
+    sourceJuridique: 'Délibération départementale 92',
+    dateVerification: '2026-01-15',
     disponibilite: 'departementale',
     zonesDisponibles: ['92'],
     actif: true,
@@ -662,6 +720,8 @@ export const AIDES_ILE_DE_FRANCE: AideAccession[] = [
     cumulable: ['ptz', 'tva_reduite_anru'],
     organisme: 'Département Seine-Saint-Denis',
     urlOfficielle: 'https://seinesaintdenis.fr/',
+    sourceJuridique: 'Délibération départementale 93',
+    dateVerification: '2026-01-15',
     disponibilite: 'departementale',
     zonesDisponibles: ['93'],
     actif: true,
@@ -687,6 +747,8 @@ export const AIDES_ILE_DE_FRANCE: AideAccession[] = [
     cumulable: ['ptz', 'action_logement'],
     organisme: 'Département Val-de-Marne',
     urlOfficielle: 'https://www.valdemarne.fr/',
+    sourceJuridique: 'Délibération départementale 94',
+    dateVerification: '2026-01-15',
     disponibilite: 'departementale',
     zonesDisponibles: ['94'],
     actif: true,

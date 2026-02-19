@@ -13,7 +13,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'AQUIZ — Conseil en acquisition immobilière à Paris & Île-de-France',
   description:
-    'AQUIZ accompagne les primo-accédants et particuliers dans leur projet immobilier : conseil personnalisé, chasse immobilière, financement. Simulateur gratuit en ligne.',
+    'AQUIZ accompagne les primo-accédants dans leur projet immobilier : conseil personnalisé, chasse immobilière et financement. Simulateur gratuit.',
   openGraph: {
     title: 'AQUIZ — Votre acquisition immobilière, notre mission',
     description:

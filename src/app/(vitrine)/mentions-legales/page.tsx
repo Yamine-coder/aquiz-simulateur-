@@ -1,6 +1,7 @@
 import { FileText, Mail } from 'lucide-react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
+
+import { ContactButton } from '@/components/vitrine/ContactButton'
 
 export const metadata: Metadata = {
   title: 'Mentions légales — AQUIZ',
@@ -160,13 +161,7 @@ export default function MentionsLegalesPage() {
             <p className="text-xs text-aquiz-gray-light">
               Dernière mise à jour : février 2026
             </p>
-            <Link
-              href="/#contact"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/90 transition-colors"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              Nous contacter
-            </Link>
+            <ContactButton />
           </div>
         </div>
       </section>

@@ -2,7 +2,7 @@
 
 import { Calculator, ChevronDown, Gift, Map, Menu, Phone, Scale, X } from 'lucide-react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 
 // ─── Types ───
@@ -70,6 +70,7 @@ const TOOL_LINKS: ToolLink[] = [
  */
 export function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isToolsOpen, setIsToolsOpen] = useState(false)
   const [isMobileToolsOpen, setIsMobileToolsOpen] = useState(false)
@@ -176,6 +177,24 @@ export function Navbar() {
       e.preventDefault()
       scrollToSection(link.sectionId)
       closeMenu()
+    } else if (!isHomepage && link.sectionId) {
+      // Depuis une page outil → naviguer vers l'accueil puis scroller à la section
+      e.preventDefault()
+      closeMenu()
+      router.push('/')
+      // Attendre la navigation puis scroller vers la section
+      const sectionId = link.sectionId
+      const waitAndScroll = () => {
+        const el = document.getElementById(sectionId)
+        if (el) {
+          scrollToSection(sectionId)
+        } else {
+          // La page n'est pas encore montée, réessayer
+          requestAnimationFrame(waitAndScroll)
+        }
+      }
+      // Petit délai pour laisser Next.js rendre la page d'accueil
+      setTimeout(waitAndScroll, 100)
     } else {
       closeMenu()
     }

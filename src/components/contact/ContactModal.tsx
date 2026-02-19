@@ -353,7 +353,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
               
               {/* CTA Principal */}
               <a
-                href="https://calendly.com/aquiz"
+                href="https://calendly.com/contact-aquiz/30min"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-3 bg-aquiz-black hover:bg-aquiz-black/90 text-white font-medium rounded-lg transition-colors"

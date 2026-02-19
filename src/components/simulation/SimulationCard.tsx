@@ -35,9 +35,7 @@ function formatMontant(n: number): string {
 const ETAPES_MODE_A: Record<string, string> = {
   profil: 'Profil',
   simulation: 'Simulation',
-  aides: 'Aides',
-  score: 'Score',
-  resume: 'Résumé'
+  resultats: 'Résultats'
 }
 
 /** Labels des étapes Mode B */

@@ -48,7 +48,17 @@ function CartePageContent() {
   const { resultats, parametresModeA, setZoneSelectionnee: saveZoneToStore } = useSimulateurStore()
   
   // Détecter l'origine de la navigation
-  const fromSimulation = searchParams.get('from') === 'simulation'
+  // On mémorise en sessionStorage pour ne pas perdre l'info après un détour (carte→aides→carte)
+  const fromParam = searchParams.get('from')
+  const [fromSimulation, setFromSimulation] = useState(false)
+  useEffect(() => {
+    if (fromParam === 'simulation') {
+      sessionStorage.setItem('aquiz-carte-from-simulation', '1')
+      setFromSimulation(true)
+    } else if (sessionStorage.getItem('aquiz-carte-from-simulation') === '1') {
+      setFromSimulation(true)
+    }
+  }, [fromParam])
   const hasSimulationData = !!(resultats?.prixAchatMax && resultats.prixAchatMax > 0)
 
   // États
@@ -174,6 +184,7 @@ function CartePageContent() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
+                sessionStorage.removeItem('aquiz-carte-from-simulation')
                 if (fromSimulation) {
                   router.push('/simulateur/mode-a?returning=1')
                 } else {

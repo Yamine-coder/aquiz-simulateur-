@@ -50,7 +50,6 @@ import {
     Zap
 } from 'lucide-react'
 import { useMemo } from 'react'
-import { COULEURS_RADAR, RadarChart } from './RadarChart'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
 
 interface TableauComparaisonProps {
@@ -649,57 +648,6 @@ export function TableauComparaison({
   const getAnalyse = (id: string) => analysesEnrichies.find(a => a.annonceId === id)
   const meilleurScore = Math.max(...analysesEnrichies.map(a => a.scoreEnrichi ?? a.score), 0)
   
-  // Préparer les données pour le graphique radar
-  const radarData = useMemo(() => {
-    if (annonces.length === 0) return []
-    return annonces.map((annonce, index) => {
-      const enrichie = getAnalyseEnrichie(annonce.id)
-      
-      // Calculer les scores par dimension
-      const scorePrix = enrichie?.marche?.success 
-        ? (enrichie.marche.ecartPrixM2 !== undefined 
-            ? Math.max(0, Math.min(100, 70 - enrichie.marche.ecartPrixM2 * 2))
-            : 50)
-        : 50
-      
-      const scoreQuartier = enrichie?.quartier?.success && enrichie.quartier.scoreQuartier !== undefined
-        ? enrichie.quartier.scoreQuartier
-        : 50
-        
-      const scoreRisques = enrichie?.risques?.success
-        ? (enrichie.risques.verdict === 'sûr' ? 90 :
-           enrichie.risques.verdict === 'vigilance' ? 60 : 30)
-        : 50
-        
-      const scoreEnergie = annonce.dpe === 'A' ? 100 :
-                          annonce.dpe === 'B' ? 85 :
-                          annonce.dpe === 'C' ? 70 :
-                          annonce.dpe === 'D' ? 55 :
-                          annonce.dpe === 'E' ? 40 :
-                          annonce.dpe === 'F' ? 25 : 10
-                          
-      const scoreEquipements = [
-        annonce.balconTerrasse,
-        annonce.parking,
-        annonce.cave,
-        annonce.type === 'appartement' && annonce.ascenseur
-      ].filter(Boolean).length * 25
-      
-      return {
-        id: annonce.id,
-        nom: annonce.ville.split(' ')[0].substring(0, 12),
-        couleur: COULEURS_RADAR[index % COULEURS_RADAR.length],
-        valeurs: [
-          { label: 'prix', value: scorePrix },
-          { label: 'quartier', value: scoreQuartier },
-          { label: 'risques', value: scoreRisques },
-          { label: 'energie', value: scoreEnergie },
-          { label: 'equipements', value: scoreEquipements }
-        ]
-      }
-    })
-  }, [annonces, getAnalyseEnrichie])
-  
   // Préparer les enrichissements pour la vue mobile
   const enrichissementsMap = useMemo(() => {
     const map = new Map<string, {
@@ -776,7 +724,7 @@ export function TableauComparaison({
                       {/* Image */}
                       <div className="relative h-20 bg-gradient-to-br from-aquiz-gray-lightest to-aquiz-gray-lighter">
                         {annonce.imageUrl ? (
-                          <img src={annonce.imageUrl} alt={`Photo du bien ${annonce.titre || 'immobilier'}`} className="w-full h-full object-cover" />
+                          <img src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <IconType className="w-7 h-7 text-aquiz-gray-light" />
@@ -1381,18 +1329,6 @@ export function TableauComparaison({
               <div className="text-[11px] text-aquiz-gray mt-0.5">{syntheseGlobale}</div>
             </td>
           </tr>
-          
-          {/* Graphique Radar - Comparaison visuelle */}
-          {annonces.length > 1 && (
-            <tr className="border-b border-aquiz-gray-lightest">
-              <td colSpan={annonces.length + 1} className="py-6 px-4">
-                <div className="flex flex-col items-center">
-                  <h4 className="text-xs font-medium text-aquiz-gray mb-4">Comparaison des profils</h4>
-                  <RadarChart data={radarData} size={280} showLabels showLegend />
-                </div>
-              </td>
-            </tr>
-          )}
           
           {/* Score global */}
           <tr className="border-b border-aquiz-gray-lightest">

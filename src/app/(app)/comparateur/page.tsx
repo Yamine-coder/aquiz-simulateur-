@@ -25,8 +25,13 @@ import {
     SelectTrigger,
     SelectValue
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { FadeIn } from '@/components/vitrine/Motion'
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet'
 import {
     calculerStatistiques,
     getAnnoncesFiltrees,
@@ -35,10 +40,9 @@ import {
 } from '@/stores/useComparateurStore'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import type { AnalyseFaisabilite, NouvelleAnnonce, TriAnnonces } from '@/types/annonces'
-import { motion } from 'framer-motion'
 import {
+    ArrowDownUp,
     ArrowRight,
-    Calculator,
     Check,
     Grid3X3,
     Import,
@@ -48,9 +52,9 @@ import {
     Plus,
     RotateCcw,
     Scale,
+    ScanSearch,
     X
 } from 'lucide-react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 
@@ -117,6 +121,7 @@ export default function ComparateurPage() {
   // Données calculées
   const annoncesFiltrees = getAnnoncesFiltrees(comparateur)
   const annoncesSelectionnees = getAnnoncesSelectionnees(comparateur)
+  const selCount = annoncesSelectionnees.length
   const statistiques = useMemo(
     () => calculerStatistiques(comparateur.annonces),
     [comparateur.annonces]
@@ -137,12 +142,15 @@ export default function ComparateurPage() {
   const handleAjouterAnnonce = (data: NouvelleAnnonce) => {
     comparateur.ajouterAnnonce(data)
     setShowForm(false)
+    // Scroll vers le haut pour voir la nouvelle annonce
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
   
   const handleModifierAnnonce = (data: NouvelleAnnonce) => {
     if (editingId) {
       comparateur.modifierAnnonce(editingId, data)
       setEditingId(null)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
   
@@ -156,407 +164,238 @@ export default function ComparateurPage() {
     ? comparateur.annonces.find((a) => a.id === editingId)
     : null
   
-  return (
-    <div className="min-h-screen flex flex-col">
-      <h1 className="sr-only">Comparateur de biens immobiliers</h1>
-      
-      {/* ─── Header — même pattern que simulateur ─── */}
-      <section className="relative bg-aquiz-black overflow-hidden">
-        {/* Photo de fond */}
-        <div className="absolute inset-0">
-          <Image
-            src="/images/parquet-moulures.jpg"
-            alt="Intérieur parisien"
-            fill
-            className="object-cover grayscale opacity-30"
-            priority
-            quality={85}
-            sizes="100vw"
-          />
-          <div className="absolute inset-0 bg-linear-to-b from-aquiz-black/50 via-aquiz-black/70 to-aquiz-black" />
-        </div>
+  // ─────────────── ÉTAT VIDE ───────────────
+  if (comparateur.annonces.length === 0) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col">
 
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-12 md:pt-12 md:pb-14 text-center">
-          <motion.p
-            className="text-xs font-medium tracking-[0.2em] uppercase text-aquiz-green mb-4"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            Outil de comparaison
-          </motion.p>
-
-          <motion.h2
-            className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-[1.15] tracking-tight mb-3"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            Comparateur d&apos;<span className="text-aquiz-green">annonces</span>
-          </motion.h2>
-
-          <motion.div
-            className="mx-auto w-12 h-px bg-white/20 mb-3"
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ duration: 0.6, delay: 0.35 }}
-          />
-
-          <motion.p
-            className="text-sm text-white/45 max-w-md mx-auto font-light leading-relaxed"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
-            Comparez jusqu&apos;à 4 biens côte à côte pour faire le meilleur choix
-          </motion.p>
-        </div>
-
-        {/* Curved bottom */}
-        <div className="absolute -bottom-px left-0 right-0 pointer-events-none">
-          <svg viewBox="0 0 1440 36" fill="none" preserveAspectRatio="none" className="w-full h-5 md:h-9 block">
-            <path d="M0 36V24Q360 0 720 0Q1080 0 1440 24V36H0Z" fill="#f3f4f6" />
-          </svg>
-        </div>
-      </section>
-
-      {/* ─── MAIN CONTENT ─── */}
-      <main className="flex-1 bg-aquiz-gray-lightest">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
-
-        {/* Budget — design épuré */}
-        <FadeIn>
-        {comparateur.budgetMax ? (
-          <div className="mb-6 bg-white rounded-2xl border border-aquiz-green/20 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
-                <Calculator className="h-4 w-4 text-aquiz-green" />
-              </div>
-              <div>
-                <span className="text-[11px] font-semibold text-aquiz-green uppercase tracking-wider">Budget max</span>
-                <p className="font-bold text-aquiz-black text-lg leading-tight">
-                  {comparateur.budgetMax.toLocaleString('fr-FR')} €
-                </p>
-              </div>
+        <section className="pt-10 pb-6 md:pt-12 md:pb-8 border-b border-aquiz-gray-lighter">
+          <div className="max-w-2xl mx-auto px-5 text-center">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-medium mb-3">
+              <Scale className="w-3 h-3" />
+              Comparateur
             </div>
-            <button
-              onClick={() => comparateur.setBudgetMax(null)}
-              className="p-2 rounded-xl hover:bg-aquiz-gray-lightest transition-colors"
-            >
-              <X className="h-4 w-4 text-aquiz-gray" />
-            </button>
-          </div>
-        ) : budgetSimulateur ? (
-          <div className="mb-6 bg-white rounded-2xl border border-aquiz-gray-lighter p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-aquiz-gray-lightest flex items-center justify-center">
-                <Info className="h-4 w-4 text-aquiz-gray" />
-              </div>
-              <span className="text-sm text-aquiz-gray">
-                Budget détecté : <strong className="text-aquiz-black">{budgetSimulateur.toLocaleString('fr-FR')} €</strong>
-              </span>
-            </div>
-            <Button 
-              size="sm"
-              onClick={handleImporterBudget}
-              className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl"
-            >
-              <Import className="h-4 w-4 mr-2" />
-              Importer
-            </Button>
-          </div>
-        ) : (
-          <div className="mb-6 bg-white rounded-2xl border border-dashed border-aquiz-gray-lighter p-4 text-center">
-            <p className="text-sm text-aquiz-gray">
-              Aucun budget défini — 
-              <Link href="/simulateur/mode-a" className="text-aquiz-green font-medium hover:underline underline-offset-2">
-                Faire une simulation
-              </Link>
+            <h2 className="text-2xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
+              Comparez vos annonces
+            </h2>
+            <p className="mt-2 text-sm md:text-base text-aquiz-gray-light max-w-lg mx-auto leading-relaxed">
+              Ajoutez un bien via un lien, du texte copié, ou en saisie manuelle
             </p>
           </div>
-        )}
-        </FadeIn>
-        
-        {/* Onglets */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-          <FadeIn delay={0.05}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <TabsList className="h-auto p-0 bg-transparent gap-2">
-              <TabsTrigger 
-                value="liste" 
-                className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-white border border-aquiz-gray-lighter text-aquiz-gray transition-all data-[state=active]:bg-aquiz-black data-[state=active]:text-white data-[state=active]:border-aquiz-black"
-              >
-                <LayoutGrid className="h-4 w-4" />
-                <span>Mes annonces</span>
-                {comparateur.annonces.length > 0 && (
-                  <span className="text-xs font-medium opacity-70">
-                    {comparateur.annonces.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger 
-                value="comparaison" 
-                className="gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-white border border-aquiz-gray-lighter text-aquiz-gray transition-all data-[state=active]:bg-aquiz-green data-[state=active]:text-white data-[state=active]:border-aquiz-green"
-              >
-                <Scale className="h-4 w-4" />
-                <span>Comparaison</span>
-                {annoncesSelectionnees.length > 0 && (
-                  <span className="text-xs font-semibold bg-white/20 px-1.5 py-0.5 rounded">
-                    {annoncesSelectionnees.length}
-                  </span>
-                )}
-              </TabsTrigger>
-            </TabsList>
-            
-            {activeTab === 'liste' && (
-              <div className="flex items-center gap-2">
-                <Select
-                  value={comparateur.tri}
-                  onValueChange={(v) => comparateur.setTri(v as TriAnnonces)}
-                >
-                  <SelectTrigger className="w-40 h-9 text-sm border-aquiz-gray-lighter bg-white rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="dateAjout-desc">Plus récentes</SelectItem>
-                    <SelectItem value="prix-asc">Prix ↑</SelectItem>
-                    <SelectItem value="prix-desc">Prix ↓</SelectItem>
-                    <SelectItem value="prixM2-asc">€/m² ↑</SelectItem>
-                    <SelectItem value="surface-desc">Surface ↓</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <div className="flex bg-white border border-aquiz-gray-lighter rounded-xl p-0.5">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      viewMode === 'grid' 
-                        ? 'bg-aquiz-gray-lightest text-aquiz-black' 
-                        : 'text-aquiz-gray hover:text-aquiz-black'
-                    }`}
-                  >
-                    <Grid3X3 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded-lg transition-colors ${
-                      viewMode === 'list' 
-                        ? 'bg-aquiz-gray-lightest text-aquiz-black' 
-                        : 'text-aquiz-gray hover:text-aquiz-black'
-                    }`}
-                  >
-                    <List className="h-4 w-4" />
-                  </button>
-                </div>
-                
-                <Button 
-                  onClick={() => setShowForm(true)}
-                  className="bg-aquiz-black hover:bg-aquiz-black/90 text-white h-9 rounded-xl"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Ajouter
-                </Button>
-              </div>
-            )}
+        </section>
+
+        <div className="flex-1 flex flex-col px-5 pt-8 pb-10">
+          <div className="w-full max-w-4xl mx-auto">
+            <FormulaireAnnonce onSubmit={handleAjouterAnnonce} />
           </div>
-          </FadeIn>
-          
-          {/* Tab Liste */}
-          <TabsContent value="liste">
-            {/* Formulaire ajout/édition */}
-            {(showForm || editingId) && (
-              <FadeIn>
-              <div className="mb-6 bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter bg-aquiz-gray-lightest flex items-center justify-between">
-                  <h3 className="font-semibold text-aquiz-black text-sm">
-                    {editingId ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setShowForm(false)
-                      setEditingId(null)
-                    }}
-                    className="text-aquiz-gray hover:text-aquiz-black p-1"
+          <p className="text-center text-xs text-aquiz-gray-light mt-8">
+            Vous n&apos;avez pas encore simulé votre budget ?{' '}
+            <Link href="/simulateur/mode-a" className="text-aquiz-green font-medium hover:underline underline-offset-2">
+              Faire une simulation
+            </Link>
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ─────────────── AVEC ANNONCES ───────────────
+  return (
+    <div className="min-h-screen bg-white flex flex-col">
+      <h1 className="sr-only">Comparateur de biens immobiliers</h1>
+
+      {/* ═══ HEADER ═══ */}
+      <div className="sticky top-0 z-30 bg-white border-b border-aquiz-gray-lighter">
+        <div className="max-w-5xl mx-auto px-5 py-3">
+          <div className="rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
+
+            {/* Haut : identité + actions */}
+            <div className="px-4 py-3 md:px-5 md:py-3.5 bg-white border-b border-aquiz-gray-lighter">
+              <div className="flex items-center justify-between gap-3">
+                {/* Gauche — badge + titre */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                    <Scale className="w-4 h-4 text-aquiz-green" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm md:text-base font-bold text-aquiz-black leading-tight truncate">
+                      Comparateur immobilier
+                    </h2>
+                    <p className="text-[11px] text-aquiz-gray mt-0.5">
+                      {comparateur.annonces.length} bien{comparateur.annonces.length > 1 ? 's' : ''} enregistré{comparateur.annonces.length > 1 ? 's' : ''}
+                      {selCount >= 2 && <span className="text-aquiz-green font-medium"> · {selCount} sélectionnés</span>}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Droite — budget + ajouter */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {comparateur.budgetMax ? (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-aquiz-green/8 border border-aquiz-green/15 text-xs">
+                      <span className="font-semibold text-aquiz-green">{(comparateur.budgetMax / 1000).toFixed(0)}k €</span>
+                      <button onClick={() => comparateur.setBudgetMax(null)} className="p-0.5 rounded hover:bg-aquiz-green/10">
+                        <X className="h-2.5 w-2.5 text-aquiz-green/60" />
+                      </button>
+                    </div>
+                  ) : budgetSimulateur ? (
+                    <button
+                      onClick={handleImporterBudget}
+                      className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-dashed border-aquiz-green/30 text-xs text-aquiz-green hover:bg-aquiz-green/5 transition-colors"
+                    >
+                      <Import className="w-3 h-3" />
+                      Importer {(budgetSimulateur / 1000).toFixed(0)}k €
+                    </button>
+                  ) : null}
+
+                  <Button
+                    onClick={() => setShowForm(true)}
+                    size="sm"
+                    className="bg-aquiz-green hover:bg-aquiz-green/90 text-white h-8 rounded-lg text-xs font-semibold px-3"
                   >
-                    <X className="h-4 w-4" />
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Ajouter
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bas : onglets + filtres */}
+            <div className="px-3 py-2 md:px-4 md:py-2.5 bg-aquiz-gray-lightest/40">
+              <div className="flex items-center justify-between gap-3">
+                {/* Onglets — pills */}
+                <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-aquiz-gray-lighter">
+                  <button
+                    onClick={() => setActiveTab('liste')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      activeTab === 'liste'
+                        ? 'bg-aquiz-black text-white shadow-sm'
+                        : 'text-aquiz-gray hover:text-aquiz-black'
+                    }`}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Annonces
+                    <span className={`text-[10px] min-w-[16px] text-center px-1 py-px rounded-full font-bold ${
+                      activeTab === 'liste' ? 'bg-white/20 text-white' : 'bg-aquiz-gray-lighter text-aquiz-gray'
+                    }`}>{comparateur.annonces.length}</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('comparaison')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                      activeTab === 'comparaison'
+                        ? 'bg-aquiz-green text-white shadow-sm'
+                        : 'text-aquiz-gray hover:text-aquiz-black'
+                    }`}
+                  >
+                    <Scale className="h-3.5 w-3.5" />
+                    Comparaison
+                    {selCount > 0 && (
+                      <span className={`text-[10px] min-w-[16px] text-center px-1 py-px rounded-full font-bold ${
+                        activeTab === 'comparaison' ? 'bg-white/20 text-white' : 'bg-aquiz-green/15 text-aquiz-green'
+                      }`}>{selCount}</span>
+                    )}
                   </button>
                 </div>
-                <div className="p-5">
-                  <FormulaireAnnonce
-                    editMode={!!editingId}
-                    initialValues={annonceEnEdition || undefined}
-                    onSubmit={editingId ? handleModifierAnnonce : handleAjouterAnnonce}
-                    onCancel={() => {
-                      setShowForm(false)
-                      setEditingId(null)
-                    }}
-                  />
-                </div>
-              </div>
-              </FadeIn>
-            )}
-            
-            {/* Liste vide */}
-            {comparateur.annonces.length === 0 && !showForm && (
-              <FadeIn>
-              <div className="bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm">
-                {/* Mini stepper */}
-                <div className="flex items-center justify-center gap-6 py-4 border-b border-aquiz-gray-lighter text-sm">
-                  <div className="flex items-center gap-2 text-aquiz-green">
-                    <span className="w-6 h-6 rounded-md bg-aquiz-green text-white text-xs font-bold flex items-center justify-center">1</span>
-                    <span className="font-medium">Ajouter</span>
-                  </div>
-                  <div className="w-4 h-px bg-aquiz-gray-lighter" />
-                  <div className="flex items-center gap-2 text-aquiz-gray opacity-50">
-                    <span className="w-6 h-6 rounded-md bg-aquiz-gray-lighter text-xs font-medium flex items-center justify-center">2</span>
-                    <span>Sélectionner</span>
-                  </div>
-                  <div className="w-4 h-px bg-aquiz-gray-lighter" />
-                  <div className="flex items-center gap-2 text-aquiz-gray opacity-50">
-                    <span className="w-6 h-6 rounded-md bg-aquiz-gray-lighter text-xs font-medium flex items-center justify-center">3</span>
-                    <span>Comparer</span>
-                  </div>
-                </div>
-                
-                {/* Formulaire inline */}
-                <div className="p-5">
-                  <FormulaireAnnonce
-                    onSubmit={handleAjouterAnnonce}
-                  />
-                </div>
-              </div>
-              </FadeIn>
-            )}
-            
-            {/* Grille d'annonces */}
-            {comparateur.annonces.length > 0 && (
-              <>
-                {/* Stepper de progression */}
-                <div className="mb-4 flex items-center justify-center gap-8 py-3 text-sm">
-                  <div className="flex items-center gap-2 text-aquiz-green">
-                    <span className="w-6 h-6 rounded-md bg-aquiz-green text-white text-xs font-medium flex items-center justify-center">
-                      <Check className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="font-medium">Ajouter</span>
-                  </div>
-                  <div className="w-6 h-px bg-aquiz-gray-lighter" />
-                  <div className={`flex items-center gap-2 ${annoncesSelectionnees.length >= 2 ? 'text-aquiz-green' : 'text-aquiz-gray'}`}>
-                    <span className={`w-6 h-6 rounded-md text-xs font-medium flex items-center justify-center ${
-                      annoncesSelectionnees.length >= 2 
-                        ? 'bg-aquiz-green text-white' 
-                        : 'bg-aquiz-gray-lighter text-aquiz-gray'
-                    }`}>
-                      {annoncesSelectionnees.length >= 2 ? <Check className="w-3.5 h-3.5" /> : '2'}
-                    </span>
-                    <span className="font-medium">
-                      Sélectionner
-                      {annoncesSelectionnees.length > 0 && annoncesSelectionnees.length < 2 && (
-                        <span className="text-orange-500 ml-1">({annoncesSelectionnees.length}/2 min)</span>
-                      )}
-                      {annoncesSelectionnees.length >= 2 && (
-                        <span className="text-aquiz-green ml-1">({annoncesSelectionnees.length})</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="w-6 h-px bg-aquiz-gray-lighter" />
-                  <div className={`flex items-center gap-2 ${annoncesSelectionnees.length >= 2 ? 'text-aquiz-black' : 'text-aquiz-gray opacity-50'}`}>
-                    <span className={`w-6 h-6 rounded-md text-xs font-medium flex items-center justify-center ${
-                      annoncesSelectionnees.length >= 2 
-                        ? 'bg-aquiz-black text-white' 
-                        : 'bg-aquiz-gray-lighter text-aquiz-gray'
-                    }`}>3</span>
-                    {annoncesSelectionnees.length >= 2 ? (
+
+                {/* Filtres tri + vue */}
+                {activeTab === 'liste' && (
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={comparateur.tri}
+                      onValueChange={(v) => comparateur.setTri(v as TriAnnonces)}
+                    >
+                      <SelectTrigger className="w-36 h-8 text-[11px] border-aquiz-gray-lighter rounded-lg font-medium bg-white">
+                        <ArrowDownUp className="h-3 w-3 text-aquiz-gray mr-1" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dateAjout-desc">Plus récentes</SelectItem>
+                        <SelectItem value="prix-asc">Prix ↑</SelectItem>
+                        <SelectItem value="prix-desc">Prix ↓</SelectItem>
+                        <SelectItem value="prixM2-asc">€/m² ↑</SelectItem>
+                        <SelectItem value="surface-desc">Surface ↓</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="hidden sm:flex bg-white rounded-lg p-0.5 border border-aquiz-gray-lighter">
                       <button
-                        onClick={() => setActiveTab('comparaison')}
-                        className="font-medium hover:text-aquiz-green transition-colors flex items-center gap-1"
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-aquiz-gray-lightest text-aquiz-black' : 'text-aquiz-gray hover:text-aquiz-black'}`}
                       >
-                        Comparer
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <Grid3X3 className="h-3.5 w-3.5" />
                       </button>
-                    ) : (
-                      <span className="font-medium">Comparer</span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Barre de sélection - Design AQUIZ */}
-                {annoncesSelectionnees.length > 0 && (
-                  <div className="mb-4 bg-aquiz-green/10 rounded-xl p-4 border border-aquiz-green/20">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-aquiz-green/20 flex items-center justify-center">
-                          <Check className="h-4 w-4 text-aquiz-green" />
-                        </div>
-                        <span className="text-sm font-medium text-aquiz-black">
-                          {annoncesSelectionnees.length} sélectionné{annoncesSelectionnees.length > 1 ? 's' : ''}
-                        </span>
-                        {annoncesSelectionnees.length >= 4 && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-aquiz-green/20 text-aquiz-green">Maximum</span>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => comparateur.deselectionnerTout()}
-                          className="text-sm text-aquiz-gray hover:text-aquiz-black px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
-                        >
-                          Réinitialiser
-                        </button>
-                        <Button
-                          size="sm"
-                          className="bg-aquiz-green hover:bg-aquiz-green/90 text-white"
-                          onClick={() => setActiveTab('comparaison')}
-                        >
-                          <Scale className="h-4 w-4 mr-2" />
-                          Comparer
-                        </Button>
-                      </div>
+                      <button
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-aquiz-gray-lightest text-aquiz-black' : 'text-aquiz-gray hover:text-aquiz-black'}`}
+                      >
+                        <List className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
                 )}
-                
-                <div className={`grid gap-4 ${
-                  viewMode === 'grid' 
-                    ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' 
-                    : 'grid-cols-1'
-                }`}>
-                  {annoncesFiltrees.map((annonce) => (
-                    <AnnonceCard
-                      key={annonce.id}
-                      annonce={annonce}
-                      isSelected={comparateur.annonceSelectionnees.includes(annonce.id)}
-                      selectionDisabled={comparateur.annonceSelectionnees.length >= 4}
-                      faisabilite={calculerFaisabilite(annonce.prix, comparateur.budgetMax)}
-                      onSelect={() => comparateur.toggleSelection(annonce.id)}
-                      onEdit={() => setEditingId(annonce.id)}
-                      onDelete={() => comparateur.supprimerAnnonce(annonce.id)}
-                      onToggleFavori={() => comparateur.toggleFavori(annonce.id)}
-                      compact={viewMode === 'list'}
-                    />
-                  ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ CONTENU ═══ */}
+      <div className="flex-1">
+        <div className={`mx-auto px-5 py-6 ${activeTab === 'comparaison' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+
+          {/* ─── TAB LISTE ─── */}
+          {activeTab === 'liste' && (
+            <>
+              {/* Budget mobile */}
+              {!comparateur.budgetMax && budgetSimulateur && (
+                <div className="sm:hidden mb-4 flex items-center justify-between px-3 py-2 rounded-lg border border-aquiz-gray-lighter">
+                  <span className="text-xs text-aquiz-gray flex items-center gap-1.5">
+                    <Info className="h-3.5 w-3.5" />
+                    Budget : <strong className="text-aquiz-black">{budgetSimulateur.toLocaleString('fr-FR')} €</strong>
+                  </span>
+                  <button onClick={handleImporterBudget} className="text-xs text-aquiz-green font-medium">Importer</button>
                 </div>
-              </>
-            )}
-          </TabsContent>
-          
-          {/* Tab Comparaison */}
-          <TabsContent value="comparaison">
-            {annoncesSelectionnees.length === 0 ? (
-              <FadeIn>
-              <div className="bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm">
-                <div className="py-16 px-6 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-6">
-                    <Scale className="h-8 w-8 text-aquiz-green" />
+              )}
+
+
+
+              {/* Grille d'annonces */}
+              <div className={`grid gap-5 ${
+                viewMode === 'grid'
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  : 'grid-cols-1 max-w-3xl'
+              }`}>
+                {annoncesFiltrees.map((annonce) => (
+                  <AnnonceCard
+                    key={annonce.id}
+                    annonce={annonce}
+                    isSelected={comparateur.annonceSelectionnees.includes(annonce.id)}
+                    selectionDisabled={comparateur.annonceSelectionnees.length >= 4}
+                    faisabilite={calculerFaisabilite(annonce.prix, comparateur.budgetMax)}
+                    onSelect={() => comparateur.toggleSelection(annonce.id)}
+                    onEdit={() => setEditingId(annonce.id)}
+                    onDelete={() => comparateur.supprimerAnnonce(annonce.id)}
+                    onToggleFavori={() => comparateur.toggleFavori(annonce.id)}
+                    compact={viewMode === 'list'}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* ─── TAB COMPARAISON ─── */}
+          {activeTab === 'comparaison' && (
+            <>
+              {annoncesSelectionnees.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-aquiz-gray-lighter py-16 px-6 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-5">
+                    <Scale className="h-7 w-7 text-aquiz-green" />
                   </div>
-                  <h3 className="text-lg font-semibold text-aquiz-black mb-2">
-                    Prêt à comparer ?
-                  </h3>
-                  <p className="text-aquiz-gray mb-2">
-                    Sélectionnez entre 2 et 4 biens depuis l&apos;onglet &quot;Mes annonces&quot;
+                  <h3 className="text-lg font-semibold text-aquiz-black mb-2">Prêt à comparer ?</h3>
+                  <p className="text-sm text-aquiz-gray mb-6 max-w-sm mx-auto">
+                    Sélectionnez entre 2 et 4 biens depuis l&apos;onglet Annonces
                   </p>
-                  <p className="text-sm text-aquiz-gray/70 mb-8">
-                    Cliquez simplement sur les cartes pour les ajouter à la comparaison
-                  </p>
-                  <Button 
+                  <Button
                     onClick={() => setActiveTab('liste')}
                     className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl"
                   >
@@ -564,71 +403,139 @@ export default function ComparateurPage() {
                     Voir mes annonces
                   </Button>
                 </div>
-              </div>
-              </FadeIn>
-            ) : (
-              <FadeIn>
-              <div className="space-y-6">
-                {/* Header section comparaison - Design AQUIZ Pro */}
-                <div className="bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm">
-                  <div className="flex items-center justify-between px-5 py-4">
+              ) : (
+                <div className="space-y-5">
+                  {/* Header comparaison */}
+                  <div className="bg-white rounded-2xl border border-aquiz-gray-lighter px-5 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
-                        <Scale className="h-5 w-5 text-aquiz-green" />
+                      <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
+                        <Scale className="h-4 w-4 text-aquiz-green" />
                       </div>
                       <div>
-                        <h2 className="font-semibold text-aquiz-black">
+                        <h2 className="font-semibold text-aquiz-black text-sm">
                           {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
                         </h2>
-                        <p className="text-xs text-aquiz-gray">Analyse comparative détaillée</p>
+                        <p className="text-[11px] text-aquiz-gray">Analyse comparative détaillée</p>
                       </div>
                     </div>
                     <button
                       onClick={() => comparateur.deselectionnerTout()}
-                      className="flex items-center gap-2 text-sm text-aquiz-gray hover:text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
                     >
-                      <RotateCcw className="h-4 w-4" />
+                      <RotateCcw className="h-3.5 w-3.5" />
                       <span className="hidden sm:inline">Réinitialiser</span>
                     </button>
                   </div>
-                </div>
-                
-                {/* Tableau de comparaison avec analyse intégrée */}
-                <div className="bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm overflow-hidden">
-                  <TableauComparaison
-                    annonces={annoncesSelectionnees}
-                    statistiques={statsSelection}
-                    budgetMax={comparateur.budgetMax}
-                    onRemove={(id) => comparateur.toggleSelection(id)}
-                    onRequestHelp={() => setShowContactModal(true)}
-                    tauxInteret={parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret}
-                    dureeAns={parametresModeA?.dureeAns ?? parametresModeB?.dureeAns}
-                    apport={parametresModeA?.apport ?? parametresModeB?.apport}
-                  />
-                </div>
-              </div>
-              </FadeIn>
-            )}
-          </TabsContent>
-        </Tabs>
 
-        {/* Trust footer */}
-        <div className="mt-8 flex items-center justify-center gap-4 text-xs text-aquiz-gray-light">
-          <span>Données DVF data.gouv.fr</span>
-          <span className="w-px h-3 bg-aquiz-gray-lighter" />
-          <span>Conforme HCSF</span>
-          <span className="w-px h-3 bg-aquiz-gray-lighter" />
-          <span>Aucune donnée partagée</span>
-        </div>
+                  {/* Tableau */}
+                  <div className="bg-white rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
+                    <TableauComparaison
+                      annonces={annoncesSelectionnees}
+                      statistiques={statsSelection}
+                      budgetMax={comparateur.budgetMax}
+                      onRemove={(id) => comparateur.toggleSelection(id)}
+                      onRequestHelp={() => setShowContactModal(true)}
+                      tauxInteret={parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret}
+                      dureeAns={parametresModeA?.dureeAns ?? parametresModeB?.dureeAns}
+                      apport={parametresModeA?.apport ?? parametresModeB?.apport}
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
         </div>
-      </main>
-      
+      </div>
+
       {/* Modal Contact */}
       <ContactModal
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
       />
+
+      {/* ═══ FLOATING SELECTION BAR ═══ */}
+      {selCount > 0 && activeTab === 'liste' && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-aquiz-black text-white shadow-xl shadow-black/20">
+            <div className="w-7 h-7 rounded-lg bg-aquiz-green flex items-center justify-center shrink-0">
+              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+            </div>
+            <span className="text-sm font-medium whitespace-nowrap">
+              {selCount} sélectionné{selCount > 1 ? 's' : ''}
+            </span>
+            {selCount >= 4 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/15 text-white/80 font-medium">Max</span>
+            )}
+            <div className="w-px h-5 bg-white/20" />
+            <button
+              onClick={() => comparateur.deselectionnerTout()}
+              className="text-xs text-white/60 hover:text-white transition-colors whitespace-nowrap"
+            >
+              Effacer
+            </button>
+            {selCount >= 2 && (
+              <button
+                onClick={() => setActiveTab('comparaison')}
+                className="flex items-center gap-1.5 text-xs font-semibold bg-aquiz-green hover:bg-aquiz-green/90 text-white px-3.5 py-1.5 rounded-xl transition-colors whitespace-nowrap"
+              >
+                Comparer
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ SHEET AJOUT / MODIFICATION ═══ */}
+      <Sheet
+        open={showForm || !!editingId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowForm(false)
+            setEditingId(null)
+          }
+        }}
+      >
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          className="w-full sm:max-w-xl p-0 flex flex-col"
+        >
+          {/* Header du panel */}
+          <SheetHeader className="px-5 pt-5 pb-4 border-b border-aquiz-gray-lighter bg-aquiz-gray-lightest/30 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                {editingId ? (
+                  <ScanSearch className="w-4 h-4 text-aquiz-green" />
+                ) : (
+                  <Plus className="w-4 h-4 text-aquiz-green" />
+                )}
+              </div>
+              <div>
+                <SheetTitle className="text-base font-bold text-aquiz-black">
+                  {editingId ? 'Modifier l\'annonce' : 'Ajouter une annonce'}
+                </SheetTitle>
+                <SheetDescription className="text-xs text-aquiz-gray mt-0.5">
+                  {editingId
+                    ? 'Modifiez les informations du bien'
+                    : 'Collez un lien, du texte, ou remplissez manuellement'}
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+
+          {/* Contenu scrollable */}
+          <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">
+            <FormulaireAnnonce
+              editMode={!!editingId}
+              initialValues={annonceEnEdition || undefined}
+              onSubmit={editingId ? handleModifierAnnonce : handleAjouterAnnonce}
+              onCancel={() => { setShowForm(false); setEditingId(null) }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

@@ -168,10 +168,17 @@ export function ServicesSection() {
                       ))}
                     </ul>
 
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-aquiz-green group-hover:gap-3 transition-all cursor-default">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('contact')
+                        if (el) el.scrollIntoView({ behavior: 'smooth' })
+                      }}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-aquiz-green hover:gap-3 transition-all"
+                    >
                       Nous contacter
                       <ArrowRight className="w-4 h-4" />
-                    </span>
+                    </button>
                   </div>
                 </div>
               </StaggerItem>
@@ -371,7 +378,7 @@ export function OutilsSection() {
             </div>
 
             <Link
-              href="/simulateur/mode-a"
+              href="/simulateur"
               className="inline-flex items-center gap-2 px-6 py-3 bg-aquiz-green text-white font-semibold rounded-xl shadow-lg shadow-aquiz-green/20 hover:brightness-110 hover:-translate-y-0.5 transition-all duration-300"
             >
               Lancer une simulation

@@ -4,13 +4,11 @@
 
 'use client'
 
-import { Button } from '@/components/ui/button'
 import type { SavedSimulation } from '@/types/simulation-save'
 import {
     ArrowRight,
     Clock,
     Home,
-    Play,
     Plus,
     Wallet,
     X
@@ -49,9 +47,7 @@ function formatMontant(n: number): string {
 const ETAPES_A: Record<string, string> = {
   profil: 'Profil',
   simulation: 'Simulation',
-  aides: 'Aides',
-  score: 'Score',
-  resume: 'Résumé'
+  resultats: 'Résultats'
 }
 
 /** Labels des étapes - Mode B */
@@ -62,14 +58,17 @@ const ETAPES_B: Record<string, string> = {
 }
 
 /** Progression */
-function getProgress(etape: string, mode: 'A' | 'B'): number {
+function getProgress(etape: string, mode: 'A' | 'B', status?: string): number {
+  // Simulation terminée → toujours 100%
+  if (status === 'terminee') return 100
   if (mode === 'B') {
     const step = parseInt(etape, 10)
     return step > 0 ? Math.round((step / 3) * 100) : 0
   }
-  const steps = ['profil', 'simulation', 'aides', 'score', 'resume']
+  const steps = ['profil', 'simulation', 'resultats']
   const idx = steps.indexOf(etape)
-  return idx >= 0 ? Math.round(((idx + 1) / steps.length) * 100) : 0
+  // Fallback : si étape inconnue mais données existent, au moins 33%
+  return idx >= 0 ? Math.round(((idx + 1) / steps.length) * 100) : 33
 }
 
 /** Obtenir le label de l'étape */
@@ -81,7 +80,7 @@ function getEtapeLabel(etape: string, mode: 'A' | 'B'): string {
 }
 
 export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
-  const progress = getProgress(simulation.etape, simulation.mode)
+  const progress = getProgress(simulation.etape, simulation.mode, simulation.status)
   const etapeLabel = getEtapeLabel(simulation.etape, simulation.mode)
   const isComplete = simulation.status === 'terminee' || progress === 100
   const revenus = simulation.profil 
@@ -93,78 +92,76 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
   const ModeIcon = isModA ? Wallet : Home
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="w-full max-w-[400px] bg-white rounded-2xl border border-gray-100 shadow-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 overflow-hidden">
         
-        {/* Header sobre noir AQUIZ */}
-        <div className="relative px-6 pt-6 pb-5 bg-aquiz-black">
-          {/* Traits diagonaux ADN AQUIZ */}
-          <div className="absolute top-0 right-0 w-20 h-full overflow-hidden opacity-20">
-            <div className="absolute top-2 right-4 w-16 h-0.5 bg-white rotate-[-20deg]" />
-            <div className="absolute top-5 right-2 w-14 h-0.5 bg-white/60 rotate-[-20deg]" />
-            <div className="absolute top-8 right-0 w-12 h-0.5 bg-white/40 rotate-[-20deg]" />
-          </div>
-
+        {/* Header - fond blanc, style aéré Apple-like */}
+        <div className="relative px-7 pt-7 pb-5">
           {/* Bouton fermer */}
           <button 
             onClick={onNew}
-            className="absolute top-4 right-4 p-1.5 rounded-full hover:bg-white/10 transition-colors"
+            className="absolute top-5 right-5 p-1.5 rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors"
           >
-            <X className="w-4 h-4 text-white/60" />
+            <X className="w-4 h-4" />
           </button>
 
-          {/* Badge mode */}
-          <div className="flex items-center gap-2 mb-3">
-            <div className="p-2 rounded-lg bg-white/10">
-              <ModeIcon className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-xs text-white/60 uppercase tracking-wider font-medium">
-              Mode {simulation.mode}
-            </span>
+          {/* Icône dans cercle gris clair */}
+          <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
+            <ModeIcon className="w-5 h-5 text-aquiz-black" />
           </div>
 
+          {/* Label mode en vert */}
+          <span className="text-xs font-semibold uppercase tracking-wider text-aquiz-green">
+            Mode {simulation.mode}
+          </span>
+
           {/* Titre */}
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-xl font-bold text-aquiz-black mt-1.5">
             {isComplete ? 'Revoir votre simulation ?' : 'Reprendre votre simulation ?'}
           </h2>
+
+          {/* Sous-titre */}
+          <p className="text-sm text-gray-400 mt-1">
+            {isModA ? 'Estimation de votre capacité d\'achat' : 'Vérification de faisabilité'}
+          </p>
         </div>
 
-        {/* Contenu */}
-        <div className="px-6 py-5">
-          {/* Info principale */}
-          <div className="flex items-center justify-between py-3 border-b border-aquiz-gray-lighter">
-            <span className="text-sm text-aquiz-gray">
+        {/* Séparateur */}
+        <div className="mx-7 h-px bg-gray-100" />
+
+        {/* Infos - badges style page d'accueil */}
+        <div className="px-7 py-5 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">
               {isModA ? 'Revenus mensuels' : 'Prix du bien'}
             </span>
-            <span className="text-base font-semibold text-aquiz-black">
+            <span className="text-sm font-semibold text-aquiz-black">
               {isModA && revenus > 0 && `${formatMontant(revenus)} €`}
               {!isModA && prixBien > 0 && `${formatMontant(prixBien)} €`}
               {((isModA && revenus === 0) || (!isModA && prixBien === 0)) && '—'}
             </span>
           </div>
 
-          {/* Étape */}
-          <div className="flex items-center justify-between py-3 border-b border-aquiz-gray-lighter">
-            <span className="text-sm text-aquiz-gray">Étape actuelle</span>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Étape actuelle</span>
             <span className="text-sm font-medium text-aquiz-black">{etapeLabel}</span>
           </div>
 
-          {/* Temps */}
-          <div className="flex items-center justify-between py-3 border-b border-aquiz-gray-lighter">
-            <span className="text-sm text-aquiz-gray">Sauvegardée</span>
-            <div className="flex items-center gap-1.5 text-sm text-aquiz-gray">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Sauvegardée</span>
+            <div className="flex items-center gap-1.5 text-sm text-gray-400">
               <Clock className="w-3.5 h-3.5" />
               {formatDate(simulation.savedAt)}
             </div>
           </div>
 
-          {/* Progression */}
-          <div className="pt-4">
-            <div className="flex justify-between text-xs text-aquiz-gray mb-2">
-              <span>Progression</span>
+          {/* Barre de progression */}
+          <div className="pt-1">
+            <div className="flex justify-between text-xs mb-2">
+              <span className="text-gray-400">Progression</span>
               <span className="font-medium text-aquiz-black">{progress}%</span>
             </div>
-            <div className="h-1.5 bg-aquiz-gray-lighter rounded-full overflow-hidden">
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-aquiz-green rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
@@ -173,20 +170,22 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="px-6 pb-6 pt-1 space-y-2">
-          <Button
+        {/* Séparateur */}
+        <div className="mx-7 h-px bg-gray-100" />
+
+        {/* Actions - boutons bien visibles */}
+        <div className="px-7 py-6 space-y-3">
+          <button
             onClick={onResume}
-            className="w-full h-11 bg-aquiz-black hover:bg-aquiz-black/90 rounded-xl font-medium text-sm"
+            className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-aquiz-green text-white text-sm font-semibold hover:bg-aquiz-green/90 transition-colors"
           >
-            <Play className="w-4 h-4 mr-2 fill-current" />
-            {isComplete ? 'Revoir les résultats' : 'Reprendre'}
-            <ArrowRight className="w-4 h-4 ml-auto" />
-          </Button>
+            {isComplete ? 'Revoir les résultats' : 'Reprendre la simulation'}
+            <ArrowRight className="w-4 h-4" />
+          </button>
           
           <button
             onClick={onNew}
-            className="w-full h-9 text-sm text-aquiz-gray hover:text-aquiz-black transition-colors flex items-center justify-center gap-2"
+            className="w-full h-10 flex items-center justify-center gap-2 rounded-xl border border-gray-200 text-sm text-gray-500 hover:border-gray-300 hover:text-aquiz-black transition-colors"
           >
             <Plus className="w-4 h-4" />
             Nouvelle simulation

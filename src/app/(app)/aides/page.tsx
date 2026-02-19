@@ -37,6 +37,8 @@ import {
     MapPinned,
     Percent,
     Phone,
+    Shield,
+    ShieldCheck,
     Star
 } from 'lucide-react'
 import Link from 'next/link'
@@ -93,24 +95,24 @@ const formatMontant = (n: number): string => n.toLocaleString('fr-FR')
 function SelecteurDepartement({ onSelect }: { onSelect: (code: string) => void }) {
   return (
     <div className="min-h-screen bg-white">
-      {/* Hero — épuré, centré, aéré */}
-      <section className="pt-12 pb-10 md:pt-20 md:pb-14 border-b border-aquiz-gray-lighter">
+      {/* Hero — même style que /simulateur */}
+      <section className="pt-10 pb-6 md:pt-12 md:pb-8 border-b border-aquiz-gray-lighter">
         <div className="max-w-2xl mx-auto px-5 text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/8 text-aquiz-green text-xs font-medium mb-5">
-            <MapPin className="w-3 h-3" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/8 text-aquiz-green text-xs font-medium mb-3">
+            <MapPin className="w-3.5 h-3.5" />
             Île-de-France
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
+          <h1 className="text-2xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
             Les aides pour devenir propriétaire
           </h1>
-          <p className="mt-3 text-base text-aquiz-gray-light max-w-md mx-auto leading-relaxed">
+          <p className="mt-2 text-sm md:text-base text-aquiz-gray-light max-w-lg mx-auto leading-relaxed">
             PTZ, Action Logement, aides locales… découvrez les dispositifs accessibles dans votre département.
           </p>
         </div>
       </section>
 
       {/* Grille de départements */}
-      <section className="max-w-2xl mx-auto px-5 py-10 md:py-14">
+      <section className="max-w-3xl mx-auto px-5 py-8 md:py-10">
         <div className="flex items-center justify-between mb-5">
           <p className="text-xs font-medium text-aquiz-gray-light uppercase tracking-widest">Sélectionnez un département</p>
           <div className="flex items-center gap-3 text-[10px]">
@@ -152,7 +154,7 @@ function SelecteurDepartement({ onSelect }: { onSelect: (code: string) => void }
 
       {/* Bloc éducatif minimal */}
       <section className="border-t border-aquiz-gray-lighter bg-aquiz-gray-lightest/50">
-        <div className="max-w-2xl mx-auto px-5 py-10 md:py-14">
+        <div className="max-w-3xl mx-auto px-5 py-8 md:py-10">
           <p className="text-xs font-medium text-aquiz-gray-light uppercase tracking-widest mb-6">Principales aides</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
@@ -205,24 +207,24 @@ function AideCard({ aide, expanded, onToggle }: {
   const colors = COULEURS_CATEGORIES[aide.categorie]
 
   return (
-    <div className={`bg-white rounded-xl border transition-all duration-150 ${
-      expanded ? 'border-aquiz-gray-lighter shadow-sm' : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+    <div className={`bg-white rounded-2xl border transition-all duration-150 ${
+      expanded ? 'border-aquiz-gray-lighter shadow-md shadow-black/[0.03]' : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light hover:shadow-sm'
     }`}>
-      <button onClick={onToggle} className="w-full px-4 py-3.5 sm:px-5 sm:py-4 flex items-start gap-3.5 text-left">
-        <div className={`w-8 h-8 rounded-lg ${colors.bg} ${colors.border} border flex items-center justify-center shrink-0 ${colors.icon}`}>
+      <button onClick={onToggle} className="w-full px-5 py-4 sm:px-6 sm:py-5 flex items-start gap-4 text-left">
+        <div className={`w-10 h-10 rounded-xl ${colors.bg} ${colors.border} border flex items-center justify-center shrink-0 ${colors.icon}`}>
           {ICONES_CATEGORIES[aide.categorie]}
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-            <h3 className="font-semibold text-aquiz-black text-sm leading-tight">{aide.nom}</h3>
+          <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+            <h3 className="font-semibold text-aquiz-black text-[15px] leading-tight">{aide.nom}</h3>
             {aide.taux === 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 bg-aquiz-green/10 text-aquiz-green rounded font-semibold">0%</span>
+              <span className="text-[10px] px-2 py-0.5 bg-aquiz-green/10 text-aquiz-green rounded-md font-bold">0%</span>
             )}
           </div>
-          <p className="text-xs text-aquiz-gray-light line-clamp-1">{aide.description}</p>
+          <p className="text-xs text-aquiz-gray-light line-clamp-1 leading-relaxed">{aide.description}</p>
           {aide.montant && (
-            <p className="text-sm font-bold text-aquiz-green mt-1.5">
+            <p className="text-sm font-bold text-aquiz-green mt-2">
               {aide.montant.max
                 ? `Jusqu'à ${formatMontant(aide.montant.max)} €`
                 : aide.montant.calcul
@@ -231,28 +233,28 @@ function AideCard({ aide, expanded, onToggle }: {
           )}
         </div>
 
-        <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 ${
+        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-transform duration-200 mt-0.5 ${
           expanded ? 'rotate-180 bg-aquiz-black text-white' : 'bg-aquiz-gray-lightest text-aquiz-gray-light'
         }`}>
-          <ChevronDown className="w-3.5 h-3.5" />
+          <ChevronDown className="w-4 h-4" />
         </div>
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-4 animate-fade-in">
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6 space-y-5 animate-fade-in">
           <div className="h-px bg-aquiz-gray-lighter" />
 
           {/* Avantages */}
           <div>
-            <p className="text-[10px] text-aquiz-gray-light uppercase tracking-wider font-medium mb-2 flex items-center gap-1.5">
-              <Star className="w-3 h-3 text-amber-400" />
+            <p className="text-[11px] text-aquiz-gray-light uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
+              <Star className="w-3.5 h-3.5 text-amber-400" />
               Avantages
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               {aide.avantages.map((avantage, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs">
-                  <CheckCircle className="w-3.5 h-3.5 text-aquiz-green shrink-0 mt-0.5" />
-                  <span className="text-aquiz-gray">{avantage}</span>
+                <div key={i} className="flex items-start gap-2.5 text-sm">
+                  <CheckCircle className="w-4 h-4 text-aquiz-green shrink-0 mt-0.5" />
+                  <span className="text-aquiz-gray leading-snug">{avantage}</span>
                 </div>
               ))}
             </div>
@@ -260,46 +262,64 @@ function AideCard({ aide, expanded, onToggle }: {
 
           {/* Conditions */}
           <div>
-            <p className="text-[10px] text-aquiz-gray-light uppercase tracking-wider font-medium mb-2 flex items-center gap-1.5">
-              <Info className="w-3 h-3 text-blue-400" />
+            <p className="text-[11px] text-aquiz-gray-light uppercase tracking-wider font-semibold mb-3 flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 text-blue-400" />
               Conditions
             </p>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {aide.conditions.primoAccedant && (
-                <span className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded-md font-medium">Primo-accédant</span>
+                <span className="text-[11px] px-2.5 py-1 bg-blue-50 text-blue-600 rounded-full font-medium">Primo-accédant</span>
               )}
               {aide.conditions.plafondRevenus && (
-                <span className="text-[10px] px-2 py-1 bg-purple-50 text-purple-600 rounded-md font-medium">Sous plafond revenus</span>
+                <span className="text-[11px] px-2.5 py-1 bg-purple-50 text-purple-600 rounded-full font-medium">Sous plafond revenus</span>
               )}
               {aide.conditions.salariePriveMin10 && (
-                <span className="text-[10px] px-2 py-1 bg-orange-50 text-orange-600 rounded-md font-medium">Salarié privé (10+ sal.)</span>
+                <span className="text-[11px] px-2.5 py-1 bg-orange-50 text-orange-600 rounded-full font-medium">Salarié privé (10+ sal.)</span>
               )}
               {aide.conditions.residencePrincipale && (
-                <span className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md font-medium">Résidence principale</span>
+                <span className="text-[11px] px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-full font-medium">Résidence principale</span>
               )}
               {aide.conditions.typeBien && (
-                <span className="text-[10px] px-2 py-1 bg-aquiz-gray-lightest text-aquiz-gray rounded-md font-medium">
+                <span className="text-[11px] px-2.5 py-1 bg-aquiz-gray-lightest text-aquiz-gray rounded-full font-medium">
                   {aide.conditions.typeBien.join(' / ')}
                 </span>
               )}
               {aide.conditions.zoneANRU && (
-                <span className="text-[10px] px-2 py-1 bg-red-50 text-red-500 rounded-md font-medium">Zone ANRU/QPV</span>
+                <span className="text-[11px] px-2.5 py-1 bg-red-50 text-red-500 rounded-full font-medium">Zone ANRU/QPV</span>
               )}
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between pt-3 border-t border-aquiz-gray-lighter">
-            <span className="text-[10px] text-aquiz-gray-light">{aide.organisme}</span>
-            <a
-              href={aide.urlOfficielle}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-aquiz-green hover:underline flex items-center gap-1 font-medium"
-            >
-              En savoir plus
-              <ExternalLink className="w-3 h-3" />
-            </a>
+          <div className="pt-4 border-t border-aquiz-gray-lighter space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-aquiz-gray-light font-medium">{aide.organisme}</span>
+              <a
+                href={aide.urlOfficielle}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-aquiz-green hover:underline flex items-center gap-1.5 font-medium"
+              >
+                En savoir plus
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+            {/* Référence juridique */}
+            {aide.sourceJuridique && (
+              <div className="flex items-center gap-1.5 text-[10px] text-aquiz-gray-light">
+                <Shield className="w-3 h-3 text-aquiz-gray-lighter shrink-0" />
+                {aide.sourceLegifrance ? (
+                  <a href={aide.sourceLegifrance} target="_blank" rel="noopener noreferrer" className="hover:text-aquiz-gray hover:underline underline-offset-2 transition-colors">
+                    {aide.sourceJuridique}
+                  </a>
+                ) : (
+                  <span>{aide.sourceJuridique}</span>
+                )}
+                {aide.dateVerification && (
+                  <span className="text-aquiz-gray-lighter">· Vérifié {new Date(aide.dateVerification).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' })}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -335,6 +355,7 @@ function AidesPageContent() {
         codePostal: dept.cp,
         zonePTZ: dept.zone,
       })
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }, [])
 
@@ -401,90 +422,64 @@ function AidesPageContent() {
   // ===== MODE 2 : Zone sélectionnée → Aides =====
   return (
     <div className="min-h-screen bg-white">
-      {/* Header — clean, minimal */}
+      {/* Header */}
       <header className="border-b border-aquiz-gray-lighter">
-        <div className="max-w-2xl mx-auto px-5 py-5 md:py-6">
+        <div className="max-w-4xl mx-auto px-5 pt-8 pb-6 md:pt-10 md:pb-8">
           {/* Navigation retour */}
           <button
             onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)}
-            className="inline-flex items-center gap-1.5 text-xs text-aquiz-gray-light hover:text-aquiz-gray transition-colors mb-4"
+            className="inline-flex items-center gap-1.5 text-xs text-aquiz-gray-light hover:text-aquiz-gray transition-colors mb-5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             {fromStore ? 'Retour à la carte' : 'Tous les départements'}
           </button>
 
-          {/* Titre + badge zone */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
+          {/* Ligne principale : Titre + Zone badge */}
+          <div className="flex items-center justify-between gap-4 mb-6">
+            <div className="flex items-baseline gap-3">
               <h2 className="text-2xl md:text-3xl font-extrabold text-aquiz-black tracking-tight">
                 {zoneSelectionnee.nomCommune}
               </h2>
-              <p className="text-sm text-aquiz-gray-light mt-0.5">
-                Département {zoneSelectionnee.codeDepartement}
-                {fromStore && capaciteAchat > 0 ? ` · Budget ${formatMontant(capaciteAchat)} €` : ''}
-              </p>
+              <span className="text-sm text-aquiz-gray-light font-medium">
+                {zoneSelectionnee.codeDepartement}
+              </span>
+              {fromStore && capaciteAchat > 0 && (
+                <span className="text-sm text-aquiz-gray-light">· Budget {formatMontant(capaciteAchat)} €</span>
+              )}
             </div>
-            <div className="flex flex-col items-end gap-1 shrink-0">
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${ZONE_COLORS[zonePTZ] || ZONE_COLORS.A}`}>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${ZONE_COLORS[zonePTZ] || ZONE_COLORS.A}`}>
                 Zone {zoneSelectionnee.zonePTZ}
               </span>
-              <span className="text-[10px] text-aquiz-gray-light">
-                {zonePTZ === 'Abis' ? 'Marché très tendu' : zonePTZ === 'A' ? 'Marché tendu' : 'Marché modéré'}
+              <span className="text-[11px] text-aquiz-gray-light hidden sm:inline">
+                {zonePTZ === 'Abis' ? 'Très tendu' : zonePTZ === 'A' ? 'Tendu' : 'Modéré'}
               </span>
             </div>
           </div>
 
-          {/* Métriques — ligne horizontale */}
-          <div className="flex items-center gap-6 mt-5 pt-5 border-t border-aquiz-gray-lighter">
-            <div>
-              <span className="text-2xl font-extrabold text-aquiz-black">{aidesEligibles.length}</span>
-              <span className="text-xs text-aquiz-gray-light ml-1.5">aides disponibles</span>
+          {/* Métriques + Filtres — sur une même bande */}
+          {/* Métriques */}
+          <div className="flex items-center gap-3 mt-6">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aquiz-gray-lightest/80 border border-aquiz-gray-lighter">
+              <span className="text-lg font-extrabold text-aquiz-black">{aidesEligibles.length}</span>
+              <span className="text-[11px] text-aquiz-gray-light leading-tight">aides</span>
             </div>
             {totalAides.max > 0 && (
-              <div>
-                <span className="text-2xl font-extrabold text-aquiz-green">{(totalAides.max / 1000).toFixed(0)}k€</span>
-                <span className="text-xs text-aquiz-gray-light ml-1.5">d&apos;économies max</span>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-green/15">
+                <span className="text-lg font-extrabold text-aquiz-green">jusqu&apos;à {(totalAides.max / 1000).toFixed(0)}k€</span>
+                <span className="text-[11px] text-aquiz-gray leading-tight">d&apos;aides cumulées</span>
               </div>
             )}
           </div>
-        </div>
-      </header>
 
-      {/* Contenu */}
-      <div className="max-w-2xl mx-auto px-5 py-6">
-
-        {/* Filtres profil — compact, inline */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 mb-6 pb-6 border-b border-aquiz-gray-lighter">
-          <span className="text-xs font-medium text-aquiz-gray-light uppercase tracking-wider">Profil</span>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs text-aquiz-gray" title="Primo-accédant : personne qui achète sa résidence principale pour la première fois (ou qui n'a pas été propriétaire depuis 2 ans)">Primo <Info className="w-3 h-3 inline text-aquiz-gray-light" /></Label>
-            <Select value={primoAccedant} onValueChange={setPrimoAccedant}>
-              <SelectTrigger className="w-16 h-7 text-xs rounded-lg border-aquiz-gray-lighter">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="oui">Oui</SelectItem>
-                <SelectItem value="non">Non</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs text-aquiz-gray" title="Salarié d'une entreprise du secteur privé de 10 employés ou plus, condition pour le prêt Action Logement">Salarié 10+ <Info className="w-3 h-3 inline text-aquiz-gray-light" /></Label>
-            <Select value={salariePriveMin10} onValueChange={setSalariePriveMin10}>
-              <SelectTrigger className="w-16 h-7 text-xs rounded-lg border-aquiz-gray-lighter">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="oui">Oui</SelectItem>
-                <SelectItem value="non">Non</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {!estFonctionnaire && (
+          {/* Filtres profil — une seule ligne */}
+          <div className="flex items-center flex-wrap gap-x-5 gap-y-3 mt-4">
             <div className="flex items-center gap-2">
-              <Label className="text-xs text-aquiz-gray">Fonctionnaire</Label>
-              <Select value={fonctionnaire} onValueChange={setFonctionnaire}>
-                <SelectTrigger className="w-16 h-7 text-xs rounded-lg border-aquiz-gray-lighter">
+              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Premier achat de résidence principale (ou pas propriétaire depuis 2 ans)">
+                Primo <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+              </Label>
+              <Select value={primoAccedant} onValueChange={setPrimoAccedant}>
+                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -493,16 +488,58 @@ function AidesPageContent() {
                 </SelectContent>
               </Select>
             </div>
-          )}
-        </div>
+            <div className="w-px h-5 bg-aquiz-gray-lighter" />
+            <div className="flex items-center gap-2">
+              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Salarié d'une entreprise privée de 10 salariés ou plus (éligible Action Logement)">
+                Salarié 10+ <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+              </Label>
+              <Select value={salariePriveMin10} onValueChange={setSalariePriveMin10}>
+                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="oui">Oui</SelectItem>
+                  <SelectItem value="non">Non</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="w-px h-5 bg-aquiz-gray-lighter" />
+            <div className="flex items-center gap-2">
+              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Agent de la fonction publique (éligible au prêt fonctionnaire)">
+                Fonctionnaire <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+              </Label>
+              <Select value={fonctionnaire} onValueChange={setFonctionnaire}>
+                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="oui">Oui</SelectItem>
+                  <SelectItem value="non">Non</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-        {/* Filtres catégorie */}
-        <div className="flex flex-wrap gap-1.5 mb-5">
+          {/* Badge données vérifiées */}
+          <div className="flex items-center gap-2 mt-5 px-3 py-2 rounded-lg bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter/50">
+            <ShieldCheck className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+            <span className="text-[10px] text-aquiz-gray leading-snug">
+              Données vérifiées · Sources : <a href="https://www.anil.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">ANIL</a>, <a href="https://www.legifrance.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">Légifrance</a>, <a href="https://www.service-public.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">service-public.fr</a> · Janvier 2026
+            </span>
+          </div>
+        </div>
+      </header>
+
+      {/* Contenu */}
+      <div className="max-w-4xl mx-auto px-5 py-6 md:py-8">
+
+        {/* Filtres catégorie — pills avec counts */}
+        <div className="flex flex-wrap gap-2 mb-6">
           <button
             onClick={() => setActiveCategory('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-150 ${
               activeCategory === 'all'
-                ? 'bg-aquiz-black text-white'
+                ? 'bg-aquiz-black text-white shadow-sm'
                 : 'bg-aquiz-gray-lightest text-aquiz-gray hover:bg-aquiz-gray-lighter'
             }`}
           >
@@ -514,15 +551,15 @@ function AidesPageContent() {
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
+                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-150 flex items-center gap-2 ${
                   activeCategory === cat
-                    ? 'bg-aquiz-black text-white'
+                    ? 'bg-aquiz-black text-white shadow-sm'
                     : 'bg-aquiz-gray-lightest text-aquiz-gray hover:bg-aquiz-gray-lighter'
                 }`}
               >
                 {LABELS_CATEGORIES[cat]}
-                <span className={`text-[10px] ${
-                  activeCategory === cat ? 'text-aquiz-gray-light' : 'text-aquiz-gray-light'
+                <span className={`text-[10px] tabular-nums ${
+                  activeCategory === cat ? 'text-white/60' : 'text-aquiz-gray-light'
                 }`}>
                   {countParCategorie[cat]}
                 </span>
@@ -532,7 +569,7 @@ function AidesPageContent() {
         </div>
 
         {/* Liste des aides */}
-        <div className="space-y-2.5 mb-8">
+        <div className="space-y-3 mb-10">
           {aidesToShow.map(aide => (
             <AideCard
               key={aide.id}
@@ -542,28 +579,28 @@ function AidesPageContent() {
             />
           ))}
           {aidesToShow.length === 0 && (
-            <div className="rounded-xl border border-aquiz-gray-lighter p-10 text-center">
+            <div className="rounded-xl border border-aquiz-gray-lighter p-12 text-center">
               <p className="text-sm text-aquiz-gray-light">Aucune aide dans cette catégorie</p>
             </div>
           )}
         </div>
 
         {/* CTA Contact */}
-        <div className="flex flex-col sm:flex-row items-center gap-4 p-5 rounded-xl bg-aquiz-gray-lightest border border-aquiz-gray-lighter mb-6">
-          <div className="w-10 h-10 rounded-xl bg-white border border-aquiz-gray-lighter flex items-center justify-center shrink-0">
-            <Phone className="w-4 h-4 text-aquiz-gray-light" />
+        <div className="flex items-center gap-5 p-6 rounded-2xl bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter mb-8">
+          <div className="w-12 h-12 rounded-xl bg-white border border-aquiz-gray-lighter flex items-center justify-center shrink-0 shadow-sm">
+            <Phone className="w-5 h-5 text-aquiz-gray" />
           </div>
-          <div className="flex-1 text-center sm:text-left">
+          <div className="flex-1">
             <p className="text-sm font-semibold text-aquiz-black">
               Besoin d&apos;accompagnement ?
             </p>
-            <p className="text-xs text-aquiz-gray-light">
+            <p className="text-xs text-aquiz-gray-light mt-0.5">
               Un conseiller vous aide à constituer vos dossiers d&apos;aides
             </p>
           </div>
           <Button
             size="sm"
-            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-9 text-xs"
+            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-10 px-5 text-xs"
             onClick={() => setShowContactModal(true)}
           >
             Être rappelé
@@ -572,12 +609,12 @@ function AidesPageContent() {
         </div>
 
         {/* Note */}
-        <p className="text-[11px] text-aquiz-gray-light text-center mb-4 leading-relaxed">
+        <p className="text-[11px] text-aquiz-gray-light text-center mb-6 leading-relaxed">
           Liste indicative · zone {zoneSelectionnee.zonePTZ} · vérifiez l&apos;éligibilité auprès des organismes ou d&apos;un conseiller ADIL
         </p>
 
         {/* Nav bas */}
-        <div className="flex items-center justify-between pt-4 pb-10 border-t border-aquiz-gray-lighter">
+        <div className="flex items-center justify-between pt-5 pb-12 border-t border-aquiz-gray-lighter">
           <button
             onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)}
             className="text-xs text-aquiz-gray-light hover:text-aquiz-gray flex items-center gap-1.5 transition-colors"
@@ -585,10 +622,10 @@ function AidesPageContent() {
             <ArrowLeft className="w-3.5 h-3.5" />
             {fromStore ? 'Retour à la carte' : 'Tous les départements'}
           </button>
-          <Button asChild size="sm" variant="outline" className="rounded-xl border-aquiz-gray-lighter text-xs h-8">
+          <Button asChild size="sm" variant="outline" className="rounded-xl border-aquiz-gray-lighter text-xs h-9 px-4">
             <Link href="/simulateur/mode-a">
               {fromStore ? 'Récapitulatif' : 'Simuler'}
-              <ArrowRight className="ml-1 w-3.5 h-3.5" />
+              <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
             </Link>
           </Button>
         </div>

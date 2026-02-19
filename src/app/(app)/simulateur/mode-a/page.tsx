@@ -24,7 +24,7 @@ import { useForm } from 'react-hook-form'
 import MiniCarteIDF from '@/components/carte/MiniCarteIDF'
 import { ConseilsAvances } from '@/components/conseils'
 import { ContactModal } from '@/components/contact'
-import { ResumeModal, SaveButton } from '@/components/simulation'
+import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -190,9 +190,40 @@ function ModeAPageContent() {
     // Ne pas afficher la modale si l'utilisateur revient d'une page interne (carte, aides…)
     // ou si c'est une nouvelle simulation explicite
     const params = new URLSearchParams(window.location.search)
-    if (params.get('returning') === '1' || params.get('new') === 'true') {
+    const isReturningParam = params.get('returning') === '1'
+    const isReturningSession = sessionStorage.getItem('aquiz-navigating-away') === '1'
+    
+    if (isReturningParam || params.get('new') === 'true') {
       window.history.replaceState({}, '', window.location.pathname)
+      sessionStorage.removeItem('aquiz-navigating-away')
       return
+    }
+    
+    // Retour via bouton navigateur (back) depuis carte/aides
+    // Le flag sessionStorage est posé quand on navigue vers ces pages
+    if (isReturningSession) {
+      sessionStorage.removeItem('aquiz-navigating-away')
+      // Restaurer silencieusement depuis le store si données présentes
+      if (storedProfil && (storedProfil.salaire1 > 0 || storedProfil.salaire2 > 0) && storedEtape >= 2) {
+        setEtapeLocal(getEtapeIdFromNumber(storedEtape))
+        setAge(storedProfil.age)
+        setStatutProfessionnel(storedProfil.statutProfessionnel)
+        setValue('situationFoyer', storedProfil.situationFoyer)
+        setValue('nombreEnfants', storedProfil.nombreEnfants)
+        setValue('salaire1', storedProfil.salaire1)
+        setValue('salaire2', storedProfil.salaire2)
+        setValue('autresRevenus', storedProfil.autresRevenus)
+        setValue('creditsEnCours', storedProfil.creditsEnCours)
+        setValue('autresCharges', storedProfil.autresCharges)
+        if (storedParametresModeA) {
+          setValue('mensualiteMax', storedParametresModeA.mensualiteMax)
+          setValue('dureeAns', storedParametresModeA.dureeAns)
+          setValue('apport', storedParametresModeA.apport)
+          setValue('typeBien', storedParametresModeA.typeBien)
+          setValue('tauxInteret', storedParametresModeA.tauxInteret)
+        }
+        return
+      }
     }
     
     // Chercher une simulation à reprendre :
@@ -282,6 +313,19 @@ function ModeAPageContent() {
     })
     setCurrentSaveId(savedSim.id)
   }, [save, currentSaveId, etape, age, statutProfessionnel, situationFoyer, nombreEnfants, salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, mensualiteMax, dureeAns, apport, typeBien, tauxInteret])
+
+  // Auto-save : Ctrl+S + auto-save au changement d'étape
+  const autoSave = useAutoSave(handleSave, salaire1 === 0)
+
+  // Re-sauvegarder après chaque changement d'étape pour que la progression soit à jour
+  useEffect(() => {
+    if (salaire1 > 0) {
+      // Petit délai pour que le state soit bien à jour
+      const timer = setTimeout(() => autoSave.triggerSave(), 100)
+      return () => clearTimeout(timer)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etape])
 
   // Mensualité max recommandée - calcul EXACT incluant l'assurance
   // Résolution de : (charges + M + assurance(M)) / revenus = 35%
@@ -938,6 +982,8 @@ function ModeAPageContent() {
 
   // Sauvegarder les résultats et aller à la carte
   const saveAndGoToCarte = () => {
+    // Auto-save avant de quitter
+    autoSave.triggerSave()
     if (calculs.prixAchatMax > 0) {
       setMode('A')
       const revenusMensuelsTotal = salaire1 + salaire2 + autresRevenus
@@ -948,6 +994,9 @@ function ModeAPageContent() {
       // Sauvegarder l'étape 3 dans le store pour pouvoir y revenir
       setEtapeStore(3)
     }
+    // Marquer qu'on navigue vers une page interne (carte/aides)
+    // pour ne pas afficher la modale au retour (même via bouton back navigateur)
+    sessionStorage.setItem('aquiz-navigating-away', '1')
     router.push('/carte?from=simulation')
   }
 
@@ -973,7 +1022,7 @@ function ModeAPageContent() {
         {/* === STEPPER + ACTIONS === */}
         <div className="border-b border-aquiz-gray-lighter/60 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Desktop - stepper + save */}
+            {/* Desktop - stepper + auto-save indicator */}
             <div className="hidden md:flex items-center py-4">
               {ETAPES.map((e, index) => {
                 const isActive = e.id === etape
@@ -1015,10 +1064,7 @@ function ModeAPageContent() {
                   </div>
                 )
               })}
-              {/* Save button */}
-              <div className="shrink-0 ml-4">
-                <SaveButton onSave={handleSave} disabled={salaire1 === 0} />
-              </div>
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="ml-auto" />
             </div>
             
             {/* Mobile */}
@@ -1033,7 +1079,7 @@ function ModeAPageContent() {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <SaveButton onSave={handleSave} disabled={salaire1 === 0} />
+                <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
                 <div className="flex gap-1.5">
                 {ETAPES.map((_, index) => (
                   <div 

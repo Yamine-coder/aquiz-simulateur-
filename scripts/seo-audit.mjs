@@ -353,16 +353,17 @@ for (const path of allMetaFiles) {
   const content = readFile(path)
   if (!content) continue
   
-  // Extract description value — multi-line string patterns
-  const descMatch = content.match(/description:\s*\n\s*'([^']+)'/s)
-    || content.match(/description:\s*'([^']+)'/s)
-    || content.match(/description:\s*"([^"]+)"/s)
-    || content.match(/description:\s*\n\s*"([^"]+)"/s)
+  // Extract description value — supports escaped quotes (e.g. \')
+  const descMatch = content.match(/description:\s*\n\s*'((?:[^'\\]|\\.)*)'/s)
+    || content.match(/description:\s*'((?:[^'\\]|\\.)*)'/s)
+    || content.match(/description:\s*"((?:[^"\\]|\\.)*)"/s)
+    || content.match(/description:\s*\n\s*"((?:[^"\\]|\\.)*)"/s)
     || content.match(/description:\s*`([^`]+)`/s)
   
   if (descMatch) {
     totalDescs++
-    const desc = descMatch[1].trim()
+    // Unescape \' and \" for accurate char count
+    const desc = descMatch[1].replace(/\\'/g, "'").replace(/\\"/g, '"').trim()
     if (desc.length >= 120 && desc.length <= 160) {
       goodDescs++
     } else {
