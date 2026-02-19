@@ -57,6 +57,7 @@ import {
     X,
     Zap
 } from 'lucide-react'
+import Image from 'next/image'
 import { useMemo, useState } from 'react'
 import { COULEURS_RADAR, RadarChart } from './RadarChart'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
@@ -301,7 +302,7 @@ export function TableauComparaison({
                       {/* Image */}
                       <div className="relative h-20 bg-gradient-to-br from-aquiz-gray-lightest to-aquiz-gray-lighter">
                         {annonce.imageUrl ? (
-                          <img src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" />
+                          <Image src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="200px" unoptimized />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <IconType className="w-7 h-7 text-aquiz-gray-light" />
@@ -311,7 +312,8 @@ export function TableauComparaison({
                         {/* Bouton supprimer */}
                         <button
                           onClick={() => onRemove(annonce.id)}
-                          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors shadow-sm"
+                          aria-label="Supprimer ce bien"
+                          className="absolute top-1.5 right-1.5 min-w-11 min-h-11 w-5 h-5 rounded-full bg-white/90 hover:bg-white flex items-center justify-center transition-colors shadow-sm"
                         >
                           <Trash2 className="w-2.5 h-2.5 text-aquiz-gray hover:text-red-500" />
                         </button>

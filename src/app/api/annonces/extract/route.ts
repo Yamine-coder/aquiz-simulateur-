@@ -8,6 +8,7 @@
  * 3. Fetch direct (fallback) → HTML brut, souvent bloqué
  */
 
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import {
     detecterSource,
     parseAnnonceHTML,
@@ -37,6 +38,16 @@ interface ExtractionResponse {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ── Rate Limiting ─────────────────────────────────────
+    const ip = getClientIP(request.headers)
+    const rateCheck = checkRateLimit(`extract:${ip}`, RATE_LIMITS.extract)
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, error: 'Trop de requêtes d\'extraction. Veuillez patienter.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+      )
+    }
+
     const { url } = await request.json()
     
     if (!url) {
@@ -47,11 +58,29 @@ export async function POST(request: NextRequest) {
     }
     
     // Valider l'URL
+    let parsedUrl: URL
     try {
-      new URL(url)
+      parsedUrl = new URL(url)
     } catch {
       return NextResponse.json(
         { success: false, error: 'URL invalide' },
+        { status: 400 }
+      )
+    }
+
+    // ── Protection SSRF : bloquer les URL internes ──────
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]']
+    const blockedPrefixes = ['10.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.', '192.168.', '169.254.']
+    const hostname = parsedUrl.hostname.toLowerCase()
+    if (
+      parsedUrl.protocol !== 'https:' ||
+      blockedHosts.includes(hostname) ||
+      blockedPrefixes.some(p => hostname.startsWith(p)) ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal')
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'URL non autorisée' },
         { status: 400 }
       )
     }

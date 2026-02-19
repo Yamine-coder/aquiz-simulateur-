@@ -10,6 +10,7 @@
  */
 
 import { analyserBien, type AnalyseComplete, type BienAnalyse } from '@/lib/api/analyseIntelligente'
+import { logger } from '@/lib/logger'
 import type { Annonce } from '@/types/annonces'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
@@ -109,7 +110,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
               const analyse = await analyserBien(bien)
               return { id: annonce.id, analyse }
             } catch (err) {
-              console.error(`Erreur analyse ${annonce.id}:`, err)
+              logger.error(`Erreur analyse ${annonce.id}:`, err)
               return { id: annonce.id, analyse: null }
             }
           })
@@ -128,7 +129,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
         
         setError(null)
       } catch (err) {
-        console.error('Erreur analyse enrichie:', err)
+        logger.error('Erreur analyse enrichie:', err)
         setError('Erreur lors de l\'analyse des biens')
       } finally {
         // Retirer du chargement
@@ -175,7 +176,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
         return next
       })
     } catch (err) {
-      console.error(`Erreur refresh ${annonceId}:`, err)
+      logger.error(`Erreur refresh ${annonceId}:`, err)
     } finally {
       setLoadingIds(prev => {
         const next = new Set(prev)
@@ -227,7 +228,7 @@ export function useAnalyseEnrichieSingle(annonce: Annonce | null): {
       const result = await analyserBien(bien)
       setAnalyse(result)
     } catch (err) {
-      console.error('Erreur analyse:', err)
+      logger.error('Erreur analyse:', err)
       setError('Erreur lors de l\'analyse')
     } finally {
       setIsLoading(false)

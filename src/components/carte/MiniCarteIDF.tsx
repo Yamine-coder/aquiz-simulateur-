@@ -5,6 +5,7 @@
  * Charge les vrais contours GeoJSON officiels des départements (source: France-GeoJSON)
  */
 
+import { logger } from '@/lib/logger'
 import { formatMontant } from '@/lib/utils/formatters'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -93,7 +94,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
     fetch('/geojson/idf-departements.geojson')
       .then(res => res.json())
       .then(data => setGeoData(data))
-      .catch(err => console.error('Erreur chargement GeoJSON:', err))
+      .catch(err => logger.error('Erreur chargement GeoJSON:', err))
   }, [isMounted])
 
   // Initialiser la carte Leaflet
@@ -107,7 +108,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
     const initMap = async () => {
       try {
         const L = (await import('leaflet')).default
-        // @ts-ignore - CSS import for Leaflet
+        // @ts-expect-error - Leaflet CSS has no type declaration
         await import('leaflet/dist/leaflet.css')
 
         if (cancelled || !mapRef.current) return
@@ -136,7 +137,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         setMap(leafletMap)
         setIsLoaded(true)
       } catch (error) {
-        console.error('Erreur initialisation carte:', error)
+        logger.error('Erreur initialisation carte:', error)
         setIsLoaded(true) // Marquer comme chargé même en cas d'erreur pour éviter boucle
       }
     }

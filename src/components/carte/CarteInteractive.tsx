@@ -64,8 +64,16 @@ export default function CarteInteractive({
   }, [])
 
   const zonesFiltrees = useMemo(() => {
-    if (!filtreStatuts || filtreStatuts.length === 0) return zonesCalculees
-    return zonesCalculees.filter((z) => filtreStatuts.includes(z.statut))
+    const base = (!filtreStatuts || filtreStatuts.length === 0)
+      ? zonesCalculees
+      : zonesCalculees.filter((z) => filtreStatuts.includes(z.statut))
+    // Dédupliquer par id (certaines communes apparaissent en double)
+    const seen = new Set<string>()
+    return base.filter((z) => {
+      if (seen.has(z.id)) return false
+      seen.add(z.id)
+      return true
+    })
   }, [zonesCalculees, filtreStatuts])
 
   // Handlers zoom

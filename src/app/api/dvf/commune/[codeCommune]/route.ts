@@ -5,11 +5,11 @@
  */
 
 import { fetchDVFCommune, type DVFStatsCommune } from '@/lib/api/dvf-real';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Cache en mémoire
-const cache = new Map<string, { data: DVFStatsCommune | null; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 heures
+// Cache borné (TTL 24h, max 500 communes)
+const cache = new ServerCache<DVFStatsCommune | null>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 500 })
 
 export async function GET(
   request: NextRequest,
@@ -30,25 +30,25 @@ export async function GET(
     const cacheKey = `dvf_commune_${codeCommune}`
     const cached = cache.get(cacheKey)
     
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      if (!cached.data) {
+    if (cached !== undefined) {
+      if (!cached) {
         return NextResponse.json(
           { error: 'Commune non trouvée' },
           { status: 404 }
         )
       }
       return NextResponse.json({
-        ...cached.data,
+        ...cached,
         fromCache: true
       })
     }
 
     // Récupérer les données DVF réelles
-    console.log(`[API DVF] Fetching commune ${codeCommune}...`)
+    console.info(`[DVF] Fetch commune ${codeCommune}`)
     const data = await fetchDVFCommune(codeCommune)
     
     // Mettre en cache (même si null)
-    cache.set(cacheKey, { data, timestamp: Date.now() })
+    cache.set(cacheKey, data)
     
     if (!data) {
       return NextResponse.json(

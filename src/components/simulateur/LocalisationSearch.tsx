@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { Input } from '@/components/ui/input'
+import { logger } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
 /**
@@ -199,7 +200,7 @@ export function LocalisationSearch({
       setIsOpen(sorted.length > 0)
       setHighlightedIndex(-1)
     } catch (error) {
-      console.error('Erreur recherche communes:', error)
+      logger.error('Erreur recherche communes:', error)
       setSuggestions([])
     } finally {
       setIsLoading(false)

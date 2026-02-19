@@ -6,11 +6,11 @@
  */
 
 import { fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Cache département déjà chargé
-const deptCache = new Map<string, { data: DVFDepartementStats; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 heures
+// Cache département borné (TTL 24h, max 100)
+const deptCache = new ServerCache<DVFDepartementStats>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 100 })
 
 export async function GET(
   request: NextRequest,
@@ -36,21 +36,21 @@ export async function GET(
     else if (cp.startsWith('92')) codeDept = '92'
     else if (cp.startsWith('93')) codeDept = '93'
     else if (cp.startsWith('94')) codeDept = '94'
+    else if (cp.startsWith('97')) codeDept = cp.substring(0, 3) // DOM-TOM
+    else if (cp.startsWith('20')) codeDept = parseInt(cp) < 20200 ? '2A' : '2B' // Corse
 
     // Vérifier le cache département
     const cacheKey = `dvf_dept_${codeDept}`
     let deptData = deptCache.get(cacheKey)
     
-    if (!deptData || Date.now() - deptData.timestamp >= CACHE_TTL) {
-      // Charger le département
-      console.log(`[API DVF CP] Fetching department ${codeDept} for CP ${cp}...`)
-      const data = await fetchDVFDepartement(codeDept)
-      deptData = { data, timestamp: Date.now() }
+    if (!deptData) {
+      console.info(`[DVF CP] Fetch dept ${codeDept} for CP ${cp}`)
+      deptData = await fetchDVFDepartement(codeDept)
       deptCache.set(cacheKey, deptData)
     }
 
     // Chercher la/les commune(s) avec ce code postal
-    const communes = deptData.data.communes.filter(c => c.codePostal === cp)
+    const communes = deptData.communes.filter(c => c.codePostal === cp)
     
     if (communes.length === 0) {
       return NextResponse.json(
@@ -93,7 +93,7 @@ export async function GET(
     return NextResponse.json({
       codePostal: cp,
       codeDepartement: codeDept,
-      nomDepartement: deptData.data.nomDepartement,
+      nomDepartement: deptData.nomDepartement,
       nomCommune,
       nbCommunes: communes.length,
       prixM2Appartement,

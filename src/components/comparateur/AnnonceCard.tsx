@@ -22,6 +22,7 @@ import {
     Ruler,
     Trash2
 } from 'lucide-react'
+import Image from 'next/image'
 import { useRef, useState } from 'react'
 
 interface AnnonceCardProps {
@@ -67,7 +68,7 @@ export function AnnonceCard({
         {/* Thumbnail ou icône */}
         <div className="relative w-16 h-16 rounded-lg bg-aquiz-gray-lightest shrink-0 overflow-hidden">
           {annonce.imageUrl ? (
-            <img src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" />
+            <Image src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="64px" unoptimized />
           ) : (
             <div className="flex items-center justify-center h-full">
               <IconType className="h-6 w-6 text-aquiz-gray-light" />
@@ -142,10 +143,13 @@ export function AnnonceCard({
         onClick={onSelect}
       >
         {annonce.imageUrl ? (
-          <img
+          <Image
             src={annonce.imageUrl}
             alt={annonce.titre || 'Bien immobilier'}
             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+            fill
+            sizes="(max-width: 768px) 100vw, 300px"
+            unoptimized
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -163,8 +167,9 @@ export function AnnonceCard({
         <button
           onClick={(e) => { e.stopPropagation(); onSelect?.() }}
           disabled={selectionDisabled && !isSelected}
+          aria-label={isSelected ? 'Désélectionner ce bien' : 'Sélectionner ce bien'}
           className={`
-            absolute top-2.5 left-2.5 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200
+            absolute top-2.5 left-2.5 min-w-11 min-h-11 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200
             ${isSelected
               ? 'bg-aquiz-green shadow-sm'
               : 'bg-white/80 backdrop-blur-sm border border-white/50 opacity-0 group-hover:opacity-100 hover:bg-white'
@@ -183,8 +188,9 @@ export function AnnonceCard({
         {onToggleFavori && (
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavori() }}
+            aria-label={annonce.favori ? 'Retirer des favoris' : 'Ajouter aux favoris'}
             className={`
-              absolute top-2.5 right-2.5 w-7 h-7 rounded-full flex items-center justify-center transition-all
+              absolute top-2.5 right-2.5 min-w-11 min-h-11 w-7 h-7 rounded-full flex items-center justify-center transition-all
               ${annonce.favori
                 ? 'bg-rose-500 shadow-sm'
                 : 'bg-white/80 backdrop-blur-sm border border-white/50 opacity-0 group-hover:opacity-100 hover:bg-white'
@@ -342,7 +348,8 @@ export function AnnonceCard({
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+              aria-label="Menu actions"
+              className="min-w-11 min-h-11 h-7 w-7 rounded-lg flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </button>

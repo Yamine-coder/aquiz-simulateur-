@@ -3,15 +3,16 @@
  * Appelle l'API Overpass côté serveur
  */
 
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 
-// Cache serveur — POIs changent rarement (TTL 24h)
-const quartierCache = new Map<string, { data: unknown; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000
+// Cache serveur borné — POIs changent rarement (TTL 24h, max 200 entrées)
+const quartierCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 200 })
 
 // Catégories et leur poids dans le score
 const CATEGORIES = {
@@ -78,14 +79,25 @@ function determinerCategorie(amenity: string): string {
 }
 
 export async function GET(request: NextRequest) {
+  // ── Rate Limiting ─────────────────────────────────────
+  const ip = getClientIP(request.headers)
+  const rateCheck = checkRateLimit(`analyse:${ip}`, RATE_LIMITS.analyse)
+  if (!rateCheck.success) {
+    return NextResponse.json(
+      { success: false, error: 'Trop de requêtes. Veuillez patienter.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+    )
+  }
+
   const searchParams = request.nextUrl.searchParams
   const lat = parseFloat(searchParams.get('lat') || '0')
   const lon = parseFloat(searchParams.get('lon') || '0')
   const rayon = parseInt(searchParams.get('rayon') || '800')
   
-  if (!lat || !lon) {
+  // ── Validation lat/lon ────────────────────────────────
+  if (!lat || !lon || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
     return NextResponse.json(
-      { success: false, error: 'Coordonnées manquantes' },
+      { success: false, error: 'Coordonnées invalides' },
       { status: 400 }
     )
   }
@@ -94,8 +106,8 @@ export async function GET(request: NextRequest) {
     // Vérifier le cache serveur
     const cacheKey = `${lat}_${lon}_${rayon}`
     const cached = quartierCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return NextResponse.json(cached.data)
+    if (cached) {
+      return NextResponse.json(cached)
     }
 
     // Construire la requête Overpass
@@ -223,7 +235,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Stocker en cache
-    quartierCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+    quartierCache.set(cacheKey, responseData)
 
     return NextResponse.json(responseData)
     

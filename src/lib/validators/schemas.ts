@@ -44,7 +44,7 @@ export const modeASchema = z.object({
   
   // Paramètres Mode A (étape 2)
   mensualiteMax: z.number().min(100, 'Mensualité minimum : 100€').max(10000, 'Mensualité maximum : 10 000€'),
-  dureeAns: z.number().min(10, 'Durée minimum : 10 ans').max(30, 'Durée maximum : 30 ans'),
+  dureeAns: z.number().min(10, 'Durée minimum : 10 ans').max(25, 'Durée maximum : 25 ans (norme HCSF)'),
   apport: z.number().min(0, 'L\'apport ne peut être négatif'),
   typeBien: z.enum(['neuf', 'ancien']),
   tauxInteret: z.number().min(0.5).max(10),

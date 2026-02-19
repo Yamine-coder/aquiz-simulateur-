@@ -29,6 +29,7 @@ import {
     X,
     Zap
 } from 'lucide-react'
+import Image from 'next/image'
 
 interface VueMobileAccordeonProps {
   annonces: Annonce[]
@@ -98,7 +99,7 @@ export function VueMobileAccordeon({
                   {/* Image/Icon */}
                   <div className="w-14 h-14 rounded-lg bg-aquiz-gray-lightest flex items-center justify-center shrink-0 overflow-hidden">
                     {annonce.imageUrl ? (
-                      <img src={annonce.imageUrl} alt={`Photo du bien ${annonce.titre || 'immobilier'}`} className="w-full h-full object-cover" />
+                      <Image src={annonce.imageUrl} alt={`Photo du bien ${annonce.titre || 'immobilier'}`} className="w-full h-full object-cover" fill sizes="56px" unoptimized />
                     ) : (
                       <IconType className="w-6 h-6 text-aquiz-gray-light" />
                     )}

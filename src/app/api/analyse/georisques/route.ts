@@ -3,13 +3,14 @@
  * Appelle l'API georisques.gouv.fr côté serveur
  */
 
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
 
-// Cache serveur — les risques changent rarement (TTL 12h)
-const risquesCache = new Map<string, { data: unknown; timestamp: number }>()
-const CACHE_TTL = 12 * 60 * 60 * 1000
+// Cache serveur borné — les risques changent rarement (TTL 12h, max 200 entrées)
+const risquesCache = new ServerCache<unknown>({ ttlMs: 12 * 60 * 60 * 1000, maxSize: 200 })
 
 interface RisqueNaturel {
   type: string
@@ -37,6 +38,16 @@ function determinerNiveau(risque: GASPARRisque): 'faible' | 'moyen' | 'fort' {
 }
 
 export async function GET(request: NextRequest) {
+  // ── Rate Limiting ─────────────────────────────────────
+  const ip = getClientIP(request.headers)
+  const rateCheck = checkRateLimit(`analyse:${ip}`, RATE_LIMITS.analyse)
+  if (!rateCheck.success) {
+    return NextResponse.json(
+      { success: false, error: 'Trop de requêtes. Veuillez patienter.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+    )
+  }
+
   const searchParams = request.nextUrl.searchParams
   const lat = searchParams.get('lat')
   const lon = searchParams.get('lon')
@@ -48,13 +59,23 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     )
   }
+
+  // ── Validation lat/lon ────────────────────────────────
+  const latNum = parseFloat(lat)
+  const lonNum = parseFloat(lon)
+  if (isNaN(latNum) || isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+    return NextResponse.json(
+      { success: false, error: 'Coordonnées invalides' },
+      { status: 400 }
+    )
+  }
   
   try {
     // Vérifier le cache serveur
     const cacheKey = `${lat}_${lon}_${rayon}`
     const cached = risquesCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      return NextResponse.json(cached.data)
+    if (cached) {
+      return NextResponse.json(cached)
     }
 
     // Appel API Géorisques avec timeout
@@ -155,7 +176,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Stocker en cache
-    risquesCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+    risquesCache.set(cacheKey, responseData)
 
     return NextResponse.json(responseData)
     

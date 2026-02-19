@@ -8,6 +8,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { logger } from '@/lib/logger'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
     ArrowRight,
@@ -110,7 +111,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
         }, 1500)
       }
     } catch (error) {
-      console.error('Erreur envoi:', error)
+      logger.error('Erreur envoi:', error)
       // Afficher quand même le succès pour l'UX (la demande sera dans les logs)
       setIsSubmitted(true)
       if (onSuccess) {

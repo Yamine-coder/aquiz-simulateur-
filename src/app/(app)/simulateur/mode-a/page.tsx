@@ -1,7 +1,6 @@
 ﻿'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { pdf } from '@react-pdf/renderer'
 import {
     AlertCircle,
     ArrowLeft,
@@ -532,6 +531,7 @@ function ModeAPageContent() {
 
     const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
+    const { pdf } = await import('@react-pdf/renderer')
     const blob = await pdf(
       <SimulationPDF
         logoUrl={logoUrl}

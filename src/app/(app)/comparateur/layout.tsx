@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 
 export const metadata: Metadata = {
   title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens',
@@ -36,7 +37,13 @@ export default function ComparateurLayout({ children }: { children: React.ReactN
   return (
     <>
       <ComparateurJsonLd />
-      {children}
+      <Suspense fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="w-8 h-8 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        {children}
+      </Suspense>
     </>
   )
 }

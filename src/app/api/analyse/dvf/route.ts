@@ -9,13 +9,14 @@
 
 import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf';
 import { fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Route dynamique (appelée côté client)
 
-// Cache département (partagé avec dvf-real mais dédupliqué ici pour la route)
-const deptCache = new Map<string, { data: DVFDepartementStats; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 heures
+// Cache département borné (TTL 24h, max 100 départements)
+const deptCache = new ServerCache<DVFDepartementStats>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 100 })
 
 interface DVFRawTransaction {
   valeur_fonciere?: number
@@ -58,19 +59,20 @@ async function fetchFromInternalData(codePostal: string, typeBien: string) {
     else if (codePostal.startsWith('92')) codeDept = '92'
     else if (codePostal.startsWith('93')) codeDept = '93'
     else if (codePostal.startsWith('94')) codeDept = '94'
+    else if (codePostal.startsWith('97')) codeDept = codePostal.substring(0, 3) // DOM-TOM
+    else if (codePostal.startsWith('20')) codeDept = parseInt(codePostal) < 20200 ? '2A' : '2B' // Corse
 
     // Vérifier le cache département
     const cacheKey = `dvf_dept_${codeDept}`
     let deptData = deptCache.get(cacheKey)
 
-    if (!deptData || Date.now() - deptData.timestamp >= CACHE_TTL) {
-      const data = await fetchDVFDepartement(codeDept)
-      deptData = { data, timestamp: Date.now() }
+    if (!deptData) {
+      deptData = await fetchDVFDepartement(codeDept)
       deptCache.set(cacheKey, deptData)
     }
 
     // Chercher les communes avec ce code postal
-    const communes = deptData.data.communes.filter(c => c.codePostal === codePostal)
+    const communes = deptData.communes.filter(c => c.codePostal === codePostal)
     if (communes.length === 0) return null
 
     // Calculer le prix pondéré
@@ -195,6 +197,16 @@ async function fetchFromCquest(codePostal: string, typeBien: string, surfaceMin?
 }
 
 export async function GET(request: NextRequest) {
+  // ── Rate Limiting ─────────────────────────────────────
+  const ip = getClientIP(request.headers)
+  const rateCheck = checkRateLimit(`analyse:${ip}`, RATE_LIMITS.analyse)
+  if (!rateCheck.success) {
+    return NextResponse.json(
+      { success: false, error: 'Trop de requêtes. Veuillez patienter.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+    )
+  }
+
   const searchParams = request.nextUrl.searchParams
   const codePostal = searchParams.get('code_postal')
   const typeBien = searchParams.get('type_local')

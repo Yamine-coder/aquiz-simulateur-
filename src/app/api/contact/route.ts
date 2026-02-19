@@ -1,4 +1,6 @@
-import { NextResponse } from 'next/server'
+import { escapeHtml } from '@/lib/escapeHtml'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
+import { NextRequest, NextResponse } from 'next/server'
 
 /** Shape of the contact form payload */
 interface ContactPayload {
@@ -24,6 +26,12 @@ async function sendEmailViaResend(body: ContactPayload): Promise<boolean> {
     timeStyle: 'short',
   })
 
+  // Échapper toutes les données utilisateur contre XSS
+  const safeNom = escapeHtml(body.nom.trim())
+  const safeEmail = escapeHtml(body.email.trim())
+  const safeTel = escapeHtml(body.telephone?.trim() ?? '')
+  const safeMessage = escapeHtml(body.message.trim())
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -33,7 +41,7 @@ async function sendEmailViaResend(body: ContactPayload): Promise<boolean> {
     body: JSON.stringify({
       from: 'AQUIZ <onboarding@resend.dev>',
       to: emailTo,
-      subject: `Nouveau message de ${body.nom.trim()}`,
+      subject: `Nouveau message de ${safeNom}`,
       html: `
 <!DOCTYPE html>
 <html>
@@ -54,23 +62,23 @@ async function sendEmailViaResend(body: ContactPayload): Promise<boolean> {
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border-radius:12px;overflow:hidden;">
             <tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
               <span style="font-size:12px;color:#999;text-transform:uppercase;">Nom</span><br>
-              <span style="font-size:15px;color:#1a1a1a;font-weight:500;">${body.nom.trim()}</span>
+              <span style="font-size:15px;color:#1a1a1a;font-weight:500;">${safeNom}</span>
             </td></tr>
             <tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
               <span style="font-size:12px;color:#999;text-transform:uppercase;">Email</span><br>
-              <a href="mailto:${body.email.trim()}" style="font-size:15px;color:#22c55e;text-decoration:none;">${body.email.trim()}</a>
+              <a href="mailto:${safeEmail}" style="font-size:15px;color:#22c55e;text-decoration:none;">${safeEmail}</a>
             </td></tr>
             <tr><td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
               <span style="font-size:12px;color:#999;text-transform:uppercase;">Téléphone</span><br>
-              <a href="tel:${body.telephone?.trim() ?? ''}" style="font-size:15px;color:#22c55e;text-decoration:none;">${body.telephone?.trim() || 'Non renseigné'}</a>
+              <a href="tel:${safeTel}" style="font-size:15px;color:#22c55e;text-decoration:none;">${safeTel || 'Non renseigné'}</a>
             </td></tr>
             <tr><td style="padding:16px 20px;">
               <span style="font-size:12px;color:#999;text-transform:uppercase;">Message</span><br>
-              <p style="margin:8px 0 0;font-size:14px;color:#333;line-height:1.6;white-space:pre-wrap;">${body.message.trim()}</p>
+              <p style="margin:8px 0 0;font-size:14px;color:#333;line-height:1.6;white-space:pre-wrap;">${safeMessage}</p>
             </td></tr>
           </table>
           <table width="100%" style="margin-top:24px;"><tr><td align="center">
-            <a href="mailto:${body.email.trim()}?subject=Re: Votre demande AQUIZ" style="display:inline-block;background:#22c55e;color:#fff;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;">Répondre à ${body.nom.trim().split(' ')[0]}</a>
+            <a href="mailto:${safeEmail}?subject=Re: Votre demande AQUIZ" style="display:inline-block;background:#22c55e;color:#fff;padding:12px 32px;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;">Répondre à ${safeNom.split(' ')[0]}</a>
           </td></tr></table>
         </td></tr>
       </table>
@@ -89,8 +97,18 @@ async function sendEmailViaResend(body: ContactPayload): Promise<boolean> {
  * Receives a contact form submission, validates it, and sends a notification email.
  * Falls back to console log if Resend is not configured.
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // ── Rate Limiting ─────────────────────────────────────
+    const ip = getClientIP(request.headers)
+    const rateCheck = checkRateLimit(`contact:${ip}`, RATE_LIMITS.contact)
+    if (!rateCheck.success) {
+      return NextResponse.json(
+        { success: false, errors: ['Trop de requêtes. Veuillez réessayer dans quelques minutes.'] },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+      )
+    }
+
     const body = (await request.json()) as ContactPayload
 
     // ── Validation ───────────────────────────────────────

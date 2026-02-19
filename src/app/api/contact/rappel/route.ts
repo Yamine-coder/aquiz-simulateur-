@@ -1,37 +1,61 @@
+import { escapeHtml } from '@/lib/escapeHtml'
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 
 /**
  * API Route pour les demandes de rappel
  * 
- * Options de notification (à configurer):
- * 1. EMAIL_TO - Recevoir par email (nécessite Resend/SendGrid)
- * 2. WEBHOOK_URL - Envoyer vers Slack/Discord/Make/Zapier
- * 3. Par défaut: log serveur + stockage JSON local (dev)
+ * Canaux de notification (configurables via .env):
+ * 1. RAPPEL_EMAIL_TO + RESEND_API_KEY → Email de notification
+ * 2. RAPPEL_WEBHOOK_URL → Slack/Discord/Make/Zapier
+ * 3. Console log → Visible dans Vercel Function Logs
  */
 
-interface RappelRequest {
-  prenom: string
-  telephone: string
-  creneau: 'matin' | 'midi' | 'soir'
-  budget?: number
-  situation?: string
-  tauxEndettement?: number
-}
+/** Schéma Zod pour la validation stricte de la demande de rappel */
+const rappelSchema = z.object({
+  prenom: z.string().min(2, 'Prénom requis (2 caractères min)').max(100),
+  telephone: z.string().regex(/^(?:\+33|0)[1-9](?:[\s.-]?\d{2}){4}$/, 'Numéro de téléphone français invalide'),
+  creneau: z.enum(['matin', 'midi', 'soir']),
+  budget: z.number().min(0).max(10_000_000).optional(),
+  situation: z.string().max(200).optional(),
+  tauxEndettement: z.number().min(0).max(100).optional(),
+})
 
-// Stockage temporaire en dev (remplacer par DB en prod)
-const demandes: Array<RappelRequest & { date: string; id: string }> = []
+type RappelRequest = z.infer<typeof rappelSchema>
 
 export async function POST(request: NextRequest) {
   try {
-    const data: RappelRequest = await request.json()
-    
-    // Validation basique
-    if (!data.prenom || !data.telephone) {
+    // ── Rate Limiting ─────────────────────────────────────
+    const ip = getClientIP(request.headers)
+    const rateCheck = checkRateLimit(`rappel:${ip}`, RATE_LIMITS.rappel)
+    if (!rateCheck.success) {
       return NextResponse.json(
-        { error: 'Prénom et téléphone requis' },
+        { error: 'Trop de requêtes. Veuillez réessayer dans quelques minutes.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+      )
+    }
+
+    // ── Parse JSON avec gestion d'erreur ──────────────────
+    let rawBody: unknown
+    try {
+      rawBody = await request.json()
+    } catch {
+      return NextResponse.json(
+        { error: 'Corps de requête JSON invalide' },
         { status: 400 }
       )
     }
+
+    // ── Validation Zod ────────────────────────────────────
+    const parsed = rappelSchema.safeParse(rawBody)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Données invalides', details: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    const data: RappelRequest = parsed.data
 
     // Formater le téléphone
     const telFormate = data.telephone.replace(/\s/g, '')
@@ -49,21 +73,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Log serveur (toujours actif)
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log('📞 NOUVELLE DEMANDE DE RAPPEL')
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.log(`ID: ${demande.id}`)
-    console.log(`Date: ${new Date(demande.date).toLocaleString('fr-FR')}`)
-    console.log(`Prénom: ${demande.prenom}`)
-    console.log(`Téléphone: ${demande.telephone}`)
-    console.log(`Créneau: ${demande.creneau === 'matin' ? '9h-12h' : demande.creneau === 'midi' ? '14h-17h' : '17h-20h'}`)
-    if (demande.budget) console.log(`Budget: ${new Intl.NumberFormat('fr-FR').format(demande.budget)} €`)
-    if (demande.situation) console.log(`Situation: ${demande.situation}`)
-    if (demande.tauxEndettement) console.log(`Taux endettement: ${demande.tauxEndettement}%`)
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-
-    // Stocker en mémoire (dev)
-    demandes.push(demande)
+    console.info('📞 RAPPEL', JSON.stringify({
+      id: demande.id,
+      date: demande.date,
+      creneau: demande.creneau,
+      budget: demande.budget ?? null,
+    }))
 
     // 2. Webhook (si configuré)
     const webhookUrl = process.env.RAPPEL_WEBHOOK_URL
@@ -80,7 +95,7 @@ export async function POST(request: NextRequest) {
             ...demande
           })
         })
-        console.log('✅ Webhook envoyé')
+        console.info('✅ Webhook envoyé')
       } catch (e) {
         console.error('❌ Erreur webhook:', e)
       }
@@ -158,7 +173,7 @@ export async function POST(request: NextRequest) {
                       <tr>
                         <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
                           <span style="color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Prénom</span>
-                          <p style="margin: 4px 0 0 0; font-size: 16px; font-weight: 600; color: #1a1a1a;">${demande.prenom}</p>
+                          <p style="margin: 4px 0 0 0; font-size: 16px; font-weight: 600; color: #1a1a1a;">${escapeHtml(demande.prenom)}</p>
                         </td>
                       </tr>
                       <!-- Téléphone -->
@@ -166,7 +181,7 @@ export async function POST(request: NextRequest) {
                         <td style="padding: 12px 0; border-bottom: 1px solid #eee;">
                           <span style="color: #999; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Téléphone</span>
                           <p style="margin: 4px 0 0 0;">
-                            <a href="tel:${demande.telephone}" style="font-size: 18px; font-weight: 700; color: #6fcf97; text-decoration: none;">${demande.telephone}</a>
+                            <a href="tel:${escapeHtml(demande.telephone)}" style="font-size: 18px; font-weight: 700; color: #6fcf97; text-decoration: none;">${escapeHtml(demande.telephone)}</a>
                           </p>
                         </td>
                       </tr>
@@ -198,8 +213,8 @@ export async function POST(request: NextRequest) {
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center">
-                    <a href="tel:${demande.telephone}" style="display: inline-block; background-color: #1a1a1a; color: #ffffff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600;">
-                      Appeler ${demande.prenom}
+                    <a href="tel:${escapeHtml(demande.telephone)}" style="display: inline-block; background-color: #1a1a1a; color: #ffffff; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-size: 14px; font-weight: 600;">
+                      Appeler ${escapeHtml(demande.prenom)}
                     </a>
                   </td>
                 </tr>
@@ -235,7 +250,7 @@ export async function POST(request: NextRequest) {
         
         const emailResult = await emailResponse.json()
         if (emailResponse.ok) {
-          console.log('✅ Email envoyé à', emailTo, '- ID:', emailResult.id)
+          console.info('✅ Email rappel envoyé - ID:', emailResult.id)
         } else {
           console.error('❌ Erreur Resend:', emailResult)
         }
@@ -257,16 +272,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// GET pour voir les demandes en dev
-export async function GET() {
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 403 })
-  }
-  
-  return NextResponse.json({
-    total: demandes.length,
-    demandes: demandes.slice(-20).reverse() // 20 dernières
-  })
 }

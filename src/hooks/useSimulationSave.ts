@@ -7,6 +7,7 @@
 
 'use client'
 
+import { logger } from '@/lib/logger'
 import type { ModeSimulation } from '@/types/simulateur'
 import type {
     SavedModeAData,
@@ -36,7 +37,7 @@ function loadStorage(): SimulationStorage {
       return JSON.parse(data)
     }
   } catch (e) {
-    console.error('Erreur lecture localStorage:', e)
+    logger.error('Erreur lecture localStorage:', e)
   }
   return { simulations: [] }
 }
@@ -47,7 +48,7 @@ function saveStorage(storage: SimulationStorage): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(storage))
   } catch (e) {
-    console.error('Erreur écriture localStorage:', e)
+    logger.error('Erreur écriture localStorage:', e)
   }
 }
 
@@ -166,7 +167,7 @@ export function useSimulationSave() {
       
       return true
     } catch (e) {
-      console.error('Erreur import:', e)
+      logger.error('Erreur import:', e)
       return false
     }
   }, [])

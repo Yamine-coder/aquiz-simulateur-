@@ -254,7 +254,7 @@ export async function fetchDVFDepartement(
 ): Promise<DVFDepartementStats> {
   const url = `${DVF_BASE_URL}/${annee}/departements/${codeDepartement}.csv.gz`
   
-  console.log(`[DVF] Téléchargement département ${codeDepartement}...`)
+  console.info(`[DVF] Fetch dept ${codeDepartement}`)
   
   try {
     const response = await fetch(url)
@@ -284,7 +284,7 @@ export async function fetchDVFDepartement(
       csvContent = await altResponse.text()
     }
     
-    console.log(`[DVF] Parsing CSV département ${codeDepartement}...`)
+    console.info(`[DVF] Parse CSV dept ${codeDepartement}`)
     
     const mutations = parseCSV(csvContent)
     const statsParCommune = calculerStatsParCommune(mutations, annee)
@@ -316,7 +316,7 @@ export async function fetchDVFCommune(
   const codeDept = codeCommune.substring(0, 2)
   const url = `${DVF_BASE_URL}/${annee}/communes/${codeDept}/${codeCommune}.csv`
   
-  console.log(`[DVF] Téléchargement commune ${codeCommune}...`)
+  console.info(`[DVF] Fetch commune ${codeCommune}`)
   
   try {
     const response = await fetch(url)
@@ -351,7 +351,7 @@ export async function fetchDVFCommune(
 export async function fetchDVFIleDeFrance(
   annee: number = ANNEE_COURANTE
 ): Promise<DVFDepartementStats[]> {
-  console.log(`[DVF] Téléchargement Île-de-France (${DEPARTEMENTS_IDF.length} départements)...`)
+  console.info(`[DVF] Fetch IDF (${DEPARTEMENTS_IDF.length} depts)`)
   
   const results: DVFDepartementStats[] = []
   

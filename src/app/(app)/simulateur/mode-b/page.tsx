@@ -1,6 +1,5 @@
 'use client'
 
-import { pdf } from '@react-pdf/renderer'
 import {
     AlertTriangle,
     ArrowLeft,
@@ -44,6 +43,7 @@ import {
 } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
+import { logger } from '@/lib/logger'
 import { formatMontant } from '@/lib/utils/formatters'
 import { calculerMontantPTZ, getInfoPTZ } from '@/lib/utils/zonePTZ'
 
@@ -325,7 +325,7 @@ export default function ModeBPage() {
       })
       .catch(err => {
         if (err.name !== 'AbortError') {
-          console.error('Erreur fetch DVF:', err)
+          logger.error('Erreur fetch DVF:', err)
           setInfoLocalisation(prev => prev ? { ...prev, isLoading: false } : null)
         }
       })
@@ -337,6 +337,7 @@ export default function ModeBPage() {
   const generatePDF = useCallback(async () => {
     const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
+    const { pdf } = await import('@react-pdf/renderer')
     const blob = await pdf(
       <SimulationPDFModeB
         logoUrl={logoUrl}

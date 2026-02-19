@@ -6,12 +6,11 @@
  */
 
 import { fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
+import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Cache en mémoire (simple pour le MVP)
-// En production: utiliser Redis ou autre
-const cache = new Map<string, { data: DVFDepartementStats; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 heures
+// Cache borné (TTL 24h, max 100 départements)
+const cache = new ServerCache<DVFDepartementStats>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 100 })
 
 export async function GET(
   request: NextRequest,
@@ -32,19 +31,19 @@ export async function GET(
     const cacheKey = `dvf_${codeDept}`
     const cached = cache.get(cacheKey)
     
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    if (cached) {
       return NextResponse.json({
-        ...cached.data,
+        ...cached,
         fromCache: true
       })
     }
 
     // Récupérer les données DVF réelles
-    console.log(`[API DVF] Fetching real data for ${codeDept}...`)
+    console.info(`[DVF] Fetch dept ${codeDept}`)
     const data = await fetchDVFDepartement(codeDept)
     
     // Mettre en cache
-    cache.set(cacheKey, { data, timestamp: Date.now() })
+    cache.set(cacheKey, data)
     
     return NextResponse.json({
       ...data,
