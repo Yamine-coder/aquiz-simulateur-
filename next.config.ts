@@ -53,7 +53,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://unpkg.com",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' data:",
-              "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api-adresse.data.gouv.fr https://georisques.gouv.fr https://overpass-api.de https://api.cquest.org https://files.data.gouv.fr",
+              "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api-adresse.data.gouv.fr https://geo.api.gouv.fr https://georisques.gouv.fr https://overpass-api.de https://api.cquest.org https://files.data.gouv.fr",
               "frame-src https://www.google.com/maps/",
               "object-src 'none'",
               "base-uri 'self'",
