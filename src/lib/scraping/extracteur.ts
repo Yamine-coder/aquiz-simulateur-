@@ -657,6 +657,217 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
 }
 
 // ============================================
+// EXTRACTION DEPUIS JSON-LD (Schema.org)
+// ============================================
+
+/**
+ * Parse les blocs <script type="application/ld+json"> pour extraire les données structurées.
+ * Les sites immobiliers majeurs (SeLoger, LeBonCoin, Bien'ici) embarquent souvent
+ * leurs données en Schema.org, ce qui est la source la plus fiable.
+ */
+export function parseJsonLd(html: string): Partial<NouvelleAnnonce> {
+  const data: Partial<NouvelleAnnonce> = {}
+  
+  // Trouver tous les blocs JSON-LD
+  const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let match: RegExpExecArray | null
+  
+  while ((match = jsonLdRegex.exec(html)) !== null) {
+    try {
+      const jsonStr = match[1].trim()
+      const json = JSON.parse(jsonStr) as Record<string, unknown>
+      
+      // Gérer les tableaux et les objets simples
+      const items = Array.isArray(json) ? json : [json]
+      
+      for (const item of items) {
+        extractFromJsonLdItem(item as Record<string, unknown>, data)
+        // Aussi checker @graph (utilisé par SeLoger, Schema.org standard)
+        if (Array.isArray((item as Record<string, unknown>)['@graph'])) {
+          for (const graphItem of (item as Record<string, unknown>)['@graph'] as Record<string, unknown>[]) {
+            extractFromJsonLdItem(graphItem, data)
+          }
+        }
+      }
+    } catch {
+      // JSON invalide, on skip silencieusement
+    }
+  }
+  
+  return data
+}
+
+/**
+ * Extraire les données d'un item JSON-LD (Schema.org)
+ * Supporte : Product, RealEstateListing, Accommodation, Apartment, House, Offer, Residence
+ */
+function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<NouvelleAnnonce>): void {
+  const type = String(item['@type'] || '')
+  
+  // Types pertinents pour l'immobilier
+  const isRelevant = /Product|RealEstateListing|Accommodation|Apartment|House|Residence|SingleFamilyResidence|Offer|Place/i.test(type)
+  if (!isRelevant && type !== '') return
+  
+  // ===== PRIX =====
+  if (!data.prix) {
+    const offers = item.offers as Record<string, unknown> | Record<string, unknown>[] | undefined
+    const offer = Array.isArray(offers) ? offers[0] : offers
+    const price = offer?.price ?? offer?.lowPrice ?? item.price
+    if (price !== undefined) {
+      const n = typeof price === 'number' ? price : parseInt(String(price).replace(/\D/g, ''))
+      if (n > 10000 && n < 50000000) data.prix = n
+    }
+  }
+  
+  // ===== TITRE =====
+  if (!data.titre && item.name) {
+    data.titre = String(item.name).substring(0, 200)
+  }
+  
+  // ===== DESCRIPTION =====
+  if (!data.description && item.description) {
+    data.description = String(item.description)
+      .replace(/\\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 1000)
+  }
+  
+  // ===== IMAGE =====
+  if (!data.imageUrl) {
+    const img = item.image ?? item.photo ?? (item.images as unknown[])?.[0]
+    if (typeof img === 'string' && img.startsWith('http')) {
+      data.imageUrl = img
+    } else if (typeof img === 'object' && img !== null) {
+      const imgObj = img as Record<string, unknown>
+      const imgUrl = imgObj.url ?? imgObj.contentUrl ?? imgObj.src
+      if (typeof imgUrl === 'string' && imgUrl.startsWith('http')) {
+        data.imageUrl = imgUrl
+      }
+    }
+  }
+  
+  // ===== SURFACE =====
+  if (!data.surface) {
+    const floorSize = item.floorSize as Record<string, unknown> | string | number | undefined
+    let surfaceVal: number | undefined
+    if (typeof floorSize === 'object' && floorSize !== null) {
+      surfaceVal = parseFloat(String(floorSize.value || '0'))
+    } else if (floorSize !== undefined) {
+      surfaceVal = parseFloat(String(floorSize))
+    }
+    // Fallback: numberOfRooms n'est pas la surface, mais livingArea l'est
+    if (!surfaceVal) {
+      const livingArea = item.livingArea ?? item.area ?? item.surfaceArea
+      if (livingArea !== undefined) {
+        surfaceVal = parseFloat(String(typeof livingArea === 'object' ? (livingArea as Record<string, unknown>).value : livingArea))
+      }
+    }
+    if (surfaceVal && surfaceVal >= 9 && surfaceVal <= 2000) {
+      data.surface = surfaceVal
+    }
+  }
+  
+  // ===== PIÈCES =====
+  if (!data.pieces && item.numberOfRooms) {
+    const n = parseInt(String(item.numberOfRooms))
+    if (n >= 1 && n <= 20) data.pieces = n
+  }
+  
+  // ===== CHAMBRES =====
+  if (!data.chambres) {
+    const bedrooms = item.numberOfBedrooms ?? item.bedrooms
+    if (bedrooms !== undefined) {
+      const n = parseInt(String(bedrooms))
+      if (n >= 0 && n <= 20) data.chambres = n
+    }
+  }
+  
+  // ===== LOCALISATION =====
+  const address = (item.address ?? (item.location as Record<string, unknown>)?.address) as Record<string, unknown> | string | undefined
+  if (address && typeof address === 'object') {
+    if (!data.ville && address.addressLocality) {
+      data.ville = String(address.addressLocality).trim()
+    }
+    if (!data.codePostal && address.postalCode) {
+      const cp = String(address.postalCode)
+      if (/^\d{5}$/.test(cp)) data.codePostal = cp
+    }
+    if (!data.adresse && address.streetAddress) {
+      data.adresse = String(address.streetAddress).trim()
+    }
+  }
+  
+  // Location directe (LeBonCoin format)
+  const location = item.location as Record<string, unknown> | undefined
+  if (location && typeof location === 'object') {
+    if (!data.ville && location.city) data.ville = String(location.city)
+    if (!data.codePostal && location.zipcode) {
+      const cp = String(location.zipcode)
+      if (/^\d{5}$/.test(cp)) data.codePostal = cp
+    }
+  }
+  
+  // ===== DPE =====
+  if (!data.dpe) {
+    const dpe = item.energyClass ?? item.energyRating ?? item.dpe ?? item.energyPerformance
+    if (typeof dpe === 'string' && /^[A-G]$/i.test(dpe)) {
+      data.dpe = dpe.toUpperCase() as ClasseDPE
+    }
+  }
+  
+  // ===== GES =====
+  if (!data.ges) {
+    const ges = item.emissionClass ?? item.ghgEmission ?? item.ges ?? item.greenHouseGas
+    if (typeof ges === 'string' && /^[A-G]$/i.test(ges)) {
+      data.ges = ges.toUpperCase() as ClasseDPE
+    }
+  }
+  
+  // ===== TYPE DE BIEN =====
+  if (!data.type) {
+    if (/House|SingleFamilyResidence|villa|maison|pavillon/i.test(type)) {
+      data.type = 'maison'
+    } else if (/Apartment|appartement/i.test(type)) {
+      data.type = 'appartement'
+    }
+    // Aussi checker dans le nom/titre
+    if (!data.type && item.name) {
+      const name = String(item.name).toLowerCase()
+      if (/maison|villa|pavillon/.test(name)) data.type = 'maison'
+      else if (/appartement|studio|duplex|triplex/.test(name)) data.type = 'appartement'
+    }
+  }
+  
+  // ===== ANNÉE CONSTRUCTION =====
+  if (!data.anneeConstruction) {
+    const year = item.yearBuilt ?? item.constructionYear ?? item.dateBuilt ?? item.buildYear
+    if (year !== undefined) {
+      const n = parseInt(String(year))
+      if (n >= 1800 && n <= 2030) data.anneeConstruction = n
+    }
+  }
+  
+  // ===== ÉTAGE =====
+  if (data.etage === undefined) {
+    const floor = item.floorLevel ?? item.floor ?? item.etage
+    if (floor !== undefined) {
+      const n = parseInt(String(floor))
+      if (n >= 0 && n <= 50) data.etage = n
+    }
+  }
+  
+  // ===== CHARGES =====
+  if (!data.chargesMensuelles) {
+    const charges = item.monthlyCharges ?? item.condominiumFees ?? item.charges
+    if (charges !== undefined) {
+      const n = parseInt(String(charges))
+      if (n > 0 && n < 5000) data.chargesMensuelles = n
+    }
+  }
+}
+
+// ============================================
 // EXTRACTION DEPUIS META TAGS (côté client)
 // ============================================
 

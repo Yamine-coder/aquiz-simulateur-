@@ -2,16 +2,18 @@
  * API Route pour extraire les données d'une annonce depuis son URL
  * POST /api/annonces/extract
  * 
- * Stratégie multi-niveaux (du plus fiable au moins fiable) :
- * 1. Jina AI Reader (gratuit, illimité) → texte propre
- * 2. Firecrawl (gratuit, 500 req/mois) → markdown structuré
- * 3. Fetch direct (fallback) → HTML brut, souvent bloqué
+ * Stratégie multi-niveaux adaptative :
+ * - Sites protégés (SeLoger, LeBonCoin…) : ScrapingBee → Jina → Firecrawl → Direct
+ * - Autres sites : Jina → ScrapingBee → Firecrawl → Direct
+ * 
+ * Chaque stratégie combine parsing HTML + JSON-LD + meta tags pour maximiser l'extraction.
  */
 
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import {
     detecterSource,
     parseAnnonceHTML,
+    parseJsonLd,
     parseMetaTags
 } from '@/lib/scraping/extracteur'
 import { compterChampsExtraits, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
@@ -30,11 +32,31 @@ interface ExtractionResponse {
   message: string
 }
 
+/** Sites avec protection anti-bot forte (DataDome, Cloudflare, etc.) */
+const PROTECTED_SITES = ['seloger', 'leboncoin', 'bienici', 'logic-immo']
+
 /**
- * Stratégie d'extraction en 3 étapes :
- * 1. Jina AI Reader (r.jina.ai) → texte propre, gratuit illimité
- * 2. Firecrawl (api.firecrawl.dev) → markdown structuré, 500/mois gratuit
- * 3. Fetch direct (fallback) → HTML brut, peut être bloqué
+ * Options ScrapingBee par site
+ * - render_js : nécessaire pour les SPA (React/Next.js)
+ * - premium_proxy : proxies résidentiels pour bypasser DataDome/Cloudflare (coûte 10x crédits)
+ */
+interface ScrapingBeeOptions {
+  render_js: boolean
+  premium_proxy: boolean
+}
+
+const SITE_SCRAPING_OPTIONS: Record<string, ScrapingBeeOptions> = {
+  seloger:      { render_js: true, premium_proxy: true },   // DataDome
+  leboncoin:    { render_js: true, premium_proxy: true },   // Anti-bot fort
+  bienici:      { render_js: true, premium_proxy: false },  // SPA React
+  'logic-immo': { render_js: true, premium_proxy: false },  // SPA
+  default:      { render_js: true, premium_proxy: false },
+}
+
+/**
+ * Stratégie d'extraction adaptative :
+ * - Sites protégés : ScrapingBee (headless+proxy) → Jina → Firecrawl → Direct
+ * - Autres sites : Jina (gratuit+rapide) → ScrapingBee → Firecrawl → Direct
  */
 export async function POST(request: NextRequest) {
   try {
@@ -87,16 +109,24 @@ export async function POST(request: NextRequest) {
     
     // Détecter la source
     const source = detecterSource(url)
+    const isProtected = source !== null && PROTECTED_SITES.includes(source)
     
-    // ===== STRATÉGIE 1 : Jina AI Reader (gratuit, illimité) =====
-    let extractionResult = await tryJinaReader(url, source)
+    let extractionResult: ExtractionResponse | null = null
     
-    // ===== STRATÉGIE 2 : Firecrawl (gratuit, 500 req/mois, plus robuste) =====
+    if (isProtected) {
+      // ===== SITE PROTÉGÉ : ScrapingBee d'abord (headless browser + anti-bot) =====
+      extractionResult = await tryScrapingBee(url, source)
+      if (!extractionResult) extractionResult = await tryJinaReader(url, source)
+    } else {
+      // ===== SITE STANDARD : Jina d'abord (gratuit + rapide) =====
+      extractionResult = await tryJinaReader(url, source)
+      if (!extractionResult) extractionResult = await tryScrapingBee(url, source)
+    }
+    
+    // ===== FALLBACKS COMMUNS =====
     if (!extractionResult) {
       extractionResult = await tryFirecrawl(url, source)
     }
-    
-    // ===== STRATÉGIE 3 : Fetch direct (fallback, souvent bloqué) =====
     if (!extractionResult) {
       extractionResult = await tryDirectFetch(url, source)
     }
@@ -126,6 +156,92 @@ export async function POST(request: NextRequest) {
       { success: false, error: 'Erreur serveur lors de l\'extraction' },
       { status: 500 }
     )
+  }
+}
+
+// ─────────────────────────────────────
+// Stratégie : ScrapingBee (headless Chrome + anti-bot + proxies résidentiels)
+// Gère : JS rendering, DataDome, Cloudflare, captchas
+// Coût : 1 crédit (basique), 5 (JS), 10 (premium proxy), ~25 (JS+premium)
+// Free tier : 1000 crédits/mois → ~40-200 requêtes selon config
+// ─────────────────────────────────────
+async function tryScrapingBee(url: string, source: string | null): Promise<ExtractionResponse | null> {
+  const apiKey = process.env.SCRAPINGBEE_API_KEY
+  if (!apiKey) return null // Pas configuré, on skip
+  
+  try {
+    // Options adaptées au site
+    const options = (source && SITE_SCRAPING_OPTIONS[source]) || SITE_SCRAPING_OPTIONS.default
+    
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      url: url,
+      render_js: String(options.render_js),
+      premium_proxy: String(options.premium_proxy),
+      country_code: 'fr',       // Proxies français pour sites FR
+      block_ads: 'true',        // Bloquer les pubs pour accélérer
+      block_resources: 'false', // Garder les ressources (certains sites en ont besoin)
+      wait: '3000',             // Attendre 3s après le chargement JS
+    })
+    
+    const response = await fetch(`https://app.scrapingbee.com/api/v1/?${params}`, {
+      signal: AbortSignal.timeout(35000), // 35s timeout (JS rendering = lent)
+    })
+    
+    if (!response.ok) {
+      console.warn(`ScrapingBee HTTP ${response.status} pour ${source || url}`)
+      return null
+    }
+    
+    const html = await response.text()
+    if (html.length < 200) return null
+    
+    // Parse multi-sources : JSON-LD (le plus fiable) > HTML patterns > meta tags
+    const dataFromJsonLd = parseJsonLd(html)
+    const dataFromHTML = parseAnnonceHTML(html, url)
+    const dataFromMeta = parseMetaTags(html)
+    
+    // Fusionner avec priorité : JSON-LD > HTML > Meta
+    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
+    
+    // Si on n'a toujours pas prix/surface, essayer le parsing texte brut
+    if (!data.prix && !data.surface) {
+      const texte = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+      const textData = parseTexteAnnonce(texte)
+      const count = compterChampsExtraits(textData)
+      if (count >= MIN_FIELDS) {
+        const textRecord = textData as unknown as Record<string, unknown>
+        // Fusionner sans écraser les données existantes
+        for (const [key, value] of Object.entries(textRecord)) {
+          if (value !== undefined && data[key] === undefined) {
+            data[key] = value
+          }
+        }
+      }
+    }
+    
+    if (!data.prix && !data.surface) return null
+    
+    const fieldsCount = Object.keys(data).filter(k => 
+      k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+    ).length
+    
+    completerDonnees(data)
+    
+    return {
+      success: true,
+      source: source || 'web',
+      data,
+      fieldsExtracted: fieldsCount,
+      method: 'scrapingbee',
+      message: `${fieldsCount} données extraites depuis ${source || 'la page'} (ScrapingBee)`
+    }
+  } catch (err) {
+    console.warn('ScrapingBee échoué:', err)
+    return null
   }
 }
 
@@ -200,7 +316,7 @@ async function tryJinaReader(url: string, source: string | null): Promise<Extrac
 }
 
 // ─────────────────────────────────────
-// Stratégie 2 : Firecrawl
+// Stratégie 2 : Firecrawl (avec waitFor pour laisser le JS se charger)
 // ─────────────────────────────────────
 async function tryFirecrawl(url: string, source: string | null): Promise<ExtractionResponse | null> {
   const apiKey = process.env.FIRECRAWL_API_KEY
@@ -215,9 +331,10 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
       },
       body: JSON.stringify({
         url,
-        formats: ['markdown', 'metadata'],
-        onlyMainContent: true,
+        formats: ['markdown', 'html', 'metadata'],
+        onlyMainContent: false,  // On veut tout le HTML pour JSON-LD
         timeout: 15000,
+        waitFor: 2000,           // Attendre 2s pour le JS
       }),
       signal: AbortSignal.timeout(20000),
     })
@@ -229,21 +346,44 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
     
     const result = await response.json()
     
-    if (!result.success || !result.data?.markdown) return null
+    if (!result.success) return null
     
-    const texte = result.data.markdown as string
-    if (texte.length < 50) return null
+    // Essayer d'abord le HTML complet (avec JSON-LD) si disponible
+    const htmlContent = result.data?.html as string | undefined
+    const texte = (result.data?.markdown || '') as string
     
-    const data = parseTexteAnnonce(texte)
-    const count = compterChampsExtraits(data)
+    let dataRecord: Record<string, unknown> = { url }
+    
+    // Parser le HTML si disponible (JSON-LD + patterns HTML + meta)
+    if (htmlContent && htmlContent.length > 200) {
+      const dataFromJsonLd = parseJsonLd(htmlContent)
+      const dataFromHTML = parseAnnonceHTML(htmlContent, url)
+      const dataFromMeta = parseMetaTags(htmlContent)
+      dataRecord = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
+    }
+    
+    // Compléter avec le parsing texte du markdown
+    if (texte.length >= 50) {
+      const textData = parseTexteAnnonce(texte)
+      const textRecord = textData as unknown as Record<string, unknown>
+      // Fusionner sans écraser les données HTML/JSON-LD
+      for (const [key, value] of Object.entries(textRecord)) {
+        if (value !== undefined && dataRecord[key] === undefined) {
+          dataRecord[key] = value
+        }
+      }
+    }
+    
+    const count = Object.keys(dataRecord).filter(k => 
+      k !== 'url' && dataRecord[k] !== undefined && dataRecord[k] !== null && dataRecord[k] !== 'NC'
+    ).length
     if (count < MIN_FIELDS) return null
     
-    const dataRecord = data as unknown as Record<string, unknown>
     completerDonnees(dataRecord)
     
     // --- Récupération de l'image via métadonnées Firecrawl ---
     if (!dataRecord.imageUrl) {
-      const metadata = result.data.metadata
+      const metadata = result.data?.metadata as Record<string, unknown> | undefined
       const ogImage = metadata?.ogImage || metadata?.['og:image'] || metadata?.image
       if (typeof ogImage === 'string' && ogImage.startsWith('http')) {
         dataRecord.imageUrl = ogImage
@@ -251,14 +391,14 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
     }
     // Titre depuis métadonnées Firecrawl si manquant
     if (!dataRecord.titre) {
-      const metadata = result.data.metadata
+      const metadata = result.data?.metadata as Record<string, unknown> | undefined
       const ogTitle = metadata?.ogTitle || metadata?.['og:title'] || metadata?.title
       if (typeof ogTitle === 'string') {
         dataRecord.titre = ogTitle.substring(0, 200)
       }
     }
     // Extraire image depuis le markdown (pattern ![alt](url))
-    if (!dataRecord.imageUrl) {
+    if (!dataRecord.imageUrl && texte) {
       const imgMatch = texte.match(/!\[.*?\]\((https?:\/\/[^\s)]+\.(?:jpg|jpeg|png|webp)[^\s)]*)\)/i)
       if (imgMatch) {
         dataRecord.imageUrl = imgMatch[1]
@@ -268,7 +408,7 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
     return {
       success: true,
       source: source || 'web',
-      data: { url, ...dataRecord },
+      data: { ...dataRecord },
       fieldsExtracted: count,
       method: 'firecrawl',
       message: `${count} données extraites depuis ${source || 'la page'}`
@@ -280,16 +420,22 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
 }
 
 // ─────────────────────────────────────
-// Stratégie 3 : Fetch direct
+// Stratégie 3 : Fetch direct (enrichi avec JSON-LD)
 // ─────────────────────────────────────
 async function tryDirectFetch(url: string, source: string | null): Promise<ExtractionResponse | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
         'Cache-Control': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
       },
       signal: AbortSignal.timeout(10000),
     })
@@ -297,21 +443,29 @@ async function tryDirectFetch(url: string, source: string | null): Promise<Extra
     if (!response.ok) return null
     
     const html = await response.text()
+    
+    // Parse multi-sources : JSON-LD > HTML patterns > meta tags
+    const dataFromJsonLd = parseJsonLd(html)
     const dataFromHTML = parseAnnonceHTML(html, url)
     const dataFromMeta = parseMetaTags(html)
     
-    const data = { url, ...dataFromMeta, ...dataFromHTML }
+    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
     
     if (!data.prix && !data.surface) return null
     
     completerDonnees(data)
     
+    const fieldsCount = Object.keys(data).filter(k => 
+      k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+    ).length
+    
     return {
       success: true,
       source: source || 'web',
       data,
+      fieldsExtracted: fieldsCount,
       method: 'direct-fetch',
-      message: `Données extraites depuis ${source || 'la page'}`
+      message: `${fieldsCount} données extraites depuis ${source || 'la page'}`
     }
   } catch (err) {
     console.warn('Fetch direct échoué:', err)
