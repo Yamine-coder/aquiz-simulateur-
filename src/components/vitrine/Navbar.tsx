@@ -1,6 +1,7 @@
 'use client'
 
 import { Calculator, ChevronDown, Gift, Map, Menu, Phone, Scale, X } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,11 +29,12 @@ const NAV_LINKS: NavLink[] = [
   { label: 'Méthode', href: '/#methode', sectionId: 'methode' },
   { label: 'Tarifs', href: '/#tarifs', sectionId: 'tarifs' },
   { label: 'Avis', href: '/#temoignages', sectionId: 'temoignages' },
+  { label: 'Blog', href: '/#blog', sectionId: 'blog' },
   { label: 'Contact', href: '/#contact', sectionId: 'contact' },
 ]
 
 /** IDs in scroll order for scroll-spy */
-const SECTION_IDS = ['hero', 'services', 'outils', 'methode', 'tarifs', 'temoignages', 'faq', 'contact']
+const SECTION_IDS = ['hero', 'services', 'outils', 'methode', 'tarifs', 'temoignages', 'blog', 'faq', 'contact']
 
 const TOOL_LINKS: ToolLink[] = [
   {
@@ -86,6 +88,16 @@ export function Navbar() {
   const isToolActive = TOOL_LINKS.some(
     (t) => pathname === t.href || pathname.startsWith(t.href + '/')
   )
+
+  // ─── Force scroll to top on homepage mount (prevent scroll restoration) ───
+  useEffect(() => {
+    if (!isHomepage) return
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+    window.scrollTo(0, 0)
+    setActiveSection('hero')
+  }, [isHomepage])
 
   // ─── Scroll & scroll-spy ───
   useEffect(() => {
@@ -181,20 +193,23 @@ export function Navbar() {
       // Depuis une page outil → naviguer vers l'accueil puis scroller à la section
       e.preventDefault()
       closeMenu()
-      router.push('/')
-      // Attendre la navigation puis scroller vers la section
       const sectionId = link.sectionId
+      // scroll: false empêche Next.js de forcer le scroll en haut
+      router.push('/#' + sectionId, { scroll: false })
+      // Attendre la navigation puis scroller vers la section
+      let attempts = 0
       const waitAndScroll = () => {
         const el = document.getElementById(sectionId)
         if (el) {
           scrollToSection(sectionId)
-        } else {
-          // La page n'est pas encore montée, réessayer
+        } else if (attempts < 50) {
+          // La page n'est pas encore montée, réessayer (max ~1.5s)
+          attempts++
           requestAnimationFrame(waitAndScroll)
         }
       }
       // Petit délai pour laisser Next.js rendre la page d'accueil
-      setTimeout(waitAndScroll, 100)
+      setTimeout(waitAndScroll, 150)
     } else {
       closeMenu()
     }
@@ -213,6 +228,11 @@ export function Navbar() {
 
   /** Check if a nav link is active */
   const isNavActive = (link: NavLink): boolean => {
+    // Page-level links (Blog, etc.) — active when pathname matches
+    if (!link.sectionId && link.href !== '/') {
+      return pathname === link.href || pathname.startsWith(link.href + '/')
+    }
+    // Homepage anchor links — scroll-spy
     if (isHomepage && link.sectionId) {
       return activeSection === link.sectionId
     }
@@ -220,7 +240,9 @@ export function Navbar() {
   }
 
   return (
+    <header>
     <nav
+      aria-label="Navigation principale"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: showSolid
@@ -238,13 +260,23 @@ export function Navbar() {
         <div className={`flex items-center justify-between h-18 md:h-22`}>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={showSolid ? '/logo-aquiz-dark.png' : '/logo-aquiz-white.png'}
-              alt="AQUIZ"
-              className={`h-16 md:h-20 lg:h-25 w-auto object-contain select-none`}
-              style={{ transition: 'opacity 0.3s ease, transform 0.3s ease' }}
+          <Link href="/" className="flex items-center shrink-0 relative h-16 md:h-20 lg:h-25 w-[120px] md:w-[150px] lg:w-[180px]">
+            <Image
+              src="/logo-aquiz-dark.png"
+              alt="AQUIZ — Conseil en acquisition immobilière à Paris"
+              fill
+              className={`object-contain select-none transition-opacity duration-300 ${showSolid ? 'opacity-100' : 'opacity-0'}`}
+              priority
+              sizes="180px"
+              draggable={false}
+            />
+            <Image
+              src="/logo-aquiz-white.png"
+              alt="AQUIZ — Conseil en acquisition immobilière à Paris"
+              fill
+              className={`object-contain select-none transition-opacity duration-300 ${showSolid ? 'opacity-0' : 'opacity-100'}`}
+              priority
+              sizes="180px"
               draggable={false}
             />
           </Link>
@@ -519,5 +551,6 @@ export function Navbar() {
         </div>
       </div>
     </nav>
+    </header>
   )
 }

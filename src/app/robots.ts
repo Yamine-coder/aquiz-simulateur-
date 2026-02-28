@@ -9,9 +9,23 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/mes-simulations', '/resultats'],
+        disallow: [
+          '/api/',
+          '/admin',
+          '/admin/',
+          '/_next/',
+          '/mes-simulations',
+          '/resultats',
+          '/favoris',
+        ],
+      },
+      {
+        userAgent: 'Googlebot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/_next/', '/mes-simulations', '/resultats', '/favoris'],
       },
     ],
     sitemap: 'https://www.aquiz.eu/sitemap.xml',
+    host: 'https://www.aquiz.eu',
   }
 }

@@ -1,6 +1,6 @@
 /**
  * Configuration globale du simulateur AQUIZ
- * Paramètres réglementaires français (HCSF 2024)
+ * Paramètres réglementaires français (HCSF 2026)
  */
 
 export const SIMULATEUR_CONFIG = {
@@ -27,11 +27,18 @@ export const SIMULATEUR_CONFIG = {
     parEnfant: 300,
   },
 
-  // Taux d'intérêt de référence (à jour 2024-2025)
+  // Taux d'intérêt de référence (à jour T1 2026)
   tauxInteretDefaut: {
-    court: 0.032, // 3.2% sur 10-15 ans
-    moyen: 0.035, // 3.5% sur 15-20 ans
-    long: 0.038, // 3.8% sur 20-25 ans
+    court: 0.031, // 3.1% sur 10-15 ans
+    moyen: 0.033, // 3.3% sur 15-20 ans
+    long: 0.035, // 3.5% sur 20-25 ans
+  },
+
+  // Taux d'usure (Banque de France, T1 2026)
+  tauxUsure: {
+    fixe10a20: 0.0529, // 5.29% — prêts à taux fixe 10-20 ans
+    fixe20plus: 0.0548, // 5.48% — prêts à taux fixe ≥20 ans
+    variable: 0.0525, // 5.25% — prêts à taux variable
   },
 
   // Limites de validation

@@ -1,8 +1,8 @@
-import { redirect } from 'next/navigation'
+import { permanentRedirect } from 'next/navigation'
 
 /**
- * Redirect /contact → /#contact (single-page navigation)
+ * Redirect 308 /contact → /#contact (SEO : redirection permanente)
  */
 export default function ContactRedirect() {
-  redirect('/#contact')
+  permanentRedirect('/#contact')
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import { FadeIn, StaggerContainer, StaggerItem } from '@/components/vitrine/Motion'
 import {
     ArrowRight,
@@ -7,8 +8,7 @@ import {
     Clock,
     HelpCircle,
     Home,
-    Sparkles,
-    Wallet,
+    Wallet
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -29,7 +29,7 @@ const MODES: ModeOption[] = [
     label: 'Mode A',
     title: 'Ce que je peux acheter',
     subtitle: 'Estimez votre capacité d’achat à partir de vos revenus, charges et apport.',
-    points: ['Budget maximum', 'Mensualités', 'Taux HCSF'],
+    points: ['Budget maximum', 'Mensualités', 'Taux d\'endettement'],
     duration: '3 min',
     href: '/simulateur/mode-a',
     popular: true,
@@ -37,7 +37,7 @@ const MODES: ModeOption[] = [
   {
     icon: Home,
     label: 'Mode B',
-    title: 'Ce qu\'il faut pour acheter',
+    title: 'Ce qu\u2019il me faut pour acheter',
     subtitle: 'Vérifiez rapidement si un bien précis est finançable dans votre situation.',
     points: ['Faisabilité', 'Revenus requis', 'Apport optimal'],
     duration: '2 min',
@@ -49,6 +49,7 @@ const MODES: ModeOption[] = [
 export default function SimulateurPage() {
   return (
     <div className="min-h-screen bg-white">
+      <Breadcrumbs items={[{ label: 'Simulateur' }]} />
 
       {/* ═══ HERO — blanc, épuré ═══ */}
       <section className="pt-10 pb-6 md:pt-12 md:pb-8 border-b border-aquiz-gray-lighter">
@@ -73,7 +74,7 @@ export default function SimulateurPage() {
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5 text-aquiz-green" />
-                Conforme HCSF
+                Conforme normes bancaires
               </span>
             </div>
           </FadeIn>
@@ -94,13 +95,6 @@ export default function SimulateurPage() {
                       className="group relative flex flex-col h-full rounded-2xl border border-aquiz-gray-lighter bg-white hover:border-aquiz-green/40 hover:shadow-lg hover:shadow-aquiz-green/5 transition-all duration-200"
                     >
                       <div className="px-5 pt-5 pb-4 flex flex-col flex-1">
-                        {mode.popular && (
-                          <span className="mb-3 inline-flex w-fit items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-aquiz-green/10 text-aquiz-green font-semibold uppercase tracking-wider">
-                            <Sparkles className="w-3 h-3" />
-                            Populaire
-                          </span>
-                        )}
-
                         <div className="w-11 h-11 rounded-xl bg-aquiz-gray-lightest group-hover:bg-aquiz-green/10 flex items-center justify-center transition-colors duration-200 mb-3">
                           <Icon className="w-5 h-5 text-aquiz-gray-dark group-hover:text-aquiz-green transition-colors duration-200" />
                         </div>

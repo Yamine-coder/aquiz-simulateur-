@@ -134,29 +134,38 @@ export function FormulaireAnnonce({
   
   // ===== REMPLIR LE FORMULAIRE DEPUIS DES DONNÉES =====
   const remplirFormulaire = (data: Record<string, unknown>) => {
-    if (data.prix) setValue('prix', data.prix as number)
-    if (data.surface) setValue('surface', data.surface as number)
+    // Helpers de coercion — les données extraites peuvent avoir des types incohérents
+    const toNumber = (v: unknown): number | undefined => {
+      if (v === null || v === undefined) return undefined
+      const n = Number(v)
+      return Number.isNaN(n) ? undefined : n
+    }
+    const toStr = (v: unknown): string | undefined =>
+      v !== null && v !== undefined ? String(v) : undefined
+
+    if (data.prix) setValue('prix', toNumber(data.prix) as number)
+    if (data.surface) setValue('surface', toNumber(data.surface) as number)
     if (data.type) setValue('type', data.type as TypeBienAnnonce)
-    if (data.pieces) setValue('pieces', data.pieces as number)
-    if (data.chambres !== undefined) setValue('chambres', data.chambres as number)
-    if (data.ville) setValue('ville', data.ville as string)
-    if (data.codePostal) setValue('codePostal', data.codePostal as string)
+    if (data.pieces) setValue('pieces', toNumber(data.pieces) as number)
+    if (data.chambres !== undefined) setValue('chambres', toNumber(data.chambres) as number)
+    if (data.ville) setValue('ville', toStr(data.ville) as string)
+    if (data.codePostal) setValue('codePostal', toStr(data.codePostal) as string)
     if (data.dpe) setValue('dpe', data.dpe as ClasseDPE)
-    if (data.titre) setValue('titre', data.titre as string)
-    if (data.etage !== undefined) setValue('etage', data.etage as number)
-    if (data.chargesMensuelles) setValue('chargesMensuelles', data.chargesMensuelles as number)
-    if (data.taxeFonciere) setValue('taxeFonciere', data.taxeFonciere as number)
-    if (data.balconTerrasse !== undefined) setValue('balconTerrasse', data.balconTerrasse as boolean)
-    if (data.parking !== undefined) setValue('parking', data.parking as boolean)
-    if (data.cave !== undefined) setValue('cave', data.cave as boolean)
-    if (data.ascenseur !== undefined) setValue('ascenseur', data.ascenseur as boolean)
-    if (data.url) setValue('url', data.url as string)
-    if (data.imageUrl) setValue('imageUrl', data.imageUrl as string)
+    if (data.titre) setValue('titre', toStr(data.titre) as string)
+    if (data.etage !== undefined) setValue('etage', toNumber(data.etage) as number)
+    if (data.chargesMensuelles) setValue('chargesMensuelles', toNumber(data.chargesMensuelles) as number)
+    if (data.taxeFonciere) setValue('taxeFonciere', toNumber(data.taxeFonciere) as number)
+    if (data.balconTerrasse !== undefined) setValue('balconTerrasse', !!data.balconTerrasse)
+    if (data.parking !== undefined) setValue('parking', !!data.parking)
+    if (data.cave !== undefined) setValue('cave', !!data.cave)
+    if (data.ascenseur !== undefined) setValue('ascenseur', !!data.ascenseur)
+    if (data.url) setValue('url', toStr(data.url) as string)
+    if (data.imageUrl) setValue('imageUrl', toStr(data.imageUrl) as string)
     if (data.ges) setValue('ges', data.ges as ClasseDPE)
-    if (data.description) setValue('description', data.description as string)
-    if (data.anneeConstruction) setValue('anneeConstruction', data.anneeConstruction as number)
-    if (data.nbSallesBains) setValue('nbSallesBains', data.nbSallesBains as number)
-    if (data.orientation) setValue('orientation', data.orientation as string)
+    if (data.description) setValue('description', toStr(data.description) as string)
+    if (data.anneeConstruction) setValue('anneeConstruction', toNumber(data.anneeConstruction) as number)
+    if (data.nbSallesBains) setValue('nbSallesBains', toNumber(data.nbSallesBains) as number)
+    if (data.orientation) setValue('orientation', toStr(data.orientation) as string)
   }
 
   // ===== EXTRACTION DEPUIS URL (via API + Jina Reader) =====
@@ -246,7 +255,7 @@ export function FormulaireAnnonce({
   }
   
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
         <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-aquiz-gray-lightest/60 rounded-xl border border-aquiz-gray-lighter">
           <TabsTrigger value="url" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
@@ -264,7 +273,7 @@ export function FormulaireAnnonce({
         </TabsList>
         
         {/* ===== TAB IMPORT URL ===== */}
-        <TabsContent value="url" className="space-y-4 mt-5">
+        <TabsContent value="url" className="space-y-3 mt-3">
           <div className="space-y-3">
             <div className="flex gap-2.5">
               <Input
@@ -334,17 +343,12 @@ export function FormulaireAnnonce({
         </TabsContent>
         
         {/* ===== TAB COLLER LE CONTENU ===== */}
-        <TabsContent value="coller" className="space-y-4 mt-5">
-          <div className="space-y-4">
-            {/* Instructions */}
-            <div className="bg-aquiz-gray-lightest border border-aquiz-gray-lighter rounded-xl p-4">
-              <p className="text-sm text-aquiz-black font-semibold mb-2">Comment faire ?</p>
-              <ol className="text-xs text-aquiz-gray space-y-1.5 list-decimal list-inside">
-                <li>Ouvrez l&apos;annonce sur SeLoger, LeBonCoin, PAP, etc.</li>
-                <li>S&eacute;lectionnez tout le texte (<kbd className="px-1.5 py-0.5 bg-white rounded-md border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+A</kbd>) puis copiez (<kbd className="px-1.5 py-0.5 bg-white rounded-md border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+C</kbd>)</li>
-                <li>Collez ici (<kbd className="px-1.5 py-0.5 bg-white rounded-md border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+V</kbd>) et cliquez sur Extraire</li>
-              </ol>
-            </div>
+        <TabsContent value="coller" className="space-y-3 mt-3">
+          <div className="space-y-3">
+            {/* Instruction compacte */}
+            <p className="text-xs text-aquiz-gray leading-relaxed">
+              Copiez tout le texte de l&apos;annonce (<kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+A</kbd> puis <kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+C</kbd>) et collez-le ci-dessous.
+            </p>
             
             {/* Zone de texte */}
             <Textarea
@@ -355,7 +359,7 @@ export function FormulaireAnnonce({
                 setExtractError(null)
                 setExtractSuccess(false)
               }}
-              className="min-h-30 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20"
+              className="min-h-24 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20"
             />
             
             <Button
@@ -404,7 +408,7 @@ export function FormulaireAnnonce({
         </TabsContent>
         
         {/* ===== TAB SAISIE MANUELLE ===== */}
-        <TabsContent value="manuel" className="mt-5">
+        <TabsContent value="manuel" className="mt-3">
           <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
             
             {/* ═══════════ SECTION 1 : Informations essentielles ═══════════ */}

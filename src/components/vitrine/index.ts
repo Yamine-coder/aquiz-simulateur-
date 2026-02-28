@@ -1,3 +1,4 @@
+export { BlogPreviewSection } from './BlogPreviewSection'
 export { ContactForm } from './ContactForm'
 export { ContactSection } from './ContactSection'
 export { Footer } from './Footer'
@@ -20,4 +21,5 @@ export {
     StaggerItem
 } from './Motion'
 export { Navbar } from './Navbar'
+export { ScrollToTopButton } from './ScrollToTopButton'
 

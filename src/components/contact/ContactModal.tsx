@@ -8,6 +8,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { logger } from '@/lib/logger'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
@@ -35,11 +36,13 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [activeTab, setActiveTab] = useState<'rappel' | 'rdv'>('rappel')
+  const focusTrapRef = useFocusTrap(isOpen)
   
   // Formulaire de rappel
   const [formData, setFormData] = useState({
     prenom: '',
     telephone: '',
+    email: '',
     creneau: 'matin',
     accepte: false
   })
@@ -63,7 +66,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
   const resetForm = () => {
     setIsSubmitted(false)
     setActiveTab('rappel')
-    setFormData({ prenom: '', telephone: '', creneau: 'matin', accepte: false })
+    setFormData({ prenom: '', telephone: '', email: '', creneau: 'matin', accepte: false })
   }
 
   // Ref pour tracker l'état précédent
@@ -99,6 +102,25 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
       
       if (!response.ok) {
         throw new Error('Erreur serveur')
+      }
+
+      // Dual-write : persister comme lead si email fourni
+      if (formData.email) {
+        fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            prenom: formData.prenom,
+            source: 'simulateur-a',
+            contexte: {
+              type: 'rappel',
+              telephone: formData.telephone,
+              budget: resultats?.prixAchatMax,
+              situation: profil?.situationFoyer,
+            },
+          }),
+        }).catch(() => { /* fire-and-forget */ })
       }
       
       setIsSubmitted(true)
@@ -144,13 +166,19 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
           - Animation d'entrée
           - Safe area sur mobile
       */}
-      <div className="relative w-full max-w-[420px] max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-200">
+      <div
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="contact-modal-title"
+        className="relative w-full max-w-[420px] max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in-0 zoom-in-95 duration-200"
+      >
         
         {/* Header minimaliste */}
         <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-4 shrink-0">
           <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-aquiz-black">
+              <h2 id="contact-modal-title" className="text-lg font-semibold text-aquiz-black">
                 Parlons de votre projet
               </h2>
               <p className="text-sm text-aquiz-gray mt-0.5">
@@ -159,6 +187,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
             </div>
             <button 
               onClick={onClose}
+              aria-label="Fermer la modale"
               className="w-8 h-8 rounded-full hover:bg-aquiz-gray-lightest flex items-center justify-center transition-colors -mt-1 -mr-1"
             >
               <X className="w-4 h-4 text-aquiz-gray" />
@@ -256,6 +285,20 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
                         className="mt-1.5 h-10 rounded-lg border-aquiz-gray-lighter bg-aquiz-gray-lightest/30 focus:bg-white focus:border-aquiz-green focus:ring-1 focus:ring-aquiz-green/20"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="email-rappel" className="text-xs font-medium text-aquiz-gray uppercase tracking-wide">
+                      Email <span className="text-aquiz-gray-light font-normal normal-case">(optionnel — pour recevoir un récapitulatif)</span>
+                    </Label>
+                    <Input
+                      id="email-rappel"
+                      type="email"
+                      placeholder="jean@email.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="mt-1.5 h-10 rounded-lg border-aquiz-gray-lighter bg-aquiz-gray-lightest/30 focus:bg-white focus:border-aquiz-green focus:ring-1 focus:ring-aquiz-green/20"
+                    />
                   </div>
                   
                   <div>

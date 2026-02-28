@@ -1,5 +1,5 @@
 import { ScrollToTop } from '@/components/ScrollToTop'
-import { Footer, Navbar } from '@/components/vitrine'
+import { Footer, Navbar, ScrollToTopButton } from '@/components/vitrine'
 
 /**
  * Layout pour les pages vitrine (accueil, services, contact, etc.)
@@ -22,6 +22,7 @@ export default function VitrineLayout({
       <Navbar />
       <main id="main-content">{children}</main>
       <Footer />
+      <ScrollToTopButton />
     </>
   )
 }

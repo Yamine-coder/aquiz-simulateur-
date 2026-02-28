@@ -9,6 +9,7 @@
  */
 
 import { ContactModal } from '@/components/contact'
+import { LeadCaptureGate } from '@/components/lead/LeadCaptureGate'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -424,108 +425,113 @@ function AidesPageContent() {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <header className="border-b border-aquiz-gray-lighter">
-        <div className="max-w-4xl mx-auto px-5 pt-8 pb-6 md:pt-10 md:pb-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-5 pt-5 pb-4 md:pt-10 md:pb-8">
           {/* Navigation retour */}
           <button
             onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)}
-            className="inline-flex items-center gap-1.5 text-xs text-aquiz-gray-light hover:text-aquiz-gray transition-colors mb-5"
+            className="inline-flex items-center gap-1.5 text-xs text-aquiz-gray-light hover:text-aquiz-gray transition-colors mb-4"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             {fromStore ? 'Retour à la carte' : 'Tous les départements'}
           </button>
 
-          {/* Ligne principale : Titre + Zone badge */}
-          <div className="flex items-center justify-between gap-4 mb-6">
-            <div className="flex items-baseline gap-3">
-              <h2 className="text-2xl md:text-3xl font-extrabold text-aquiz-black tracking-tight">
-                {zoneSelectionnee.nomCommune}
-              </h2>
-              <span className="text-sm text-aquiz-gray-light font-medium">
-                {zoneSelectionnee.codeDepartement}
-              </span>
-              {fromStore && capaciteAchat > 0 && (
-                <span className="text-sm text-aquiz-gray-light">· Budget {formatMontant(capaciteAchat)} €</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2.5 shrink-0">
-              <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${ZONE_COLORS[zonePTZ] || ZONE_COLORS.A}`}>
-                Zone {zoneSelectionnee.zonePTZ}
-              </span>
-              <span className="text-[11px] text-aquiz-gray-light hidden sm:inline">
-                {zonePTZ === 'Abis' ? 'Très tendu' : zonePTZ === 'A' ? 'Tendu' : 'Modéré'}
-              </span>
-            </div>
-          </div>
-
-          {/* Métriques + Filtres — sur une même bande */}
-          {/* Métriques */}
-          <div className="flex items-center gap-3 mt-6">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aquiz-gray-lightest/80 border border-aquiz-gray-lighter">
-              <span className="text-lg font-extrabold text-aquiz-black">{aidesEligibles.length}</span>
-              <span className="text-[11px] text-aquiz-gray-light leading-tight">aides</span>
-            </div>
-            {totalAides.max > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-green/15">
-                <span className="text-lg font-extrabold text-aquiz-green">jusqu&apos;à {(totalAides.max / 1000).toFixed(0)}k€</span>
-                <span className="text-[11px] text-aquiz-gray leading-tight">d&apos;aides cumulées</span>
+          {/* Carte récap — regroupée */}
+          <div className="rounded-xl border border-aquiz-gray-lighter bg-white overflow-hidden">
+            {/* Titre + Zone + Métriques */}
+            <div className="px-4 sm:px-5 py-3.5 sm:py-4">
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-aquiz-black tracking-tight">
+                      {zoneSelectionnee.nomCommune}
+                    </h2>
+                    <span className="text-xs text-aquiz-gray-light font-medium">
+                      {zoneSelectionnee.codeDepartement}
+                    </span>
+                    {fromStore && capaciteAchat > 0 && (
+                      <span className="text-xs text-aquiz-gray-light">· Budget {formatMontant(capaciteAchat)} €</span>
+                    )}
+                  </div>
+                </div>
+                <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shrink-0 ${ZONE_COLORS[zonePTZ] || ZONE_COLORS.A}`}>
+                  Zone {zoneSelectionnee.zonePTZ}
+                </span>
               </div>
-            )}
-          </div>
 
-          {/* Filtres profil — une seule ligne */}
-          <div className="flex items-center flex-wrap gap-x-5 gap-y-3 mt-4">
-            <div className="flex items-center gap-2">
-              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Premier achat de résidence principale (ou pas propriétaire depuis 2 ans)">
-                Primo <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
-              </Label>
-              <Select value={primoAccedant} onValueChange={setPrimoAccedant}>
-                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="oui">Oui</SelectItem>
-                  <SelectItem value="non">Non</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Métriques inline */}
+              <div className="flex items-center gap-2 mt-3">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-aquiz-gray-lightest border border-aquiz-gray-lighter">
+                  <span className="text-sm font-bold text-aquiz-black">{aidesEligibles.length}</span>
+                  <span className="text-[10px] text-aquiz-gray-light">aides</span>
+                </div>
+                {totalAides.max > 0 && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-aquiz-green/5 border border-aquiz-green/15">
+                    <span className="text-sm font-bold text-aquiz-green">jusqu&apos;à {(totalAides.max / 1000).toFixed(0)}k€</span>
+                    <span className="text-[10px] text-aquiz-gray">d&apos;aides cumulées</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="w-px h-5 bg-aquiz-gray-lighter" />
-            <div className="flex items-center gap-2">
-              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Salarié d'une entreprise privée de 10 salariés ou plus (éligible Action Logement)">
-                Salarié 10+ <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
-              </Label>
-              <Select value={salariePriveMin10} onValueChange={setSalariePriveMin10}>
-                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="oui">Oui</SelectItem>
-                  <SelectItem value="non">Non</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-px h-5 bg-aquiz-gray-lighter" />
-            <div className="flex items-center gap-2">
-              <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Agent de la fonction publique (éligible au prêt fonctionnaire)">
-                Fonctionnaire <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
-              </Label>
-              <Select value={fonctionnaire} onValueChange={setFonctionnaire}>
-                <SelectTrigger className="w-[76px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="oui">Oui</SelectItem>
-                  <SelectItem value="non">Non</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
-          {/* Badge données vérifiées */}
-          <div className="flex items-center gap-2 mt-5 px-3 py-2 rounded-lg bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter/50">
-            <ShieldCheck className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-            <span className="text-[10px] text-aquiz-gray leading-snug">
-              Données vérifiées · Sources : <a href="https://www.anil.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">ANIL</a>, <a href="https://www.legifrance.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">Légifrance</a>, <a href="https://www.service-public.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">service-public.fr</a> · Janvier 2026
-            </span>
+            {/* Filtres profil — séparés visuellement */}
+            <div className="px-4 sm:px-5 py-3 border-t border-aquiz-gray-lighter bg-slate-50/50">
+              <div className="flex items-center flex-wrap gap-x-4 gap-y-2">
+                <div className="flex items-center gap-2">
+                  <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Premier achat de résidence principale (ou pas propriétaire depuis 2 ans)">
+                    Primo <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+                  </Label>
+                  <Select value={primoAccedant} onValueChange={setPrimoAccedant}>
+                    <SelectTrigger className="w-[70px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="oui">Oui</SelectItem>
+                      <SelectItem value="non">Non</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-px h-4 bg-aquiz-gray-lighter hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Salarié d'une entreprise privée de 10 salariés ou plus (éligible Action Logement)">
+                    Salarié 10+ <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+                  </Label>
+                  <Select value={salariePriveMin10} onValueChange={setSalariePriveMin10}>
+                    <SelectTrigger className="w-[70px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="oui">Oui</SelectItem>
+                      <SelectItem value="non">Non</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-px h-4 bg-aquiz-gray-lighter hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <Label className="text-[11px] text-aquiz-gray font-medium cursor-help whitespace-nowrap" title="Agent de la fonction publique (éligible au prêt fonctionnaire)">
+                    Fonctionnaire <Info className="w-3 h-3 inline text-aquiz-gray-lighter" />
+                  </Label>
+                  <Select value={fonctionnaire} onValueChange={setFonctionnaire}>
+                    <SelectTrigger className="w-[70px] h-7 text-[11px] rounded-md border-aquiz-gray-lighter bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="oui">Oui</SelectItem>
+                      <SelectItem value="non">Non</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Badge données vérifiées */}
+            <div className="px-4 sm:px-5 py-2 border-t border-aquiz-gray-lighter/50 bg-slate-50/30">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                <span className="text-[10px] text-aquiz-gray leading-snug">
+                  Données vérifiées · Sources : <a href="https://www.anil.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">ANIL</a>, <a href="https://www.legifrance.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">Légifrance</a>, <a href="https://www.service-public.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">service-public.fr</a> · Janvier 2026
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </header>
@@ -534,10 +540,10 @@ function AidesPageContent() {
       <div className="max-w-4xl mx-auto px-5 py-6 md:py-8">
 
         {/* Filtres catégorie — pills avec counts */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-5 sm:mb-6">
           <button
             onClick={() => setActiveCategory('all')}
-            className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-150 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-semibold transition-all duration-150 ${
               activeCategory === 'all'
                 ? 'bg-aquiz-black text-white shadow-sm'
                 : 'bg-aquiz-gray-lightest text-aquiz-gray hover:bg-aquiz-gray-lighter'
@@ -551,7 +557,7 @@ function AidesPageContent() {
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all duration-150 flex items-center gap-2 ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-semibold transition-all duration-150 flex items-center gap-1.5 sm:gap-2 ${
                   activeCategory === cat
                     ? 'bg-aquiz-black text-white shadow-sm'
                     : 'bg-aquiz-gray-lightest text-aquiz-gray hover:bg-aquiz-gray-lighter'
@@ -585,22 +591,45 @@ function AidesPageContent() {
           )}
         </div>
 
-        {/* CTA Contact */}
-        <div className="flex items-center gap-5 p-6 rounded-2xl bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter mb-8">
-          <div className="w-12 h-12 rounded-xl bg-white border border-aquiz-gray-lighter flex items-center justify-center shrink-0 shadow-sm">
-            <Phone className="w-5 h-5 text-aquiz-gray" />
+        {/* Lead capture — Récapitulatif aides par email */}
+        {aidesEligibles.length > 0 && (
+          <div className="mb-6">
+            <LeadCaptureGate
+              titre="Recevez votre récapitulatif d'aides"
+              description={`${aidesEligibles.length} aide${aidesEligibles.length > 1 ? 's' : ''} identifiée${aidesEligibles.length > 1 ? 's' : ''} pour votre profil — gardez une trace pour vos démarches.`}
+              source="aides"
+              contexte={{
+                zone: zoneSelectionnee.zonePTZ,
+                commune: zoneSelectionnee.nomCommune,
+                departement: zoneSelectionnee.codeDepartement,
+                nbAides: aidesEligibles.length,
+                totalAides,
+              }}
+              variant="inline"
+              buttonText="Recevoir mon récapitulatif"
+              successText="Récapitulatif envoyé !"
+            />
           </div>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-aquiz-black">
-              Besoin d&apos;accompagnement ?
-            </p>
-            <p className="text-xs text-aquiz-gray-light mt-0.5">
-              Un conseiller vous aide à constituer vos dossiers d&apos;aides
-            </p>
+        )}
+
+        {/* CTA Contact */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-5 p-4 sm:p-6 rounded-2xl bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter mb-8">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white border border-aquiz-gray-lighter flex items-center justify-center shrink-0 shadow-sm">
+              <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-gray" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-aquiz-black">
+                Besoin d&apos;accompagnement ?
+              </p>
+              <p className="text-xs text-aquiz-gray-light mt-0.5">
+                Un conseiller vous aide à constituer vos dossiers d&apos;aides
+              </p>
+            </div>
           </div>
           <Button
             size="sm"
-            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-10 px-5 text-xs"
+            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-9 sm:h-10 px-4 sm:px-5 text-xs w-full sm:w-auto shrink-0"
             onClick={() => setShowContactModal(true)}
           >
             Être rappelé

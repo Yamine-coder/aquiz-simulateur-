@@ -1,30 +1,5 @@
 ﻿'use client'
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import {
-    AlertCircle,
-    ArrowLeft,
-    ArrowRight,
-    CheckCircle,
-    ChevronDown,
-    Clock,
-    CreditCard,
-    Download,
-    Info,
-    MapPin,
-    Percent,
-    Phone,
-    PiggyBank,
-    Shield
-} from 'lucide-react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useForm } from 'react-hook-form'
-
-import MiniCarteIDF from '@/components/carte/MiniCarteIDF'
-import { ConseilsAvances } from '@/components/conseils'
-import { ContactModal } from '@/components/contact'
-import { SimulationPDF } from '@/components/pdf/SimulationPDF'
 import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,8 +20,40 @@ import { useDVFData } from '@/hooks/useDVFData'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
 import { calculerScoreFaisabilite } from '@/lib/calculs/scoreFaisabilite'
 import { genererConseilsAvances } from '@/lib/conseils/genererConseilsAvances'
+import type { EnrichissementPDF } from '@/lib/pdf/enrichirPourPDF'
+import { enrichirPourPDF } from '@/lib/pdf/enrichirPourPDF'
 import { modeASchema, type ModeAFormData } from '@/lib/validators/schemas'
+import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
+import { zodResolver } from '@hookform/resolvers/zod'
+import {
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    CreditCard,
+    FileDown,
+    Info,
+    Loader2,
+    Mail,
+    MapPin,
+    Percent,
+    Phone,
+    PiggyBank,
+    Shield
+} from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useForm } from 'react-hook-form'
+
+const MiniCarteIDF = dynamic(() => import('@/components/carte/MiniCarteIDF'), { ssr: false })
+const ConseilsAvances = dynamic(() => import('@/components/conseils').then(m => ({ default: m.ConseilsAvances })), { ssr: false })
+const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
+const SimulationPDF = dynamic(() => import('@/components/pdf/SimulationPDF').then(m => ({ default: m.SimulationPDF })), { ssr: false })
 
 const STATUTS_PROFESSIONNELS = [
   { value: 'cdi', label: 'CDI', description: 'Meilleure acceptation bancaire' },
@@ -88,6 +95,12 @@ function ModeAPageContent() {
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
   const [showScoreDetail, setShowScoreDetail] = useState(false)
+  const [pdfEmailSent, setPdfEmailSent] = useState(false)
+  const [pdfEmailValue, setPdfEmailValue] = useState('')
+  const [pdfEmailLoading, setPdfEmailLoading] = useState(false)
+  const [cachedEnrichissement, setCachedEnrichissement] = useState<EnrichissementPDF | null>(null)
+  const leadStore = useLeadStore()
+  const hasLead = useLeadStore(hasValidEmail)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
   const { 
     setMode, setProfil, setParametresModeA, setResultats, reset: resetStore,
@@ -163,7 +176,8 @@ function ModeAPageContent() {
       window.history.replaceState({}, '', window.location.pathname)
     }
    
-  }, [storedResultats, storedEtape, storedProfil, storedParametresModeA, hasRestoredFromStore, setValue, isNewSimulation, setEtapeStore, resetStore])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNewSimulation])
 
   const situationFoyer = watch('situationFoyer')
   const nombreEnfants = watch('nombreEnfants') || 0
@@ -250,6 +264,14 @@ function ModeAPageContent() {
       resetStore()
     }
   }, [isLoaded, simulations, getPending, storedProfil, resetStore])
+
+  // Pré-remplir l'email du CTA PDF depuis le lead store
+  useEffect(() => {
+    if (hasLead && leadStore.email && !pdfEmailValue) {
+      setPdfEmailValue(leadStore.email)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLead])
 
   const restoreSimulation = useCallback((sim: typeof simulations[0]) => {
     if (sim.profil) {
@@ -410,16 +432,19 @@ function ModeAPageContent() {
       if (communesDept.length === 0) return { codeDept, nom: '', prixM2: 0, surface: 0, nbOpportunites: 0 }
       
       // Trier par prix croissant pour trouver les meilleures opportunités
+      // On utilise le percentile 10 (P10) au lieu du min absolu pour éviter les outliers
+      // (communes avec très peu de ventes et prix aberrants)
       const prixList = communesDept.map(c => c.prixM2Appartement).sort((a, b) => a - b)
-      const prixMin = prixList[0] || 0 // Prix de la commune la moins chère
+      const indexP10 = Math.max(0, Math.floor(prixList.length * 0.10))
+      const prixRepresentatif = prixList[indexP10] || prixList[0] || 0
       
       // Compter les opportunités (communes où on peut acheter >= 40m²)
       const surfaceMin40m2Prix = prixAchatMax / 40
       const nbOpportunites = communesDept.filter(c => c.prixM2Appartement <= surfaceMin40m2Prix).length
       
-      // Surface max = ce qu'on peut acheter dans la MEILLEURE commune du département
-      // C'est cohérent avec les opportunités affichées sur la carte
-      const surfaceMax = prixMin > 0 ? Math.round(prixAchatMax / prixMin) : 0
+      // Surface max = ce qu'on peut acheter au prix P10 du département
+      // Plus réaliste que le min absolu (qui peut être une commune à 1 vente)
+      const surfaceMax = prixRepresentatif > 0 ? Math.round(prixAchatMax / prixRepresentatif) : 0
       
       // Noms des départements
       const nomsDept: Record<string, string> = {
@@ -436,7 +461,7 @@ function ModeAPageContent() {
       return {
         codeDept,
         nom: nomsDept[codeDept] || codeDept,
-        prixM2: prixMin,
+        prixM2: prixRepresentatif,
         surface: surfaceMax,
         nbOpportunites
       }
@@ -502,7 +527,7 @@ function ModeAPageContent() {
   }, [apport, calculs])
 
   // Export PDF Premium - Design professionnel avec @react-pdf/renderer
-  const generatePDF = useCallback(async () => {
+  const generatePDF = useCallback(async (enrichissement?: EnrichissementPDF) => {
     // Génération des conseils pour le PDF
     const resultatsConseils = genererConseilsAvances({
       age,
@@ -555,6 +580,9 @@ function ModeAPageContent() {
         scoreDetails={scoreDetails}
         pieData={pieData}
         conseils={resultatsConseils}
+        marche={enrichissement?.marche}
+        quartier={enrichissement?.quartier}
+        syntheseIA={enrichissement?.syntheseIA}
       />
     ).toBlob()
 
@@ -612,6 +640,62 @@ function ModeAPageContent() {
   const goToPrevEtape = () => { const prevIndex = etapeActuelleIndex - 1; if (prevIndex >= 0) setEtape(ETAPES[prevIndex].id) }
   const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(montant)
 
+  // Handler: envoyer le PDF par email (bonus, pas de gate)
+  const handleSendPdfEmail = useCallback(async () => {
+    if (!pdfEmailValue.includes('@') || pdfEmailLoading) return
+    setPdfEmailLoading(true)
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pdfEmailValue,
+          source: 'simulateur-a',
+          contexte: {
+            type: 'pdf-bonus',
+            prixAchatMax: calculs.prixAchatMax,
+            capitalEmpruntable: calculs.capitalEmpruntable,
+            scoreFaisabilite,
+            tauxEndettement: calculs.tauxEndettementProjet,
+            dureeAns,
+            apport,
+          },
+        }),
+      })
+      if (!res.ok) throw new Error('Erreur')
+      // Sync lead store
+      leadStore.capture(pdfEmailValue, 'simulateur-a', undefined, {
+        type: 'pdf-bonus',
+        prixAchatMax: calculs.prixAchatMax,
+      })
+      setPdfEmailSent(true)
+      // Enrichir le PDF avec IA + données marché (Mode A = pas de codePostal)
+      const enrichissement = await enrichirPourPDF({
+        mode: 'A',
+        age,
+        statutProfessionnel,
+        situationFoyer,
+        nombreEnfants,
+        revenusMensuels: calculs.revenusMensuelsTotal,
+        chargesMensuelles: calculs.chargesMensuellesTotal,
+        prixAchatMax: calculs.prixAchatMax,
+        capitalEmpruntable: calculs.capitalEmpruntable,
+        apport,
+        dureeAns,
+        tauxInteret,
+        mensualite: mensualiteMax,
+        scoreFaisabilite,
+        tauxEndettement: calculs.tauxEndettementProjet,
+        resteAVivre: calculs.resteAVivre,
+      })
+      setCachedEnrichissement(enrichissement)
+      await generatePDF(enrichissement)
+    } catch { /* silent */ } finally {
+      setPdfEmailLoading(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfEmailValue, pdfEmailLoading, calculs.prixAchatMax, calculs.capitalEmpruntable, calculs.tauxEndettementProjet, calculs.revenusMensuelsTotal, calculs.chargesMensuellesTotal, calculs.resteAVivre, scoreFaisabilite, dureeAns, apport, tauxInteret, mensualiteMax, age, statutProfessionnel, situationFoyer, nombreEnfants, generatePDF])
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-white">
@@ -622,7 +706,17 @@ function ModeAPageContent() {
         <div className="border-b border-aquiz-gray-lighter/60 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Desktop - stepper + auto-save indicator */}
-            <div className="hidden md:flex items-center py-4">
+            <div className="hidden md:flex items-center py-4 relative">
+              {/* Bouton retour desktop — label contextuel */}
+              <button
+                type="button"
+                onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
+                className="flex items-center gap-1.5 mr-5 px-3 py-1.5 rounded-lg text-sm text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                {etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}
+              </button>
+              <div className="w-px h-6 bg-aquiz-gray-lighter mr-5" />
               {ETAPES.map((e, index) => {
                 const isActive = e.id === etape
                 const isPassed = index < etapeActuelleIndex
@@ -663,15 +757,21 @@ function ModeAPageContent() {
                   </div>
                 )
               })}
-              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="ml-auto" />
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="absolute right-0 top-1/2 -translate-y-1/2" />
             </div>
             
             {/* Mobile */}
             <div className="md:hidden py-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-aquiz-green text-white text-xs font-bold flex items-center justify-center shadow-md shadow-aquiz-green/25">
-                  {etapeActuelleIndex + 1}
-                </div>
+              <div className="flex items-center gap-2.5">
+                {/* Bouton retour mobile — label contextuel */}
+                <button
+                  type="button"
+                  onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
+                  className="w-8 h-8 rounded-full bg-aquiz-gray-lightest flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lighter transition-colors"
+                  aria-label={etapeActuelleIndex === 0 ? 'Retour' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                </button>
                 <div>
                   <p className="text-sm font-semibold text-aquiz-black">{ETAPES[etapeActuelleIndex].label}</p>
                   <p className="text-[11px] text-aquiz-gray">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
@@ -680,29 +780,36 @@ function ModeAPageContent() {
               <div className="flex items-center gap-3">
                 <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
                 <div className="flex gap-1.5">
-                {ETAPES.map((_, index) => (
-                  <div 
-                    key={index}
-                    className={`h-1 rounded-full transition-all duration-300 ${
-                      index < etapeActuelleIndex 
-                        ? 'bg-aquiz-green w-5' 
-                        : index === etapeActuelleIndex 
-                          ? 'bg-aquiz-green w-7' 
-                          : 'bg-aquiz-gray-lighter w-5'
-                    }`}
-                  />
-                ))}
+                {ETAPES.map((e, index) => {
+                  const isClickable = canGoToEtape(e.id)
+                  return (
+                    <button
+                      type="button"
+                      key={e.id}
+                      onClick={() => isClickable && goToEtape(e.id)}
+                      disabled={!isClickable}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        index < etapeActuelleIndex 
+                          ? 'bg-aquiz-green w-5' 
+                          : index === etapeActuelleIndex 
+                            ? 'bg-aquiz-green w-7' 
+                            : 'bg-aquiz-gray-lighter w-5'
+                      } ${isClickable ? 'cursor-pointer hover:opacity-70' : 'cursor-not-allowed'}`}
+                      aria-label={`Étape ${index + 1}: ${e.label}`}
+                    />
+                  )
+                })}
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <main className="max-w-5xl mx-auto px-6 py-6">
+        <main className="max-w-5xl mx-auto px-3 sm:px-6 py-6">
           <form onSubmit={handleSubmit(onSubmit)}>
             {etape === 'profil' && (
               <div className="animate-fade-in">
-                <div className="grid lg:grid-cols-[1fr,340px] gap-8">
+                <div className="grid lg:grid-cols-[1fr,340px] gap-6 lg:gap-8">
                   
                   {/* === FORMULAIRE === */}
                   <div className="space-y-5">
@@ -722,9 +829,9 @@ function ModeAPageContent() {
                         <h2 className="font-semibold text-aquiz-black text-sm">Situation personnelle</h2>
                       </div>
                       
-                      <div className="p-6">
+                      <div className="p-4 sm:p-6">
                         {/* Ligne 1: Âge + Statut */}
-                        <div className="grid grid-cols-2 gap-8 mb-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-8 mb-6">
                           {/* Âge */}
                           <div className="space-y-3">
                             <div className="flex justify-between items-center">
@@ -757,7 +864,7 @@ function ModeAPageContent() {
                         </div>
                         
                         {/* Ligne 2: Situation + Enfants */}
-                        <div className="grid grid-cols-2 gap-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-8">
                           {/* Foyer - avec coche animée */}
                           <div className="space-y-3">
                             <Label className="text-sm font-medium text-aquiz-gray-dark">Situation</Label>
@@ -815,7 +922,7 @@ function ModeAPageContent() {
                         <h2 className="font-semibold text-aquiz-black text-sm">Revenus mensuels nets</h2>
                       </div>
                       
-                      <div className="p-5">
+                      <div className="p-4 sm:p-5">
                         <div className={`grid gap-4 ${situationFoyer === 'couple' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                           {/* Salaire 1 */}
                           <div className="space-y-2">
@@ -880,7 +987,7 @@ function ModeAPageContent() {
                         <h2 className="font-semibold text-aquiz-black text-sm">Charges mensuelles</h2>
                       </div>
                       
-                      <div className="p-5">
+                      <div className="p-4 sm:p-5">
                         <div className="grid sm:grid-cols-2 gap-4">
                           {/* Crédits en cours */}
                           <div className="space-y-2">
@@ -936,7 +1043,7 @@ function ModeAPageContent() {
                     <div className="sticky top-24 space-y-4">
                       
                       {/* Card Résultat principal */}
-                      <div className="rounded-xl border border-aquiz-green/20 bg-aquiz-green/5 overflow-hidden">
+                      <div className="rounded-xl border border-aquiz-green/20 bg-aquiz-green/5 overflow-hidden" aria-live="polite">
                         <div className="px-4 py-2.5 border-b border-aquiz-green/15">
                           <p className="text-[11px] text-aquiz-green uppercase tracking-wider font-semibold">Mensualité maximale</p>
                         </div>
@@ -949,7 +1056,7 @@ function ModeAPageContent() {
                             <span className="text-sm font-normal text-aquiz-gray">/mois</span>
                           </p>
                           {mensualiteRecommandee > 0 && (
-                            <p className="text-[10px] text-aquiz-gray mt-1">Assurance incluse dans le calcul HCSF</p>
+                            <p className="text-[10px] text-aquiz-gray mt-1">Assurance incluse dans le calcul réglementaire</p>
                           )}
                         </div>
                       </div>
@@ -1055,11 +1162,8 @@ function ModeAPageContent() {
                   {/* === FORMULAIRE === */}
                   <div className="space-y-5">
                     
-                    {/* Header + Retour */}
+                    {/* Header */}
                     <div className="mb-2">
-                      <button type="button" onClick={goToPrevEtape} className="flex items-center gap-2 text-aquiz-gray hover:text-aquiz-black transition-colors text-sm mb-3">
-                        <ArrowLeft className="w-4 h-4" />Modifier mon profil
-                      </button>
                       <h2 className="text-xl font-bold text-aquiz-black">Votre simulation</h2>
                       <p className="text-aquiz-gray text-sm mt-0.5">Définissez votre budget et les paramètres de votre projet</p>
                     </div>
@@ -1087,7 +1191,7 @@ function ModeAPageContent() {
                                     <Info className="w-3 h-3" />
                                   </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="left" className="max-w-72 text-xs leading-relaxed">
+                                <TooltipContent side="top" align="end" collisionPadding={16} className="max-w-72 text-xs leading-relaxed">
                                   <p className="font-semibold mb-1">Haut Conseil de Stabilité Financière</p>
                                   <p>Depuis janvier 2022, le HCSF impose aux banques :</p>
                                   <ul className="mt-1 space-y-0.5">
@@ -1172,7 +1276,7 @@ function ModeAPageContent() {
                             <span>10 ans</span>
                             <span>15 ans</span>
                             <span>20 ans</span>
-                            <span>25 ans (max HCSF)</span>
+                            <span>25 ans (max réglementaire)</span>
                           </div>
                         </div>
                         
@@ -1186,8 +1290,8 @@ function ModeAPageContent() {
                                   <Info className="w-4 h-4" />
                                 </button>
                               </TooltipTrigger>
-                              <TooltipContent side="left" className="max-w-72 text-xs leading-relaxed">
-                                <p className="font-semibold mb-1.5">Taux moyens constatés (fév. 2025)</p>
+                              <TooltipContent side="top" align="center" collisionPadding={16} className="max-w-72 text-xs leading-relaxed">
+                                <p className="font-semibold mb-1.5">Taux moyens constatés (janv. 2026)</p>
                                 <ul className="space-y-1">
                                   <li><strong>3.0%</strong> — Profil premium : CDI cadre, revenus élevés, apport 20%+</li>
                                   <li><strong>3.2%</strong> — Très bon profil : CDI stable, bon apport</li>
@@ -1232,12 +1336,12 @@ function ModeAPageContent() {
                         </div>
                         
                         {/* Type de bien — compact inline */}
-                        <div className="flex items-center gap-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                           <Label className="text-sm font-medium text-aquiz-gray-dark whitespace-nowrap">Type de bien</Label>
                           <RadioGroup value={typeBien} onValueChange={(value) => setValue('typeBien', value as 'neuf' | 'ancien')} className="flex gap-2 flex-1">
                             <label 
                               htmlFor="ancien" 
-                              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
+                              className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
                                 typeBien === 'ancien' 
                                   ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-medium' 
                                   : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
@@ -1249,7 +1353,7 @@ function ModeAPageContent() {
                             </label>
                             <label 
                               htmlFor="neuf" 
-                              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
+                              className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-2.5 rounded-lg border cursor-pointer transition-all text-center ${
                                 typeBien === 'neuf' 
                                   ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-black font-medium' 
                                   : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light text-aquiz-gray'
@@ -1266,7 +1370,7 @@ function ModeAPageContent() {
                     
                     {/* Alerte si problème */}
                     {mensualiteMax > 0 && (calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque') && (
-                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-xl" role="alert" aria-live="assertive">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
                             <AlertCircle className="w-4 h-4 text-red-500" />
@@ -1303,7 +1407,7 @@ function ModeAPageContent() {
                     <div className="sticky top-24 space-y-4">
                       
                       {/* Card Résultat principal — hero */}
-                      <div className="rounded-2xl overflow-hidden border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/5">
+                      <div className="rounded-2xl overflow-hidden border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/5" aria-live="polite">
                         <div className="p-5">
                           <p className="text-[10px] text-aquiz-green uppercase tracking-widest font-semibold mb-3 flex items-center gap-1.5">
                             <CheckCircle className="w-3 h-3" />
@@ -1330,7 +1434,7 @@ function ModeAPageContent() {
                               </div>
                               <div className="text-right">
                                 <p className="text-[10px] text-aquiz-gray">sur <span className="font-semibold text-aquiz-black">{dureeAns} ans</span> à <span className="font-semibold text-aquiz-black">{tauxInteret.toFixed(1)}%</span></p>
-                                <p className="text-[10px] text-aquiz-gray mt-0.5">Assurance incluse dans le calcul HCSF</p>
+                                <p className="text-[10px] text-aquiz-gray mt-0.5">Assurance incluse dans le calcul réglementaire</p>
                               </div>
                             </div>
                           </div>
@@ -1390,7 +1494,7 @@ function ModeAPageContent() {
                               </div>
                               <div className="flex justify-between mt-1">
                                 <span className="text-[9px] text-aquiz-gray">0%</span>
-                                <span className={`text-[9px] font-medium ${calculs.depasseEndettement ? 'text-red-500' : 'text-aquiz-gray'}`}>35% max HCSF</span>
+                                <span className={`text-[9px] font-medium ${calculs.depasseEndettement ? 'text-red-500' : 'text-aquiz-gray'}`}>35% max réglementaire</span>
                               </div>
                             </>
                           )}
@@ -1434,43 +1538,124 @@ function ModeAPageContent() {
                 
                 {/* Bouton Mobile */}
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
-                  <Button 
-                    type="button" 
-                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
-                    onClick={goToNextEtape} 
-                    disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
-                  >
-                    Voir mon score
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      className="h-12 px-3 border-aquiz-gray-lighter rounded-xl" 
+                      onClick={goToPrevEtape}
+                      aria-label="Retour au profil"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      type="button" 
+                      className="flex-1 bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
+                      onClick={goToNextEtape} 
+                      disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
+                    >
+                      Voir mon score
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="lg:hidden h-20" />
               </div>
             )}
 
             {etape === 'resultats' && (
-              <div className="animate-fade-in -mx-4 sm:mx-0">
+              <div className="animate-fade-in -mx-4 sm:mx-0" aria-live="polite">
 
                 <div className="px-4 sm:px-0 space-y-4">
+
+                  {/* Header résultat — carte récap */}
+                  <div className="rounded-2xl border border-aquiz-gray-lighter bg-white overflow-hidden shadow-sm">
+                    <div className="h-1 bg-aquiz-green" />
+
+                    <div className="px-4 sm:px-7 py-4 sm:py-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                        <div className="min-w-0">
+                          <h2 className="text-base sm:text-xl font-bold text-aquiz-black leading-tight">
+                            Ce que je peux acheter
+                          </h2>
+                          <p className="text-xs sm:text-sm text-aquiz-gray mt-0.5 sm:mt-1">
+                            Budget max <span className="font-semibold text-aquiz-green">{formatMontant(calculs.prixAchatMax)} €</span> · {formatMontant(mensualiteRecommandee)} €/mois sur {dureeAns} ans
+                          </p>
+                        </div>
+
+                        {/* Actions — responsive inline */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={goToPrevEtape}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-xs font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200"
+                          >
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                            Modifier
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.getElementById('pdf-gate')
+                              if (!el) return
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              el.classList.add('animate-pulse-highlight')
+                              setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                            }}
+                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
+                          >
+                            <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            Mon rapport PDF
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Keyframe for pulse highlight + carte animations */}
+                    <style>{`
+                      @keyframes pulseHighlight {
+                        0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+                        40% { box-shadow: 0 0 0 12px rgba(34,197,94,0.15); }
+                        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+                      }
+                      .animate-pulse-highlight {
+                        animation: pulseHighlight 0.9s ease-out 2;
+                      }
+                      @keyframes shimmer {
+                        0% { transform: translateX(-100%); }
+                        100% { transform: translateX(200%); }
+                      }
+                      .animate-shimmer {
+                        animation: shimmer 2.5s ease-in-out infinite;
+                      }
+                      @keyframes ctaGlow {
+                        0%, 100% { box-shadow: 0 4px 15px rgba(16,185,129,0.25); }
+                        50% { box-shadow: 0 4px 25px rgba(16,185,129,0.45), 0 0 40px rgba(16,185,129,0.15); }
+                      }
+                      .animate-cta-glow {
+                        animation: ctaGlow 3s ease-in-out infinite;
+                      }
+                    `}</style>
+                  </div>
                   
                   {/* CARTE IDF INTERACTIVE - EN PREMIER (Above the fold) */}
                   <div className="bg-white rounded-2xl shadow-sm border border-aquiz-gray-lighter overflow-hidden">
                     {/* Header compact */}
-                    <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                    <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-gray-lighter">
+                      <div className="flex items-start sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
                             <MapPin className="w-4 h-4 text-aquiz-green" />
                           </div>
-                          <div>
-                            <h2 className="font-bold text-aquiz-black text-sm">Carte des surfaces accessibles</h2>
-                            <p className="text-[11px] text-aquiz-gray">
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-semibold mr-1">DVF 2025</span>
+                          <div className="min-w-0">
+                            <h2 className="font-bold text-aquiz-black text-[13px] sm:text-sm leading-tight">Carte des surfaces accessibles</h2>
+                            <p className="text-[10px] sm:text-[11px] text-aquiz-gray mt-0.5">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded text-[9px] font-semibold mr-1">Prix 2026</span>
                               Budget {formatMontant(calculs.prixAchatMax)} €
                             </p>
                           </div>
                         </div>
-                        <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold ${!calculs.depasseEndettement ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'}`}>
+                        <div className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold shrink-0 ${!calculs.depasseEndettement ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'}`}>
                           {!calculs.depasseEndettement ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                           {!calculs.depasseEndettement ? 'Finançable' : 'Non finançable'}
                         </div>
@@ -1480,66 +1665,102 @@ function ModeAPageContent() {
                     {/* Carte Leaflet interactive */}
                     <MiniCarteIDF departements={calculs.apercuSurfaces} onExplore={saveAndGoToCarte} />
                     
-                    {/* Statistiques rapides */}
-                    <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-white border-t border-slate-100">
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500">Jusqu&apos;à :</span>
-                            <span className="font-bold text-emerald-600">
-                              {Math.max(...calculs.apercuSurfaces.map(z => z.surface || 0))} m² ({calculs.apercuSurfaces.find(z => z.surface === Math.max(...calculs.apercuSurfaces.map(a => a.surface || 0)))?.nom})
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-slate-500">
-                          <span className="font-semibold text-emerald-600">{calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)}</span> communes accessibles
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Détails par zone sous la carte - Redesign */}
-                    <div className="px-4 py-4 border-t border-slate-100">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {calculs.apercuSurfaces
-                          .sort((a, b) => (b.surface || 0) - (a.surface || 0))
-                          .slice(0, 4)
-                          .map((zone, index) => (
-                          <div key={zone.codeDept} className={`relative flex items-center gap-2.5 p-3 rounded-xl transition-all cursor-pointer ${
-                            (zone.surface || 0) >= 40 ? 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200' :
-                            (zone.surface || 0) >= 25 ? 'bg-amber-50 hover:bg-amber-100 border border-amber-200' : 
-                            'bg-slate-50 hover:bg-slate-100 border border-slate-200'
-                          }`}>
-                            {index === 0 && (
-                              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-aquiz-green rounded-full flex items-center justify-center text-white text-[9px] font-bold shadow">
-                                1
-                              </div>
-                            )}
-                            <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ${
-                              (zone.surface || 0) >= 40 ? 'bg-emerald-500' :
-                              (zone.surface || 0) >= 25 ? 'bg-amber-500' : 'bg-slate-400'
-                            }`}>{zone.codeDept}</div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[10px] text-slate-500 truncate">{zone.nom}</p>
-                              <p className={`text-sm font-bold ${
-                                (zone.surface || 0) >= 40 ? 'text-emerald-700' :
-                                (zone.surface || 0) >= 25 ? 'text-amber-700' : 'text-slate-600'
-                              }`}>jusqu&apos;à {zone.surface} m²</p>
-                              {(zone.nbOpportunites || 0) > 0 && (
-                                <p className="text-[9px] text-emerald-600 font-medium">{zone.nbOpportunites} commune{(zone.nbOpportunites || 0) > 1 ? 's' : ''} accessible{(zone.nbOpportunites || 0) > 1 ? 's' : ''}</p>
-                              )}
+                    {/* Insight personnalisé — accroche contextuelle */}
+                    {(() => {
+                      const sorted = [...calculs.apercuSurfaces].sort((a, b) => (b.surface || 0) - (a.surface || 0))
+                      const best = sorted[0]
+                      const totalCommunes = calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)
+                      // Types basés sur surface d'appartement (données = prixM2Appartement)
+                      const surfaceType = (best?.surface || 0) >= 80 ? 'un grand T4+' : (best?.surface || 0) >= 60 ? 'un T3 familial' : (best?.surface || 0) >= 45 ? 'un T3 confortable' : (best?.surface || 0) >= 30 ? 'un T2 lumineux' : 'un studio'
+                      return (
+                        <div className="px-4 py-3 bg-linear-to-r from-emerald-50 via-white to-amber-50 border-t border-emerald-100">
+                          <div className="flex items-start gap-2.5">
+                            <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
+                              <Info className="w-3.5 h-3.5 text-emerald-600" />
                             </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-emerald-800">
+                                En {best?.nom}, votre budget permet {surfaceType} ({best?.surface} m²)
+                              </p>
+                              <p className="text-[10px] text-slate-500 mt-0.5">
+                                {totalCommunes} communes accessibles dans votre budget en Ile-de-France
+                              </p>
+                            </div>
+                            <button type="button" onClick={saveAndGoToCarte} className="shrink-0 text-[10px] font-bold text-emerald-600 hover:text-emerald-700 underline underline-offset-2 cursor-pointer mt-0.5">
+                              Voir tout
+                            </button>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )
+                    })()}
+                    
+                    {/* Détails par zone sous la carte - Top 3 + teaser */}
+                    <div className="px-3 sm:px-4 py-3 sm:py-4 border-t border-slate-100">
+                      {(() => {
+                        const sortedZones = [...calculs.apercuSurfaces].sort((a, b) => (b.surface || 0) - (a.surface || 0))
+                        const top3 = sortedZones.slice(0, 3)
+                        const remaining = sortedZones.length - 3
+                        return (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            {top3.map((zone, index) => (
+                              <div key={zone.codeDept} className={`relative flex items-center gap-2.5 p-3 rounded-xl transition-all cursor-pointer ${
+                                (zone.surface || 0) >= 40 ? 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200' :
+                                (zone.surface || 0) >= 25 ? 'bg-amber-50 hover:bg-amber-100 border border-amber-200' : 
+                                'bg-slate-50 hover:bg-slate-100 border border-slate-200'
+                              }`} onClick={saveAndGoToCarte}>
+                                {index === 0 && (
+                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-aquiz-green rounded-full flex items-center justify-center text-white text-[9px] font-bold shadow">
+                                    1
+                                  </div>
+                                )}
+                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ${
+                                  (zone.surface || 0) >= 40 ? 'bg-emerald-500' :
+                                  (zone.surface || 0) >= 25 ? 'bg-amber-500' : 'bg-slate-400'
+                                }`}>{zone.codeDept}</div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] text-slate-500 truncate">{zone.nom}</p>
+                                  <p className={`text-sm font-bold ${
+                                    (zone.surface || 0) >= 40 ? 'text-emerald-700' :
+                                    (zone.surface || 0) >= 25 ? 'text-amber-700' : 'text-slate-600'
+                                  }`}>jusqu&apos;à {zone.surface} m²</p>
+                                  {(zone.nbOpportunites || 0) > 0 && (
+                                    <p className="text-[9px] text-emerald-600 font-medium">{zone.nbOpportunites} commune{(zone.nbOpportunites || 0) > 1 ? 's' : ''} accessible{(zone.nbOpportunites || 0) > 1 ? 's' : ''}</p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            {/* Teaser 4e carte — floue, cliquable */}
+                            {remaining > 0 && (
+                              <button
+                                type="button"
+                                onClick={saveAndGoToCarte}
+                                className="relative flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50 transition-all cursor-pointer group overflow-hidden"
+                              >
+                                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+                                <div className="w-9 h-9 rounded-lg bg-emerald-200/60 flex items-center justify-center text-emerald-500 text-xs font-bold">
+                                  +{remaining}
+                                </div>
+                                <div className="min-w-0 flex-1 relative">
+                                  <p className="text-[10px] text-emerald-600 font-semibold">Autres departements</p>
+                                  <p className="text-xs font-bold text-emerald-700 group-hover:underline underline-offset-2">Explorer la carte</p>
+                                  <p className="text-[9px] text-emerald-500 mt-0.5">PTZ, prix, communes...</p>
+                                </div>
+                                <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
 
-                    {/* CTA Explorer — pleine largeur, vert, en bas de la carte */}
-                    <div className="px-4 pb-4 pt-1">
-                      <button type="button" onClick={saveAndGoToCarte} className="w-full flex items-center justify-center gap-2.5 py-3 bg-gradient-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white rounded-xl shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.01] active:scale-[0.98] transition-all group cursor-pointer">
-                        <MapPin className="w-4.5 h-4.5 group-hover:animate-bounce" />
-                        <span className="text-sm font-bold tracking-tight">Explorer la carte interactive</span>
-                        <span className="text-xs text-white/70 font-medium hidden sm:inline">— {calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)} communes, PTZ, prix au m²</span>
-                        <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                    {/* CTA Explorer — pleine largeur, animé */}
+                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1">
+                      <button type="button" onClick={saveAndGoToCarte} className="relative w-full flex items-center justify-center gap-2 sm:gap-2.5 py-3 sm:py-3.5 bg-linear-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white rounded-xl shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.01] active:scale-[0.98] transition-all group cursor-pointer overflow-hidden animate-cta-glow">
+                        <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                        <MapPin className="w-4 h-4 sm:w-4.5 sm:h-4.5 group-hover:animate-bounce relative" />
+                        <span className="text-xs sm:text-sm font-bold tracking-tight relative">Explorer la carte interactive</span>
+                        <span className="text-xs text-white/80 font-medium hidden sm:inline relative">— {calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)} communes, PTZ, prix au m²</span>
+                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1 group-hover:translate-x-1 transition-transform relative" />
                       </button>
                     </div>
                     
@@ -1719,7 +1940,7 @@ function ModeAPageContent() {
                     </div>
                   </div>
 
-                  {/* CONSEILS AQUIZ AVANCÉS - Système professionnel */}
+                  {/* CONSEILS AQUIZ AVANCÉS - Système professionnel — GATE EMAIL */}
                   {!calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque' && (() => {
                     const resultatsConseils = genererConseilsAvances({
                       // Profil
@@ -1761,7 +1982,7 @@ function ModeAPageContent() {
 
                   {/* ALERTE SI PROBLÈME + CTA CONSEILLER */}
                   {(calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque') && (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <div className="p-4 bg-red-50 border border-red-200 rounded-xl" role="alert" aria-live="assertive">
                       <div className="flex items-start gap-3">
                         <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                           <AlertCircle className="w-4 h-4 text-red-500" />
@@ -1783,43 +2004,138 @@ function ModeAPageContent() {
                     </div>
                   )}
 
-                  {/* CTA Télécharger PDF — consécration du projet */}
-                  <div className="relative overflow-hidden rounded-2xl border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/10">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-aquiz-green/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-aquiz-green/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-                    <div className="relative p-6 sm:p-8 text-center">
-                      <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-4">
-                        <Download className="w-7 h-7 text-aquiz-green" />
+                  {/* CTA Bonus — Recevez votre étude personnalisée PDF par email */}
+                  <div id="pdf-gate" className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+                    <div className="px-5 py-5">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                          <FileDown className="w-5 h-5 text-aquiz-green" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-sm text-aquiz-black">
+                            {pdfEmailSent ? 'Étude personnalisée téléchargée !' : 'Votre étude complète en PDF'}
+                          </h3>
+                          <p className="text-aquiz-gray text-xs">
+                            {pdfEmailSent ? 'Vous pouvez la re-télécharger à tout moment.' : 'Tout ce qu\'il faut pour passer à l\'action — en un seul document.'}
+                          </p>
+                        </div>
                       </div>
-                      <h3 className="text-lg font-bold text-aquiz-black mb-1">Votre rapport de simulation</h3>
-                      <p className="text-sm text-aquiz-gray mb-5 max-w-md mx-auto">
-                        Téléchargez votre étude complète au format PDF : budget, capacité d&apos;emprunt, conseils personnalisés et opportunités géographiques.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={generatePDF}
-                        className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all hover:shadow-lg hover:shadow-aquiz-green/30 hover:-translate-y-0.5"
+
+                      {!pdfEmailSent && (
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                            <span className="text-[11px] text-aquiz-black/80">Budget détaillé + frais</span>
+                          </div>
+                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                            <span className="text-[11px] text-aquiz-black/80">Analyse IA personnalisée</span>
+                          </div>
+                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                            <span className="text-[11px] text-aquiz-black/80">Score quartier sur 9 axes</span>
+                          </div>
+                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                            <span className="text-[11px] text-aquiz-black/80">Risques naturels de la zone</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {pdfEmailSent ? (
+                        <button
+                          type="button"
+                          onClick={() => generatePDF(cachedEnrichissement ?? undefined)}
+                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                        >
+                          <FileDown className="w-4 h-4" />
+                          Re-télécharger mon étude
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <div className="flex-1 relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                              <input
+                                type="email"
+                                value={pdfEmailValue}
+                                onChange={(e) => setPdfEmailValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                                placeholder="Votre email"
+                                className="w-full pl-10 pr-4 py-3 text-sm border border-aquiz-gray-lighter rounded-xl focus:outline-none focus:ring-2 focus:ring-aquiz-green/30 bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleSendPdfEmail}
+                              disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
+                              className="px-5 py-3 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-50 text-white font-bold rounded-xl transition-all text-sm shrink-0 flex items-center gap-2"
+                            >
+                              {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                              {pdfEmailLoading ? 'Analyse en cours…' : 'Recevoir'}
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
+                            <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
+                            <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CTA Accompagnement projet */}
+                  <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+                    <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                          <Phone className="w-5 h-5 text-slate-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-aquiz-black font-semibold text-sm">
+                            Besoin d&apos;aide pour la suite ?
+                          </h3>
+                          <p className="text-aquiz-gray text-xs">
+                            Échangez avec un conseiller pour valider votre projet — sans engagement
+                          </p>
+                        </div>
+                      </div>
+                      <a
+                        href="https://calendly.com/contact-aquiz/30min"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
                       >
-                        <Download className="w-5 h-5" />
-                        Télécharger mon rapport PDF
-                      </button>
-                      <p className="text-[10px] text-aquiz-gray mt-3">Gratuit • Aucune inscription requise</p>
+                        Échanger avec un conseiller
+                        <ArrowRight className="w-4 h-4" />
+                      </a>
                     </div>
                   </div>
 
                   {/* Disclaimer */}
                   <p className="text-[10px] text-aquiz-gray text-center pt-2">
-                    Simulation indicative • Critères HCSF 2025 • Prix DVF data.gouv.fr
+                    Simulation indicative • Normes bancaires 2026 • Prix data.gouv.fr
                   </p>
                 </div>
                 
                 {/* Bouton Mobile fixe */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-aquiz-gray-lighter z-20">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-aquiz-gray-lighter z-20">
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" className="h-11 px-3 border-aquiz-gray-lighter rounded-xl" onClick={() => goToEtape('simulation')}>
                       <ArrowLeft className="w-4 h-4" />
                     </Button>
-                    <Button type="button" onClick={saveAndGoToCarte} className="flex-1 h-11 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-2 text-sm">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('pdf-gate')
+                        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }}
+                      className="flex-1 h-11 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-2 text-sm"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Mon PDF
+                    </Button>
+                    <Button type="button" onClick={saveAndGoToCarte} className="flex-1 h-11 bg-white hover:bg-aquiz-gray-lightest text-aquiz-black border border-aquiz-gray-lighter rounded-xl gap-2 text-sm">
                       <MapPin className="w-4 h-4" />
                       Carte
                     </Button>
@@ -1833,7 +2149,7 @@ function ModeAPageContent() {
                     </Button>
                   </div>
                 </div>
-                <div className="lg:hidden h-24" />
+                <div className="lg:hidden h-28" />
               </div>
             )}
 

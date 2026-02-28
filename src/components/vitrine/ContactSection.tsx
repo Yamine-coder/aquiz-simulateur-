@@ -34,7 +34,7 @@ export function ContactSection() {
           <div className="absolute -top-32 -right-32 w-80 h-80 bg-aquiz-green/10 rounded-full blur-[100px]" />
           <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-aquiz-green/5 rounded-full blur-[80px]" />
 
-          <div className="relative h-full flex flex-col justify-center px-8 sm:px-12 lg:px-14 py-10 lg:py-12">
+          <div className="relative h-full flex flex-col justify-center px-5 sm:px-8 md:px-12 lg:px-14 py-8 sm:py-10 lg:py-12">
             <FadeIn>
               {/* Badge */}
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-aquiz-green mb-3">
@@ -139,7 +139,7 @@ export function ContactSection() {
 
         {/* ─── Colonne droite — Form ─── */}
         <div className="bg-aquiz-gray-lightest flex items-center">
-            <div className="w-full max-w-lg mx-auto px-6 sm:px-10 lg:px-12 py-8 lg:py-10">
+            <div className="w-full max-w-lg mx-auto px-5 sm:px-10 lg:px-12 py-6 sm:py-8 lg:py-10">
             <FadeIn delay={0.15}>
               <div className="mb-6">
                 <h3 className="text-xl font-bold text-aquiz-black mb-1">

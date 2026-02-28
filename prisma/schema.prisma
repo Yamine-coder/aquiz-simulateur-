@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// Messages de contact (formulaire principal)
+model Contact {
+  id        String   @id @default(cuid())
+  nom       String
+  email     String
+  telephone String   @default("")
+  message   String
+  status    String   @default("nouveau") // nouveau | lu | traité | archivé
+  emailSent Boolean  @default(false)
+  ip        String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Demandes de rappel téléphonique
+model Rappel {
+  id               String   @id @default(cuid())
+  prenom           String
+  telephone        String
+  creneau          String   // matin | midi | soir
+  budget           Float?
+  situation        String?
+  tauxEndettement  Float?
+  status           String   @default("nouveau") // nouveau | rappelé | traité | archivé
+  notes            String   @default("")
+  emailSent        Boolean  @default(false)
+  webhookSent      Boolean  @default(false)
+  ip               String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+/// Leads capturés (email gate PDF + comparateur)
+model Lead {
+  id        String   @id @default(cuid())
+  email     String
+  prenom    String   @default("")
+  source    String   // comparateur | simulateur-a | simulateur-b | carte | aides
+  contexte  String   @default("") // JSON libre : budget, score, nb biens, etc.
+  emailSent Boolean  @default(false)
+  ip        String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([source])
+}

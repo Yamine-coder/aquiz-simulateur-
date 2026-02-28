@@ -348,8 +348,15 @@ function scorerPrixMarche(
       impact: score - 50
     })
   } else if (ecart <= 5) {
-    detail = 'Prix aligné au marché'
+    detail = `Prix aligné au marché (${ecart > 0 ? '+' : ''}${ecart.toFixed(0)}%)`
     impact = 'neutre'
+    points.push({
+      texte: 'Prix cohérent avec le marché',
+      detail: `Écart de ${ecart > 0 ? '+' : ''}${ecart.toFixed(0)}% vs médiane DVF du secteur${enrichi.marche.prixM2MedianMarche ? ` (${Math.round(enrichi.marche.prixM2MedianMarche).toLocaleString('fr-FR')} €/m²)` : ''} — prix justifié`,
+      type: 'conseil',
+      axe: 'prixMarche',
+      impact: 0
+    })
   } else if (ecart <= 15) {
     detail = `+${ecart.toFixed(0)}% au-dessus du marché — marge de négo`
     impact = 'negatif'
@@ -421,6 +428,13 @@ function scorerRendement(
   } else if (rendementBrut >= 4) {
     detail = `Rendement brut ${rendementBrut.toFixed(1)}% — correct`
     impact = 'neutre'
+    points.push({
+      texte: `Rendement correct : ${rendementBrut.toFixed(1)}%`,
+      detail: `Loyer estimé ~${loyerEstime} €/mois (${(loyerEstime * 12).toLocaleString('fr-FR')} €/an) — complément de revenu raisonnable`,
+      type: 'conseil',
+      axe: 'rendement',
+      impact: 0
+    })
   } else if (rendementBrut >= 2) {
     detail = `Rendement brut ${rendementBrut.toFixed(1)}% — faible`
     impact = 'negatif'
@@ -500,6 +514,23 @@ function scorerEnergie(
   } else if (['C', 'D'].includes(annonce.dpe)) {
     detail = `DPE ${annonce.dpe} — ~${coutAnnuel} €/an d'énergie`
     impact = annonce.dpe === 'C' ? 'positif' : 'neutre'
+    if (annonce.dpe === 'C') {
+      points.push({
+        texte: `Bonne performance énergétique (DPE C)`,
+        detail: `~${coutAnnuel} €/an d'énergie (~${Math.round(coutAnnuel / 12)} €/mois) — conforme aux standards actuels`,
+        type: 'avantage',
+        axe: 'energie',
+        impact: score - 50
+      })
+    } else {
+      points.push({
+        texte: `Performance énergétique correcte (DPE D)`,
+        detail: `~${coutAnnuel} €/an d'énergie (~${Math.round(coutAnnuel / 12)} €/mois) — amélioration possible via isolation`,
+        type: 'conseil',
+        axe: 'energie',
+        impact: 0
+      })
+    }
   } else if (annonce.dpe === 'E') {
     detail = `DPE E — ~${coutAnnuel} €/an d'énergie`
     impact = 'negatif'
@@ -567,9 +598,17 @@ function scorerEmplacement(
   if (scoreQ >= 75) {
     detail = `Quartier très bien desservi (${scoreQ}/100)`
     impact = 'positif'
+    const atouts: string[] = []
+    if (enrichi.quartier?.transports !== undefined && enrichi.quartier.transports >= 60) atouts.push('transports')
+    if (enrichi.quartier?.commerces !== undefined && enrichi.quartier.commerces >= 60) atouts.push('commerces')
+    if (enrichi.quartier?.ecoles !== undefined && enrichi.quartier.ecoles >= 60) atouts.push('écoles')
+    if (enrichi.quartier?.sante !== undefined && enrichi.quartier.sante >= 60) atouts.push('santé')
+    if (enrichi.quartier?.espaceVerts !== undefined && enrichi.quartier.espaceVerts >= 60) atouts.push('espaces verts')
     points.push({
       texte: 'Emplacement premium',
-      detail: `Score quartier ${scoreQ}/100 — transports, commerces, écoles à proximité`,
+      detail: atouts.length > 0
+        ? `Score ${scoreQ}/100 — excellente couverture en ${atouts.join(', ')}`
+        : `Score quartier ${scoreQ}/100 — transports, commerces, écoles à proximité`,
       type: 'avantage',
       axe: 'emplacement',
       impact: score - 50
@@ -577,6 +616,21 @@ function scorerEmplacement(
   } else if (scoreQ >= 50) {
     detail = `Quartier correctement équipé (${scoreQ}/100)`
     impact = 'neutre'
+    const details: string[] = []
+    if (enrichi.quartier?.transports !== undefined && enrichi.quartier.transports >= 50) details.push('transports')
+    if (enrichi.quartier?.commerces !== undefined && enrichi.quartier.commerces >= 50) details.push('commerces')
+    if (enrichi.quartier?.ecoles !== undefined && enrichi.quartier.ecoles >= 50) details.push('écoles')
+    if (enrichi.quartier?.sante !== undefined && enrichi.quartier.sante >= 50) details.push('santé')
+    if (enrichi.quartier?.espaceVerts !== undefined && enrichi.quartier.espaceVerts >= 50) details.push('espaces verts')
+    points.push({
+      texte: 'Quartier fonctionnel',
+      detail: details.length > 0
+        ? `Score ${scoreQ}/100 — points forts : ${details.join(', ')}`
+        : `Score quartier ${scoreQ}/100 — services de base accessibles`,
+      type: 'conseil',
+      axe: 'emplacement',
+      impact: 0
+    })
   } else if (scoreQ >= 30) {
     detail = `Quartier peu équipé (${scoreQ}/100)`
     impact = 'negatif'
@@ -665,9 +719,14 @@ function scorerRisques(
   if (score >= 80) {
     detail = 'Zone sûre — aucun risque majeur'
     impact = 'positif'
+    const absences: string[] = []
+    if (!enrichi.risques.zoneInondable) absences.push('hors zone inondable')
+    if (!enrichi.risques.niveauRadon || enrichi.risques.niveauRadon < 2) absences.push('radon négligeable')
     points.push({
-      texte: 'Zone sécurisée',
-      detail: 'Aucun risque naturel ou technologique majeur',
+      texte: 'Zone à faible risque',
+      detail: absences.length > 0
+        ? `Score Géorisques ${score}/100 — ${absences.join(', ')}`
+        : `Score Géorisques ${score}/100 — aucun risque naturel ou technologique majeur`,
       type: 'avantage',
       axe: 'risques',
       impact: score - 50
@@ -675,6 +734,18 @@ function scorerRisques(
   } else if (score >= 50) {
     detail = 'Quelques risques à surveiller'
     impact = 'neutre'
+    const risquesPresents: string[] = []
+    if (enrichi.risques.zoneInondable) risquesPresents.push('proximité zone inondable')
+    if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 2) risquesPresents.push(`radon catégorie ${enrichi.risques.niveauRadon}`)
+    points.push({
+      texte: 'Risques modérés identifiés',
+      detail: risquesPresents.length > 0
+        ? `Score ${score}/100 — éléments à surveiller : ${risquesPresents.join(', ')}`
+        : `Score Géorisques ${score}/100 — pas de risque majeur, quelques points de vigilance`,
+      type: 'conseil',
+      axe: 'risques',
+      impact: 0
+    })
   } else {
     detail = 'Zone à risques identifiés'
     impact = 'negatif'
@@ -756,6 +827,15 @@ function scorerEtatBien(
   } else if (budgetTravaux <= 10000) {
     detail = `Travaux légers estimés ~${budgetTravaux.toLocaleString('fr-FR')} €`
     impact = 'neutre'
+    points.push({
+      texte: `Rafraîchissement léger (~${budgetTravaux.toLocaleString('fr-FR')} €)`,
+      detail: annee
+        ? `Bâtiment de ${annee} — travaux mineurs cosmétiques, pas de gros œuvre à prévoir`
+        : 'Travaux mineurs possibles — pas de rénovation lourde nécessaire',
+      type: 'conseil',
+      axe: 'etatBien',
+      impact: 0
+    })
   } else if (budgetTravaux <= 30000) {
     detail = `Budget travaux estimé ~${budgetTravaux.toLocaleString('fr-FR')} €`
     impact = 'negatif'
@@ -851,6 +931,16 @@ function scorerCharges(
   } else if (ratio <= 2) {
     detail = `Charges modérées (${chargesAnnuelles.toLocaleString('fr-FR')} €/an)`
     impact = 'neutre'
+    const detailParts: string[] = []
+    if (charges) detailParts.push(`${charges} €/mois copro`)
+    if (taxe) detailParts.push(`${taxe.toLocaleString('fr-FR')} €/an taxe foncière`)
+    points.push({
+      texte: `Charges dans la moyenne (${ratio.toFixed(1)}% du prix)`,
+      detail: `${chargesAnnuelles.toLocaleString('fr-FR')} €/an${detailParts.length > 0 ? ` (${detailParts.join(' + ')})` : ''} — budget courant maîtrisé`,
+      type: 'conseil',
+      axe: 'charges',
+      impact: 0
+    })
   } else {
     detail = `Charges élevées (${chargesAnnuelles.toLocaleString('fr-FR')} €/an)`
     impact = 'negatif'
@@ -890,9 +980,43 @@ function scorerSurface(
 
   // 1. Surface par pièce (confort : 20m²+ = bon, 15m² = moyen, <12m² = serré)
   const surfacePiece = annonce.pieces > 0 ? annonce.surface / annonce.pieces : annonce.surface
-  if (surfacePiece >= 22) score += 20
-  else if (surfacePiece >= 18) score += 10
-  else if (surfacePiece < 13) score -= 15
+  if (surfacePiece >= 22) {
+    score += 20
+    points.push({
+      texte: `Pièces spacieuses (${Math.round(surfacePiece)} m²/pièce)`,
+      detail: `${annonce.surface} m² pour ${annonce.pieces} pièce${annonce.pieces > 1 ? 's' : ''} — confort au-dessus de la norme`,
+      type: 'avantage',
+      axe: 'surface',
+      impact: 10
+    })
+  } else if (surfacePiece >= 18) {
+    score += 10
+    points.push({
+      texte: `Agencement équilibré (${Math.round(surfacePiece)} m²/pièce)`,
+      detail: `${annonce.surface} m² pour ${annonce.pieces} pièces — volumes corrects`,
+      type: 'conseil',
+      axe: 'surface',
+      impact: 0
+    })
+  } else if (surfacePiece < 13) {
+    score -= 15
+    points.push({
+      texte: `Pièces étroites (${Math.round(surfacePiece)} m²/pièce)`,
+      detail: `${annonce.surface} m² répartis sur ${annonce.pieces} pièces — agencement contraint`,
+      type: 'attention',
+      axe: 'surface',
+      impact: -10
+    })
+  } else {
+    // 13-18 m²/pièce, range standard
+    points.push({
+      texte: `Surface standard (${Math.round(surfacePiece)} m²/pièce)`,
+      detail: `${annonce.surface} m² pour ${annonce.pieces} pièces — agencement typique`,
+      type: 'conseil',
+      axe: 'surface',
+      impact: 0
+    })
+  }
 
   // 2. Position relative dans la comparaison
   if (annonces.length > 1) {
@@ -1012,7 +1136,17 @@ function scorerEquipements(
       axe: 'equipements',
       impact: 10
     })
-  } else if (equips.length === 0) {
+  } else if (equips.length >= 1) {
+    points.push({
+      texte: `Équipement${equips.length > 1 ? 's' : ''} : ${equips.join(', ')}`,
+      detail: equips.length === 1
+        ? 'Un seul équipement notable — vérifiez les options manquantes (parking, rangement, extérieur)'
+        : 'Quelques équipements utiles — le bien reste fonctionnel',
+      type: 'conseil',
+      axe: 'equipements',
+      impact: 0
+    })
+  } else {
     points.push({
       texte: 'Aucun équipement renseigné',
       detail: 'Vérifiez lors de la visite : parking, rangement, extérieur',
@@ -1113,6 +1247,150 @@ function scorerPlusValue(
 }
 
 // ============================================
+// ANALYSE COMPARATIVE INTER-ANNONCES
+// ============================================
+
+/**
+ * Génère des points d'analyse comparatifs entre les annonces de la sélection
+ * Identifie les forces/faiblesses relatives de chaque bien
+ */
+function genererPointsComparatifs(
+  annonce: Annonce,
+  annonces: Annonce[],
+  rendementData: { loyerEstime: number; rendementBrut: number },
+): PointAnalysePro[] {
+  if (annonces.length <= 1) return []
+  const points: PointAnalysePro[] = []
+  const autres = annonces.filter(a => a.id !== annonce.id)
+
+  // 1. Prix au m² comparatif
+  const prixM2 = annonce.prix / annonce.surface
+  const allPrixM2 = annonces.map(a => a.prix / a.surface)
+  const moyPrixM2 = allPrixM2.reduce((a, b) => a + b, 0) / allPrixM2.length
+  const minPrixM2 = Math.min(...allPrixM2)
+  const maxPrixM2 = Math.max(...allPrixM2)
+
+  if (prixM2 <= minPrixM2 * 1.02 && maxPrixM2 - minPrixM2 > 200) {
+    points.push({
+      texte: 'Meilleur prix au m² de la sélection',
+      detail: `${Math.round(prixM2).toLocaleString('fr-FR')} €/m² vs ${Math.round(moyPrixM2).toLocaleString('fr-FR')} €/m² en moyenne`,
+      type: 'avantage',
+      axe: 'prixMarche',
+      impact: 5
+    })
+  } else if (prixM2 >= maxPrixM2 * 0.98 && maxPrixM2 - minPrixM2 > 200) {
+    points.push({
+      texte: 'Prix au m² le plus élevé',
+      detail: `${Math.round(prixM2).toLocaleString('fr-FR')} €/m² — ${Math.round((prixM2 / minPrixM2 - 1) * 100)}% de plus que le moins cher`,
+      type: 'attention',
+      axe: 'prixMarche',
+      impact: -5
+    })
+  }
+
+  // 2. DPE comparatif
+  const dpeOrder: Record<string, number> = { A: 7, B: 6, C: 5, D: 4, E: 3, F: 2, G: 1, NC: 0 }
+  const myDpe = dpeOrder[annonce.dpe] ?? 0
+  const othersDpe = autres.map(a => dpeOrder[a.dpe] ?? 0)
+  if (myDpe > Math.max(...othersDpe) && myDpe >= 4) {
+    points.push({
+      texte: 'Meilleur DPE de la sélection',
+      detail: `DPE ${annonce.dpe} — le plus performant énergétiquement parmi vos ${annonces.length} biens`,
+      type: 'avantage',
+      axe: 'energie',
+      impact: 5
+    })
+  } else if (myDpe < Math.min(...othersDpe) && Math.max(...othersDpe) - myDpe >= 2) {
+    points.push({
+      texte: 'DPE le moins performant',
+      detail: `DPE ${annonce.dpe} — coûts énergie plus élevés que les alternatives`,
+      type: 'attention',
+      axe: 'energie',
+      impact: -5
+    })
+  }
+
+  // 3. Équipements exclusifs
+  if (annonce.parking && !autres.some(a => a.parking)) {
+    points.push({
+      texte: 'Seul bien avec parking',
+      detail: 'Avantage exclusif — impact revente et confort quotidien',
+      type: 'avantage',
+      axe: 'equipements',
+      impact: 5
+    })
+  }
+  if (annonce.balconTerrasse && !autres.some(a => a.balconTerrasse)) {
+    points.push({
+      texte: 'Seul bien avec extérieur',
+      detail: 'Balcon ou terrasse — avantage rare dans la sélection',
+      type: 'avantage',
+      axe: 'equipements',
+      impact: 5
+    })
+  }
+  if (!annonce.parking && autres.every(a => a.parking)) {
+    points.push({
+      texte: 'Seul bien sans parking',
+      detail: 'Tous les autres biens ont un parking — point différenciant',
+      type: 'attention',
+      axe: 'equipements',
+      impact: -5
+    })
+  }
+
+  // 4. Surface comparative
+  const maxSurface = Math.max(...annonces.map(a => a.surface))
+  const minSurface = Math.min(...annonces.map(a => a.surface))
+  if (annonce.surface >= maxSurface && maxSurface - minSurface > 10) {
+    // Already handled in scorerSurface, skip duplicate
+  } else if (annonce.surface <= minSurface && maxSurface - minSurface > 15) {
+    const ecartPct = Math.round((1 - annonce.surface / maxSurface) * 100)
+    points.push({
+      texte: 'Surface la plus petite',
+      detail: `${annonce.surface} m² — ${ecartPct}% de moins que le plus grand (${maxSurface} m²)`,
+      type: 'attention',
+      axe: 'surface',
+      impact: -5
+    })
+  }
+
+  // 5. Rendement comparatif
+  const allRendements = annonces.map(a => {
+    const loyer = estimerLoyerMensuel(a.prix, a.codePostal)
+    return ((loyer * 12) / a.prix) * 100
+  })
+  const maxRendement = Math.max(...allRendements)
+  if (rendementData.rendementBrut >= maxRendement * 0.98 && allRendements.length > 1) {
+    const ecart = rendementData.rendementBrut - Math.min(...allRendements)
+    if (ecart > 0.5) {
+      points.push({
+        texte: 'Meilleur rendement locatif',
+        detail: `${rendementData.rendementBrut.toFixed(1)}% brut — ${ecart.toFixed(1)} points de plus que le moins rentable`,
+        type: 'avantage',
+        axe: 'rendement',
+        impact: 5
+      })
+    }
+  }
+
+  // 6. Meilleur rapport qualité/prix (prix le plus bas + pas le pire score)
+  const prixMin = Math.min(...annonces.map(a => a.prix))
+  const prixMax = Math.max(...annonces.map(a => a.prix))
+  if (annonce.prix <= prixMin * 1.02 && prixMax - prixMin > 20000) {
+    points.push({
+      texte: 'Prix le plus accessible',
+      detail: `${annonce.prix.toLocaleString('fr-FR')} € — ${Math.round((1 - annonce.prix / prixMax) * 100)}% de moins que le plus cher`,
+      type: 'avantage',
+      axe: 'prixMarche',
+      impact: 3
+    })
+  }
+
+  return points
+}
+
+// ============================================
 // MOTEUR PRINCIPAL
 // ============================================
 
@@ -1146,7 +1424,6 @@ export function calculerScorePro(
 
   // 2. Redistribuer les poids si axes indisponibles
   const axesDisponibles = tousAxes.filter(a => a.disponible)
-  const axesIndisponibles = tousAxes.filter(a => !a.disponible)
   
   const poidsDisponible = axesDisponibles.reduce((sum, a) => sum + a.poids, 0)
   const poidsTotal = 100
@@ -1190,6 +1467,13 @@ export function calculerScorePro(
     points.push(...axe.points)
   }
 
+  // 5b. Points comparatifs inter-annonces
+  const pointsComparatifs = genererPointsComparatifs(
+    annonce, annonces,
+    { loyerEstime: rendement.loyerEstime, rendementBrut: rendement.rendementBrut },
+  )
+  points.push(...pointsComparatifs)
+
   // Budget point
   if (budgetMax && budgetMax > 0) {
     const pourcent = Math.round((annonce.prix / budgetMax) * 100)
@@ -1213,20 +1497,23 @@ export function calculerScorePro(
     }
   }
 
-  // 6. Verdict et recommandation
+  // 6. Verdict et recommandation (granularité affinée)
   let verdict: string
   let recommandation: NiveauRecommandation
 
-  if (scoreGlobal >= 75) {
+  if (scoreGlobal >= 80) {
     verdict = 'Excellent choix'
     recommandation = 'fortement_recommande'
-  } else if (scoreGlobal >= 62) {
+  } else if (scoreGlobal >= 68) {
+    verdict = 'Très bon potentiel'
+    recommandation = 'recommande'
+  } else if (scoreGlobal >= 56) {
     verdict = 'Bon potentiel'
     recommandation = 'recommande'
-  } else if (scoreGlobal >= 48) {
+  } else if (scoreGlobal >= 45) {
     verdict = 'À étudier'
     recommandation = 'a_etudier'
-  } else if (scoreGlobal >= 35) {
+  } else if (scoreGlobal >= 32) {
     verdict = 'Avec réserves'
     recommandation = 'prudence'
   } else {
@@ -1234,33 +1521,85 @@ export function calculerScorePro(
     recommandation = 'deconseille'
   }
 
-  // 7. Conseil personnalisé intelligent
+  // 7. Confiance (calculé en amont pour usage dans le conseil)
+  const confiance = Math.round((axesDisponibles.length / tousAxes.length) * 100)
+
+  // 8. Conseil personnalisé intelligent — 15+ branches avec données spécifiques
   const avantages = points.filter(p => p.type === 'avantage')
   const attentions = points.filter(p => p.type === 'attention')
-  const conseils = points.filter(p => p.type === 'conseil')
+
+  // Helpers analytiques
+  const topAvantages = [...avantages].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, 3)
+  const topAttentions = [...attentions].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, 3)
+  const axesSorted = resultatsAxes.filter(a => a.disponible).sort((a, b) => b.score - a.score)
+  const axeForte = axesSorted[0]
+  const axeFaible = [...axesSorted].reverse()[0]
   
   let conseilPerso: string
-  if (avantages.length >= 3 && attentions.length === 0) {
-    conseilPerso = 'Ce bien coche toutes les cases. Planifiez une visite rapidement — les biens de cette qualité partent vite.'
-  } else if (attentions.some(a => a.axe === 'energie' && a.texte.includes('Passoire'))) {
-    const travaux = etatBien.budgetTravaux
-    conseilPerso = travaux > 0
-      ? `Demandez des devis rénovation (~${travaux.toLocaleString('fr-FR')} €) et négociez le prix en conséquence.`
-      : 'Demandez des devis rénovation énergétique avant de vous engager.'
-  } else if (attentions.some(a => a.texte.includes('budget'))) {
-    conseilPerso = 'Préparez vos arguments de négociation : comparez au prix DVF du secteur.'
-  } else if (rendement.rendementBrut >= 5 && scoreGlobal >= 55) {
-    conseilPerso = `Bon investissement locatif potentiel (~${rendement.loyerEstime} €/mois estimé). Vérifiez la demande locative.`
-  } else if (avantages.length > attentions.length) {
-    conseilPerso = 'Plus de points forts que de faiblesses — bonne option à considérer sérieusement.'
-  } else if (attentions.length > avantages.length) {
-    conseilPerso = 'Plusieurs points de vigilance identifiés. Comparez bien avec les alternatives.'
-  } else {
-    conseilPerso = 'Visitez le bien pour vous faire votre propre avis sur le terrain.'
-  }
 
-  // 8. Confiance
-  const confiance = Math.round((axesDisponibles.length / tousAxes.length) * 100)
+  if (scoreGlobal >= 80 && avantages.length >= 4) {
+    // Cas 1 : Bien exceptionnel
+    conseilPerso = `Bien exceptionnel : ${topAvantages.map(p => p.texte.toLowerCase()).join(', ')}. Ne tardez pas à organiser une visite.`
+  } else if (avantages.length >= 3 && attentions.length === 0) {
+    // Cas 2 : Tout positif sans blocage
+    conseilPerso = `${avantages.length} atouts sans point bloquant (${topAvantages.slice(0, 2).map(p => p.texte.toLowerCase()).join(', ')}). Planifiez une visite rapidement.`
+  } else if (attentions.some(a => a.axe === 'energie' && a.texte.includes('Passoire'))) {
+    // Cas 3 : Passoire thermique dominante
+    const travaux = etatBien.budgetTravaux
+    const dpe = annonce.dpe
+    conseilPerso = travaux > 0
+      ? `DPE ${dpe} = passoire thermique. Rénovation estimée ~${travaux.toLocaleString('fr-FR')} €. Négociez le prix et exigez des devis avant engagement.`
+      : `DPE ${dpe} = passoire thermique. Faites chiffrer la rénovation énergétique — impacte la valeur et la location future.`
+  } else if (attentions.some(a => a.texte.toLowerCase().includes('budget'))) {
+    // Cas 4 : Dépassement budget
+    const ecartBudget = budgetMax ? annonce.prix - budgetMax : 0
+    conseilPerso = ecartBudget > 0
+      ? `Dépasse votre budget de ${ecartBudget.toLocaleString('fr-FR')} €. Négociez : comparez au prix DVF du secteur${enrichi?.marche?.ecartPrixM2 !== undefined ? ` (écart ${enrichi.marche.ecartPrixM2 > 0 ? '+' : ''}${enrichi.marche.ecartPrixM2.toFixed(0)}%)` : ''}.`
+      : 'Ce bien sollicite fortement votre budget. Préparez vos arguments de négociation en vous appuyant sur les prix DVF.'
+  } else if (rendement.rendementBrut >= 6 && scoreGlobal >= 55) {
+    // Cas 5 : Excellent rendement locatif
+    conseilPerso = `Excellent potentiel locatif : ${rendement.rendementBrut.toFixed(1)}% brut (~${rendement.loyerEstime} €/mois). Vérifiez la demande locative et la vacance du secteur.`
+  } else if (rendement.rendementBrut >= 4.5 && scoreGlobal >= 60) {
+    // Cas 6 : Bon compromis investissement/qualité
+    conseilPerso = `Bon compromis investissement/qualité : rendement ${rendement.rendementBrut.toFixed(1)}% (~${rendement.loyerEstime} €/mois)${axeForte ? ` avec un point fort en ${axeForte.label.toLowerCase()}` : ''}.`
+  } else if (axeFaible && axeFaible.score < 30 && axeForte && axeForte.score >= 70) {
+    // Cas 7 : Profil contrasté (un axe très fort, un très faible)
+    const conseilAxeFaible = axeFaible.axe === 'energie' ? 'Budgétez la rénovation énergétique.'
+      : axeFaible.axe === 'charges' ? 'Vérifiez l\'historique des charges de copropriété.'
+      : axeFaible.axe === 'risques' ? 'Consultez Géorisques.gouv.fr pour le détail des risques.'
+      : axeFaible.axe === 'etatBien' ? 'Faites estimer les travaux par un professionnel.'
+      : 'Évaluez si ce point est bloquant pour votre projet.'
+    conseilPerso = `Profil contrasté : excellent en ${axeForte.label.toLowerCase()} (${axeForte.score}/100) mais faible en ${axeFaible.label.toLowerCase()} (${axeFaible.score}/100). ${conseilAxeFaible}`
+  } else if (scoreGlobal >= 65 && confiance < 60) {
+    // Cas 8 : Bon score mais données incomplètes
+    conseilPerso = `Score encourageant (${scoreGlobal}/100) mais basé sur ${axesDisponibles.length}/${tousAxes.length} axes. Demandez les données manquantes au vendeur pour confirmer.`
+  } else if (avantages.length >= 2 && attentions.length <= 1) {
+    // Cas 9 : Bon profil, un seul bémol
+    const topPoint = topAvantages[0]
+    conseilPerso = `Bon profil global, porté par ${topPoint?.texte?.toLowerCase() || 'plusieurs atouts'}. ${attentions.length === 1 ? `Seul bémol : ${topAttentions[0]?.texte?.toLowerCase() || 'un point à vérifier'}.` : 'Mérite clairement une visite.'}`
+  } else if (attentions.length >= 3) {
+    // Cas 10 : Plusieurs points bloquants
+    conseilPerso = `${attentions.length} points de vigilance (${topAttentions.slice(0, 2).map(p => p.texte.toLowerCase()).join(', ')}). Comparez soigneusement avec les alternatives avant de visiter.`
+  } else if (etatBien.budgetTravaux > 20000 && scoreGlobal >= 50) {
+    // Cas 11 : Travaux significatifs mais potentiel
+    conseilPerso = `Budget travaux estimé ~${etatBien.budgetTravaux.toLocaleString('fr-FR')} €. Coût total réel = ${(annonce.prix + etatBien.budgetTravaux).toLocaleString('fr-FR')} €. Comparez ce coût global aux alternatives neuves ou rénovées.`
+  } else if (annonces.length > 1 && pointsComparatifs.some(p => p.type === 'avantage')) {
+    // Cas 12 : Bien qui se démarque en comparatif
+    const avantagesComparatifs = pointsComparatifs.filter(p => p.type === 'avantage')
+    conseilPerso = `Se démarque dans la sélection : ${avantagesComparatifs.map(p => p.texte.toLowerCase()).join(', ')}. ${avantages.length > attentions.length ? 'Profil globalement solide.' : 'Mais des réserves à considérer.'}`
+  } else if (avantages.length > attentions.length) {
+    // Cas 13 : Bilan positif générique
+    conseilPerso = `${avantages.length} atout${avantages.length > 1 ? 's' : ''} vs ${attentions.length} réserve${attentions.length > 1 ? 's' : ''} — bilan positif. ${topAvantages[0] ? `Point fort principal : ${topAvantages[0].texte.toLowerCase()}.` : ''}`
+  } else if (attentions.length > avantages.length) {
+    // Cas 14 : Bilan négatif
+    conseilPerso = `Plus de réserves (${attentions.length}) que d'atouts (${avantages.length}). ${topAttentions[0] ? `Principal point faible : ${topAttentions[0].texte.toLowerCase()}.` : ''} Comparez avec les alternatives.`
+  } else if (scoreGlobal >= 50) {
+    // Cas 15 : Profil équilibré
+    conseilPerso = `Profil équilibré (${avantages.length} atout${avantages.length > 1 ? 's' : ''}, ${attentions.length} réserve${attentions.length > 1 ? 's' : ''}). ${axeFaible ? `Concentrez la visite sur ${axeFaible.label.toLowerCase()}.` : 'La visite permettra de trancher.'}`
+  } else {
+    // Cas 16 : Score modeste
+    conseilPerso = `Score modeste (${scoreGlobal}/100). ${axeForte ? `Meilleur point : ${axeForte.label.toLowerCase()} (${axeForte.score}/100).` : ''} Ne visitez que si le prix est négociable.`
+  }
 
   return {
     annonceId: annonce.id,
@@ -1310,21 +1649,28 @@ export function genererSyntheseComparaison(
 
   if (resultats.length === 1) {
     const r = resultats[0]
-    syntheseGlobale = `Score professionnel : ${r.scoreGlobal}/100 — ${r.verdict.toLowerCase()}.`
+    const nbAvantages = r.points.filter(p => p.type === 'avantage').length
+    const nbAttentions = r.points.filter(p => p.type === 'attention').length
+    syntheseGlobale = `Score professionnel : ${r.scoreGlobal}/100 — ${r.verdict.toLowerCase()} (${nbAvantages} atout${nbAvantages > 1 ? 's' : ''}, ${nbAttentions} réserve${nbAttentions > 1 ? 's' : ''}).`
     conseilGeneral = r.conseilPerso
   } else {
     const meilleur = sorted[0]
-    const ecart = sorted[0].scoreGlobal - sorted[1].scoreGlobal
+    const deuxieme = sorted[1]
+    const ecart = meilleur.scoreGlobal - deuxieme.scoreGlobal
+    const scoreMoyen = Math.round(resultats.reduce((s, r) => s + r.scoreGlobal, 0) / resultats.length)
 
     if (ecart >= 15) {
-      syntheseGlobale = `Un choix se démarque clairement avec ${meilleur.scoreGlobal}/100 (${meilleur.verdict}).`
-      conseilGeneral = 'Le meilleur bien a un avantage net. Priorisez-le pour la visite.'
-    } else if (ecart >= 5) {
-      syntheseGlobale = `Le meilleur score est ${meilleur.scoreGlobal}/100 mais les biens sont proches.`
-      conseilGeneral = 'Scores relativement proches — visitez les 2 meilleurs pour trancher.'
+      syntheseGlobale = `Un bien se démarque nettement : ${meilleur.scoreGlobal}/100 (${meilleur.verdict}) vs ${deuxieme.scoreGlobal}/100 pour le 2e.`
+      conseilGeneral = `Écart de ${ecart} points — le meilleur a un avantage significatif. Priorisez-le pour la visite.`
+    } else if (ecart >= 8) {
+      syntheseGlobale = `Le meilleur obtient ${meilleur.scoreGlobal}/100 (${meilleur.verdict}), talonné par le 2e à ${deuxieme.scoreGlobal}/100.`
+      conseilGeneral = 'Léger avantage pour le 1er, mais visitez les deux pour trancher sur le terrain.'
+    } else if (ecart >= 3) {
+      syntheseGlobale = `Biens très proches : ${meilleur.scoreGlobal}/100 vs ${deuxieme.scoreGlobal}/100 (écart ${ecart} pts). Score moyen : ${scoreMoyen}/100.`
+      conseilGeneral = 'Scores quasi identiques — la visite et votre ressenti feront la différence.'
     } else {
-      syntheseGlobale = `Biens très comparables (écart ${ecart} pts). Le contexte de visite fera la différence.`
-      conseilGeneral = 'Les scores sont très proches — concentrez-vous sur le ressenti en visite.'
+      syntheseGlobale = `Sélection homogène : scores regroupés entre ${sorted[sorted.length - 1].scoreGlobal} et ${meilleur.scoreGlobal}/100.`
+      conseilGeneral = `Avec seulement ${ecart} point${ecart > 1 ? 's' : ''} d'écart, comparez sur des critères personnels (localisation, coup de cœur, négociabilité).`
     }
   }
 

@@ -1,13 +1,14 @@
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Carte des prix immobiliers en Île-de-France',
   description:
-    'Explorez les prix au m² par département et commune en Île-de-France. Données DVF officielles, carte interactive avec filtres par budget.',
+    'Explorez les prix au m² par département et commune en Île-de-France. Données officielles, carte interactive avec filtres par budget.',
   openGraph: {
     title: 'Carte des prix immobiliers IDF — AQUIZ',
     description:
-      'Prix au m² en Île-de-France : Paris, Hauts-de-Seine, Seine-Saint-Denis… Carte interactive basée sur les données DVF.',
+      'Prix au m² en Île-de-France : Paris, Hauts-de-Seine, Seine-Saint-Denis… Carte interactive basée sur les données officielles.',
     url: 'https://www.aquiz.eu/carte',
   },
   alternates: {
@@ -36,6 +37,7 @@ export default function CarteLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <CarteJsonLd />
+      <Breadcrumbs items={[{ label: 'Carte des prix' }]} />
       {children}
     </>
   )

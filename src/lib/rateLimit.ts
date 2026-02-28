@@ -7,6 +7,9 @@
  * basique mais efficace pour un site vitrine.
  * 
  * Pour un rate limiting plus robuste en prod : Vercel WAF ou Upstash Redis.
+ * 
+ * TODO PROD : Migrer vers Upstash Redis (@upstash/ratelimit) pour persister
+ * les compteurs entre cold starts Vercel. Coût estimé : plan gratuit = 10k req/jour.
  */
 
 interface RateLimitEntry {
@@ -84,8 +87,8 @@ export const RATE_LIMITS = {
   rappel: { maxRequests: 3, windowMs: 15 * 60 * 1000 },
   /** Extraction d'annonce : 10 requêtes / 5 min */
   extract: { maxRequests: 10, windowMs: 5 * 60 * 1000 },
-  /** API analyse (DVF, géorisques, quartier) : 30 requêtes / min */
-  analyse: { maxRequests: 30, windowMs: 60 * 1000 },
+  /** API analyse (DVF, géorisques, quartier) : 100 requêtes / min */
+  analyse: { maxRequests: 100, windowMs: 60 * 1000 },
 } as const
 
 /**

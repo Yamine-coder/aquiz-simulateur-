@@ -230,7 +230,7 @@ export function RadarChart({
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: bien.couleur }}
               />
-              <span className="text-xs text-aquiz-gray truncate max-w-[100px]">
+              <span className="text-xs text-aquiz-gray truncate max-w-25">
                 {bien.nom}
               </span>
             </div>

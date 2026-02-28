@@ -205,16 +205,16 @@ export async function GET(request: NextRequest) {
       }, 0)
     )
     
-    // Synthèse
+    // Synthèse (sans emojis — incompatibles @react-pdf/renderer)
     let synthese: string
     if (scoreGlobal >= 80) {
-      synthese = '🌟 Quartier très bien équipé'
+      synthese = 'Quartier très bien équipé'
     } else if (scoreGlobal >= 60) {
-      synthese = '👍 Quartier bien desservi'
+      synthese = 'Quartier bien desservi'
     } else if (scoreGlobal >= 40) {
-      synthese = '🚗 Véhicule conseillé'
+      synthese = 'Véhicule conseillé'
     } else {
-      synthese = '🏡 Zone calme, éloignée des services'
+      synthese = 'Zone calme, éloignée des services'
     }
     
     // Extraire les scores simplifiés

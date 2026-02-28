@@ -1,5 +1,6 @@
 'use client'
 
+import * as Sentry from '@sentry/nextjs'
 import { AlertTriangle, Home, RotateCcw } from 'lucide-react'
 import { useEffect } from 'react'
 
@@ -15,7 +16,7 @@ export default function AppError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error('[AQUIZ App Error]', error)
+    Sentry.captureException(error)
   }, [error])
 
   return (

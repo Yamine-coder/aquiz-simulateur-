@@ -1,7 +1,9 @@
+import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  trailingSlash: false,
   images: {
     qualities: [75, 90],
     remotePatterns: [
@@ -14,6 +16,8 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.century21.fr' },
       { protocol: 'https', hostname: '**.meilleursagents.com' },
       { protocol: 'https', hostname: '**.ouestfrance-immo.com' },
+      // Catch-all pour les images d'annonces issues de domaines non listés
+      { protocol: 'https', hostname: '**' },
     ],
   },
   async headers() {
@@ -45,25 +49,25 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
           },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
-              "style-src 'self' 'unsafe-inline' https://unpkg.com",
-              "img-src 'self' data: blob: https: http:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://vitals.vercel-insights.com https://va.vercel-scripts.com https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://api-adresse.data.gouv.fr https://geo.api.gouv.fr https://georisques.gouv.fr https://overpass-api.de https://api.cquest.org https://files.data.gouv.fr",
-              "frame-src https://www.google.com/maps/",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join("; "),
-          },
+          // CSP est défini dynamiquement dans middleware.ts (nonce par requête)
         ],
       },
     ];
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Uploads source maps to Sentry for readable stack traces
+  // Requires SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT env vars
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  disableLogger: true,
+  // Tunnelling avoids ad-blockers
+  tunnelRoute: '/monitoring',
+  // Automatically tree-shake Sentry logger in production
+  bundleSizeOptimizations: {
+    excludeDebugStatements: true,
+    excludeReplayIframe: true,
+    excludeReplayShadowDom: true,
+  },
+})

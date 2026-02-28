@@ -11,10 +11,11 @@
 
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import {
-    detecterSource,
-    parseAnnonceHTML,
-    parseJsonLd,
-    parseMetaTags
+  detecterSource,
+  parseAnnonceHTML,
+  parseJsonLd,
+  parseMetaTags,
+  parseNextData
 } from '@/lib/scraping/extracteur'
 import { compterChampsExtraits, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import { NextRequest, NextResponse } from 'next/server'
@@ -196,13 +197,14 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
     const html = await response.text()
     if (html.length < 200) return null
     
-    // Parse multi-sources : JSON-LD (le plus fiable) > HTML patterns > meta tags
+    // Parse multi-sources : __NEXT_DATA__ (le plus fiable) > JSON-LD > HTML patterns > meta tags
+    const dataFromNextData = parseNextData(html)
     const dataFromJsonLd = parseJsonLd(html)
     const dataFromHTML = parseAnnonceHTML(html, url)
     const dataFromMeta = parseMetaTags(html)
     
-    // Fusionner avec priorité : JSON-LD > HTML > Meta
-    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
+    // Fusionner avec priorité : __NEXT_DATA__ > JSON-LD > HTML > Meta
+    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd, ...dataFromNextData }
     
     // Si on n'a toujours pas prix/surface, essayer le parsing texte brut
     if (!data.prix && !data.surface) {
@@ -251,11 +253,16 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
 async function tryJinaReader(url: string, source: string | null): Promise<ExtractionResponse | null> {
   try {
     const jinaUrl = `https://r.jina.ai/${url}`
+    const jinaApiKey = process.env.JINA_API_KEY
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      'X-Return-Format': 'json',
+    }
+    if (jinaApiKey) {
+      headers['Authorization'] = `Bearer ${jinaApiKey}`
+    }
     const response = await fetch(jinaUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'X-Return-Format': 'json',
-      },
+      headers,
       signal: AbortSignal.timeout(15000),
     })
     
@@ -354,12 +361,13 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
     
     let dataRecord: Record<string, unknown> = { url }
     
-    // Parser le HTML si disponible (JSON-LD + patterns HTML + meta)
+    // Parser le HTML si disponible (__NEXT_DATA__ > JSON-LD > patterns HTML > meta)
     if (htmlContent && htmlContent.length > 200) {
+      const dataFromNextData = parseNextData(htmlContent)
       const dataFromJsonLd = parseJsonLd(htmlContent)
       const dataFromHTML = parseAnnonceHTML(htmlContent, url)
       const dataFromMeta = parseMetaTags(htmlContent)
-      dataRecord = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
+      dataRecord = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd, ...dataFromNextData }
     }
     
     // Compléter avec le parsing texte du markdown
@@ -444,12 +452,13 @@ async function tryDirectFetch(url: string, source: string | null): Promise<Extra
     
     const html = await response.text()
     
-    // Parse multi-sources : JSON-LD > HTML patterns > meta tags
+    // Parse multi-sources : __NEXT_DATA__ > JSON-LD > HTML patterns > meta tags
+    const dataFromNextData = parseNextData(html)
     const dataFromJsonLd = parseJsonLd(html)
     const dataFromHTML = parseAnnonceHTML(html, url)
     const dataFromMeta = parseMetaTags(html)
     
-    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd }
+    const data: Record<string, unknown> = { url, ...dataFromMeta, ...dataFromHTML, ...dataFromJsonLd, ...dataFromNextData }
     
     if (!data.prix && !data.surface) return null
     

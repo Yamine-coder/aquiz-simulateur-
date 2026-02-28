@@ -5,6 +5,7 @@
  */
 
 import { fetchDVFCommune, type DVFStatsCommune } from '@/lib/api/dvf-real';
+import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -15,6 +16,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ codeCommune: string }> }
 ) {
+  // Rate limiting
+  const ip = getClientIP(request.headers)
+  const rl = checkRateLimit(`dvf_${ip}`, RATE_LIMITS.analyse)
+  if (!rl.success) {
+    return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 })
+  }
+
   try {
     const { codeCommune } = await params
     

@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/escapeHtml'
+import { prisma } from '@/lib/prisma'
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -134,22 +135,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, errors }, { status: 400 })
     }
 
-    // ── Log serveur (toujours actif) ─────────────────────
-    console.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.info('📩 NOUVEAU MESSAGE DE CONTACT')
-    console.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-    console.info(`Nom: ${body.nom.trim()}`)
-    console.info(`Email: ${body.email.trim()}`)
-    console.info(`Tél: ${body.telephone?.trim() ?? 'N/A'}`)
-    console.info(`Message: ${body.message.trim().slice(0, 100)}…`)
-    console.info(`Date: ${new Date().toLocaleString('fr-FR')}`)
-    console.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    // ── Sauvegarder en base de données ───────────────────
+    let contactId: string | null = null
+    try {
+      const contact = await prisma.contact.create({
+        data: {
+          nom: body.nom.trim(),
+          email: body.email.trim(),
+          telephone: body.telephone?.trim() ?? '',
+          message: body.message.trim(),
+          ip,
+        },
+      })
+      contactId = contact.id
+    } catch (dbError) {
+      console.error('❌ Erreur sauvegarde BDD:', dbError)
+      // On continue même si la BDD échoue (email en fallback)
+    }
+
+    // ── Log serveur (sans PII — RGPD) ─────────────────────
+    console.info(`📩 NOUVEAU CONTACT | id=${contactId ?? 'N/A'} | date=${new Date().toISOString()}`)
 
     // ── Email via Resend (si configuré) ──────────────────
     try {
       const emailSent = await sendEmailViaResend(body)
       if (emailSent) {
         console.info('✅ Email envoyé via Resend')
+        // Mettre à jour le flag emailSent en BDD
+        if (contactId) {
+          await prisma.contact.update({
+            where: { id: contactId },
+            data: { emailSent: true },
+          }).catch(() => {/* ignore */})
+        }
       } else {
         console.info('ℹ️  Resend non configuré — message uniquement loggé')
       }

@@ -1,7 +1,8 @@
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Puis-je acheter ce bien ? — Mode B',
+  title: 'Puis-je acheter ce bien ? — Vérification de faisabilité',
   description:
     'Vérifiez si un bien immobilier est finançable : revenus minimums requis, apport conseillé, mensualité à prévoir. Simulation instantanée et gratuite.',
   openGraph: {
@@ -37,6 +38,10 @@ export default function ModeBLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <ModeBJsonLd />
+      <Breadcrumbs items={[
+        { label: 'Simulateur', href: '/simulateur' },
+        { label: 'Faisabilit\u00e9' },
+      ]} />
       {children}
     </>
   )

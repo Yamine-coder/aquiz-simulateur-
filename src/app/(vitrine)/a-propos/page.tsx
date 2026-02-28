@@ -29,9 +29,33 @@ export const metadata: Metadata = {
   },
 }
 
+/** JSON-LD AboutPage pour les signaux E-E-A-T */
+function AboutJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    '@id': 'https://www.aquiz.eu/a-propos#about',
+    name: 'À propos d\'AQUIZ',
+    description: 'Experts en acquisition immobilière à Paris et Île-de-France, au service des primo-accédants.',
+    url: 'https://www.aquiz.eu/a-propos',
+    mainEntity: {
+      '@type': 'Organization',
+      '@id': 'https://www.aquiz.eu/#org',
+      name: 'AQUIZ',
+    },
+  }
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  )
+}
+
 export default function AProposPage() {
   return (
     <>
+      <AboutJsonLd />
       {/* Hero */}
       <section className="relative bg-aquiz-black pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-aquiz-black to-aquiz-black-light" />
@@ -68,7 +92,7 @@ export default function AProposPage() {
               </p>
               <p className="text-lg text-aquiz-gray leading-relaxed mb-8">
                 Notre approche combine des <strong className="text-aquiz-black">outils technologiques performants</strong> — 
-                simulateur de capacité d&apos;emprunt, carte des prix DVF, comparateur — 
+                simulateur de capacité d&apos;emprunt, carte des prix, comparateur — 
                 avec un <strong className="text-aquiz-black">accompagnement humain</strong> de proximité.
               </p>
               

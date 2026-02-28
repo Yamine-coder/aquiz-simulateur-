@@ -1,5 +1,5 @@
 import { ScrollToTop } from '@/components/ScrollToTop'
-import { Footer, Navbar } from '@/components/vitrine'
+import { Footer, Navbar, ScrollToTopButton } from '@/components/vitrine'
 
 /**
  * Layout pour les pages applicatives (simulateur, carte, aides, comparateur, historique).
@@ -18,6 +18,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Navbar />
       <main id="main-content" className="pt-18 md:pt-22">{children}</main>
       <Footer />
+      <ScrollToTopButton />
     </>
   )
 }

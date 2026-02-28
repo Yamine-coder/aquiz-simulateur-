@@ -107,7 +107,7 @@ export function useDVFData(departements: readonly string[] = ['75', '92', '93', 
           const response = await fetch(`/api/dvf/${codeDept}`)
           
           if (!response.ok) {
-            console.warn(`[DVF] Département ${codeDept}: ${response.status}`)
+            // Skip this department silently — non-critical
             continue
           }
           
@@ -127,8 +127,8 @@ export function useDVFData(departements: readonly string[] = ['75', '92', '93', 
         loaded++
         setProgress({ loaded, total: depts.length })
         
-      } catch (err) {
-        console.error(`[DVF] Erreur département ${codeDept}:`, err)
+      } catch {
+        // Skip failed department — non-critical, other departments will still load
       }
     }
 

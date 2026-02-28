@@ -2,7 +2,7 @@
  * Tests pour les fonctions d'extraction (parseJsonLd, parseAnnonceHTML, parseMetaTags)
  */
 import { describe, expect, it } from 'vitest'
-import { parseJsonLd, parseAnnonceHTML, parseMetaTags } from '../extracteur'
+import { parseAnnonceHTML, parseJsonLd, parseMetaTags } from '../extracteur'
 
 // ============================================
 // parseJsonLd

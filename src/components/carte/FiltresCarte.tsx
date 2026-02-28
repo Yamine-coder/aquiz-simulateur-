@@ -243,7 +243,7 @@ export default function FiltresCarte({
       {/* Footer avec info source */}
       <div className="px-4 py-3 bg-aquiz-gray-lightest border-t border-aquiz-gray-lighter">
         <p className="text-[10px] text-aquiz-gray text-center">
-          Prix médians DVF • Mise à jour oct. 2025
+          Prix médians • Mise à jour oct. 2025
         </p>
       </div>
     </div>

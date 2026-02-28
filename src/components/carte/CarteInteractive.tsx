@@ -52,12 +52,13 @@ export default function CarteInteractive({
     CircleMarker: typeof import('react-leaflet').CircleMarker
     Tooltip: typeof import('react-leaflet').Tooltip
     useMap: typeof import('react-leaflet').useMap
+    AttributionControl: typeof import('react-leaflet').AttributionControl
   } | null>(null)
 
   useEffect(() => {
     const loadLeaflet = async () => {
-      const { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } = await import('react-leaflet')
-      setMapComponents({ MapContainer, TileLayer, CircleMarker, Tooltip, useMap })
+      const { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, AttributionControl } = await import('react-leaflet')
+      setMapComponents({ MapContainer, TileLayer, CircleMarker, Tooltip, useMap, AttributionControl })
       setIsMounted(true)
     }
     loadLeaflet()
@@ -89,7 +90,7 @@ export default function CarteInteractive({
   if (!isMounted || !MapComponents) {
     return (
       <div className={cn(
-        'w-full h-full min-h-[400px] bg-gradient-to-br from-aquiz-gray-lightest to-white flex items-center justify-center',
+        'w-full h-full min-h-100 bg-linear-to-br from-aquiz-gray-lightest to-white flex items-center justify-center',
         className
       )}>
         <div className="flex flex-col items-center gap-5">
@@ -106,7 +107,7 @@ export default function CarteInteractive({
     )
   }
 
-  const { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } = MapComponents
+  const { MapContainer, TileLayer, CircleMarker, Tooltip, useMap, AttributionControl } = MapComponents
 
   // Composant interne pour synchro map ref
   const MapRefSync = () => {
@@ -118,17 +119,19 @@ export default function CarteInteractive({
   }
 
   return (
-    <div className={cn('relative w-full h-full min-h-[400px]', className)}>
+    <div className={cn('relative w-full h-full min-h-100', className)}>
       <MapContainer
         center={[centreInitial.lat, centreInitial.lng]}
         zoom={zoomInitial}
         className="w-full h-full"
         scrollWheelZoom={true}
         zoomControl={false}
+        attributionControl={false}
         doubleClickZoom={true}
         touchZoom={true}
         dragging={true}
       >
+        <AttributionControl position="bottomright" prefix={false} />
         <MapRefSync />
         
         {/* Fond de carte sobre (CartoDB Positron) */}
@@ -179,27 +182,27 @@ export default function CarteInteractive({
       </MapContainer>
 
       {/* Contrôles de zoom custom - En dehors de MapContainer */}
-      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-1">
+      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-1000 flex flex-col gap-1">
         <button
           onClick={handleZoomIn}
-          className="w-10 h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors"
+          className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors"
           aria-label="Zoom avant"
         >
-          <Plus className="w-5 h-5 text-aquiz-black" />
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-black" />
         </button>
         <button
           onClick={handleZoomOut}
-          className="w-10 h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors"
+          className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors"
           aria-label="Zoom arrière"
         >
-          <Minus className="w-5 h-5 text-aquiz-black" />
+          <Minus className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-black" />
         </button>
         <button
           onClick={handleReset}
-          className="w-10 h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors mt-2"
+          className="w-8 h-8 sm:w-10 sm:h-10 bg-white rounded-lg shadow-lg border border-aquiz-gray-lighter flex items-center justify-center hover:bg-aquiz-gray-lightest transition-colors mt-1 sm:mt-2"
           aria-label="Recentrer"
         >
-          <Navigation className="w-4 h-4 text-aquiz-black" />
+          <Navigation className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-aquiz-black" />
         </button>
       </div>
     </div>

@@ -143,58 +143,66 @@ function extraireType(texte: string): TypeBienAnnonce {
 function extraireLocalisation(texte: string): { ville?: string; codePostal?: string } {
   const result: { ville?: string; codePostal?: string } = {}
 
-  // Code postal 5 chiffres
-  const cpMatch = texte.match(/\b(\d{5})\b/)
-  if (cpMatch) {
-    const cp = cpMatch[1]
+  /** Valide un code postal français (dept 01-98, inclut DOM-TOM 97x) */
+  const isValidCP = (cp: string): boolean => {
+    if (!/^\d{5}$/.test(cp)) return false
     const dept = parseInt(cp.substring(0, 2))
-    if (dept >= 1 && dept <= 98) {
-      result.codePostal = cp
+    return dept >= 1 && dept <= 98
+  }
+
+  /** Mots français courants qu'il ne faut PAS prendre pour des villes */
+  const MOTS_EXCLUS = /^(appartement|maison|villa|studio|duplex|loft|pavillon|immeuble|résidence|programme|vente|achat|annonce|prix|surface|pièces?|chambres?|étage|orientation|construction|description|parking|garage|terrasse|balcon|cave|code|bien|local|situé|centre|quartier)$/i
+
+  // ──── 1. Villes connues (le plus fiable) ────
+  const VILLES = [
+    'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
+    'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
+    'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
+    'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
+    'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
+    'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
+    'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
+    'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
+    'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
+    'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
+    'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
+    'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
+    'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
+    'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
+    'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
+  ]
+  const lower = texte.toLowerCase()
+  for (const v of VILLES) {
+    if (lower.includes(v.toLowerCase())) {
+      result.ville = v
+      break
     }
   }
 
-  // Pattern "Ville (75001)" ou "75001 Ville"
-  const villeAvecCP = texte.match(/([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(?\s*(\d{5})\s*\)?/) ||
-                      texte.match(/(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)/)
-  if (villeAvecCP) {
-    if (/^\d{5}$/.test(villeAvecCP[1])) {
-      result.codePostal = villeAvecCP[1]
-      result.ville = villeAvecCP[2]
-    } else {
-      result.ville = villeAvecCP[1]
-      result.codePostal = villeAvecCP[2]
-    }
+  // ──── 2. Code postal 5 chiffres (avec validation dept) ────
+  const cpMatch = texte.match(/\b(\d{5})\b/)
+  if (cpMatch && isValidCP(cpMatch[1])) {
+    result.codePostal = cpMatch[1]
   }
 
-  // Fallback : villes connues
+  // ──── 3. Pattern "Ville (75001)" ou "75001 Ville" (seulement si pas déjà trouvé) ────
   if (!result.ville) {
-    const VILLES = [
-      'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
-      'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
-      'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
-      'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
-      'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
-      'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
-      'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
-      'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
-      'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
-      'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
-      'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
-      'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
-      'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
-      'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
-      'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
-    ]
-    const lower = texte.toLowerCase()
-    for (const v of VILLES) {
-      if (lower.includes(v.toLowerCase())) {
-        result.ville = v
-        break
+    const villeAvecCP = texte.match(/([A-ZÀ-Ÿ][a-zà-ÿ]+(?:-[A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(\s*(\d{5})\s*\)/) ||
+                        texte.match(/(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:-[A-ZÀ-Ÿa-zà-ÿ]+)*)/)
+    if (villeAvecCP) {
+      const [cp, ville] = /^\d{5}$/.test(villeAvecCP[1])
+        ? [villeAvecCP[1], villeAvecCP[2]]
+        : [villeAvecCP[2], villeAvecCP[1]]
+
+      // Valider : CP valide ET nom de ville pas un mot courant
+      if (isValidCP(cp) && !MOTS_EXCLUS.test(ville)) {
+        result.ville = ville
+        result.codePostal = cp
       }
     }
   }
 
-  // Déduire ville depuis code postal si Paris/Lyon/Marseille
+  // ──── 4. Déduire ville depuis code postal si Paris/Lyon/Marseille ────
   if (!result.ville && result.codePostal) {
     const dept = result.codePostal.substring(0, 2)
     if (dept === '75') result.ville = 'Paris'
@@ -232,11 +240,13 @@ function extraireGES(texte: string): ClasseDPE | undefined {
   for (const p of patterns) {
     const m = texte.match(p)
     if (m) {
-      // Le groupe de capture est en position 1 pour le pattern #1, 
-      // mais peut être en position 1 ou plus loin pour les autres.
-      // On prend le dernier groupe non-undefined.
-      const letter = [...m].reverse().find(g => g && /^[A-G]$/i.test(g))
-      if (letter) return letter.toUpperCase() as ClasseDPE
+      // Tous les patterns ont la lettre en dernier groupe capturant
+      // Parcourir les groupes depuis la fin pour trouver la lettre
+      for (let i = m.length - 1; i >= 1; i--) {
+        if (m[i] && /^[A-G]$/i.test(m[i])) {
+          return m[i].toUpperCase() as ClasseDPE
+        }
+      }
     }
   }
   return undefined
@@ -262,28 +272,30 @@ function extraireEtagesTotal(texte: string): number | undefined {
 function extraireAnneeConstruction(texte: string): number | undefined {
   const patterns = [
     // Patterns explicites (les plus fiables)
-    /(?:année\s*(?:de\s*)?construction)\s*:?\s*((?:19|20)\d{2})/i,
-    /(?:date\s*(?:de\s*)?construction)\s*:?\s*((?:19|20)\d{2})/i,
-    /(?:construit|construction)\s*(?:en\s*)?:?\s*((?:19|20)\d{2})/i,
-    /(?:bâti|b[aâ]tie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:19|20)\d{2})/i,
+    /(?:année\s*(?:de\s*)?construction)\s*:?\s*((?:18|19|20)\d{2})/i,
+    /(?:date\s*(?:de\s*)?construction)\s*:?\s*((?:18|19|20)\d{2})/i,
+    /(?:construit|construction)\s*(?:en\s*)?:?\s*((?:18|19|20)\d{2})/i,
+    /(?:bâti|b[aâ]tie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:18|19|20)\d{2})/i,
     // "Immeuble de 1972", "Résidence de 1985", "Copropriété de 1974"
-    /(?:immeuble|résidence|r[eé]sidence|copropri[eé]t[eé]|programme|b[aâ]timent)\s+(?:de|du)\s+((?:19|20)\d{2})/i,
+    /(?:immeuble|résidence|r[eé]sidence|copropri[eé]t[eé]|programme|b[aâ]timent)\s+(?:de|du)\s+((?:18|19|20)\d{2})/i,
     // "Livraison 2024", "Livraison prévue T3 2025", "Livraison prévue 2025"
     /livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i,
     // "Neuf - livré en 2024"
     /livr[eé]e?\s+(?:en\s+)?((?:19|20)\d{2})/i,
     // "Année : 1985", "Année de construction : 1985"
-    /ann[eé]e\s*:?\s*((?:19|20)\d{2})/i,
+    /ann[eé]e\s*:?\s*((?:18|19|20)\d{2})/i,
     // "Construction year: 1985" (Jina/Firecrawl can return English)
-    /(?:construction\s*year|year\s*(?:of\s*)?(?:construction|built))\s*:?\s*((?:19|20)\d{2})/i,
+    /(?:construction\s*year|year\s*(?:of\s*)?(?:construction|built))\s*:?\s*((?:18|19|20)\d{2})/i,
     // "Période de construction : 1970-1980" → prend la 1ère année
-    /p[eé]riode\s*(?:de\s*)?construction\s*:?\s*((?:19|20)\d{2})/i,
+    /p[eé]riode\s*(?:de\s*)?construction\s*:?\s*((?:18|19|20)\d{2})/i,
     // "datant de 1975", "datant des années 70"
-    /datant\s+(?:de\s+|des\s+ann[eé]es\s+)?((?:19|20)\d{2})/i,
+    /datant\s+(?:de\s+|des\s+ann[eé]es\s+)?((?:18|19|20)\d{2})/i,
     // Tableau markdown : "| Année | 1985 |" ou "| Construction | 1985 |"
-    /\|\s*(?:année|ann[eé]e\s*(?:de\s*)?construction|construction|date\s*construction)\s*\|\s*((?:19|20)\d{2})\s*\|/i,
+    /\|\s*(?:année|ann[eé]e\s*(?:de\s*)?construction|construction|date\s*construction)\s*\|\s*((?:18|19|20)\d{2})\s*\|/i,
     // "Built in 1985" (Jina anglais)
-    /built\s+in\s+((?:19|20)\d{2})/i,
+    /built\s+in\s+((?:18|19|20)\d{2})/i,
+    // Fallback : "année de construction" suivi de n'importe quoi puis année (SeLoger séparation HTML)
+    /ann[eé]e\s*(?:de\s*)?construction\D{0,30}((?:18|19|20)\d{2})/i,
   ]
   for (const p of patterns) {
     const m = texte.match(p)
@@ -308,6 +320,8 @@ function extraireNbSallesBains(texte: string): number | undefined {
   const patterns = [
     /(\d+)\s*salles?\s*(?:de\s*)?bains?/i,
     /salles?\s*(?:de\s*)?bains?\s*:?\s*(\d+)/i,
+    /(\d+)\s*salles?\s*d'eau/i,
+    /salles?\s*d'eau\s*:?\s*(\d+)/i,
     /(\d+)\s*(?:SDB|sdb)/i,
   ]
   for (const p of patterns) {
@@ -444,32 +458,42 @@ function extraireTitre(texte: string): string | undefined {
  * Parse le texte collé par l'utilisateur et extrait les données de l'annonce.
  * Fonctionne entièrement côté client, sans requête serveur.
  */
+/** Limite de taille pour éviter les ReDoS sur texte très long */
+const MAX_TEXT_LENGTH = 200_000
+
+/**
+ * Parse le texte collé par l'utilisateur et extrait les données de l'annonce.
+ * Fonctionne entièrement côté client, sans requête serveur.
+ */
 export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
   const texte = nettoyerTexte(texteColle)
   if (!texte) return {}
 
-  const localisation = extraireLocalisation(texte)
-  const equipements = extraireEquipements(texte)
+  // Protection ReDoS : tronquer les textes trop longs
+  const texteSafe = texte.length > MAX_TEXT_LENGTH ? texte.substring(0, MAX_TEXT_LENGTH) : texte
+
+  const localisation = extraireLocalisation(texteSafe)
+  const equipements = extraireEquipements(texteSafe)
 
   const resultat: DonneesExtraites = {
-    prix: extrairePrix(texte),
-    surface: extraireSurface(texte),
-    pieces: extrairePieces(texte),
-    chambres: extraireChambres(texte),
-    type: extraireType(texte),
+    prix: extrairePrix(texteSafe),
+    surface: extraireSurface(texteSafe),
+    pieces: extrairePieces(texteSafe),
+    chambres: extraireChambres(texteSafe),
+    type: extraireType(texteSafe),
     ville: localisation.ville,
     codePostal: localisation.codePostal,
-    dpe: extraireDPE(texte),
-    ges: extraireGES(texte),
-    etage: extraireEtage(texte),
-    etagesTotal: extraireEtagesTotal(texte),
-    chargesMensuelles: extraireCharges(texte),
-    taxeFonciere: extraireTaxeFonciere(texte),
-    titre: extraireTitre(texte),
-    description: extraireDescription(texte),
-    anneeConstruction: extraireAnneeConstruction(texte),
-    nbSallesBains: extraireNbSallesBains(texte),
-    orientation: extraireOrientation(texte),
+    dpe: extraireDPE(texteSafe),
+    ges: extraireGES(texteSafe),
+    etage: extraireEtage(texteSafe),
+    etagesTotal: extraireEtagesTotal(texteSafe),
+    chargesMensuelles: extraireCharges(texteSafe),
+    taxeFonciere: extraireTaxeFonciere(texteSafe),
+    titre: extraireTitre(texteSafe),
+    description: extraireDescription(texteSafe),
+    anneeConstruction: extraireAnneeConstruction(texteSafe),
+    nbSallesBains: extraireNbSallesBains(texteSafe),
+    orientation: extraireOrientation(texteSafe),
     ...equipements,
   }
 

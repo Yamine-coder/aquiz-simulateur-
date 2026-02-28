@@ -51,6 +51,7 @@ const FOOTER_OUTILS = [
 
 const FOOTER_LIENS = [
   { label: 'Accueil', href: '/' },
+  { label: 'Blog immobilier', href: '/blog' },
   { label: 'Notre méthode', href: '/#methode' },
   { label: 'Tarifs', href: '/#tarifs' },
   { label: 'Avis clients', href: '/#temoignages' },
@@ -64,69 +65,73 @@ const FOOTER_LEGAL = [
   { label: 'CGU', href: '/mentions-legales#cgu' },
 ]
 
+/** Réouvre le bandeau cookie via un événement global */
+function reopenCookieBanner() {
+  window.dispatchEvent(new Event('reopen-cookie-banner'))
+}
+
 /**
  * Footer corporate du site vitrine AQUIZ
  */
 export function Footer() {
   const pathname = usePathname()
 
-  // Masquer la bande CTA sur les pages outils (simulateur, carte, aides, résultats)
-  const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats')
+  // Masquer la bande CTA sur les pages outils et pages avec leur propre CTA
+  const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats') || pathname.startsWith('/comparateur') || pathname.startsWith('/a-propos') || pathname.startsWith('/mentions-legales')
 
   return (
     <footer className="bg-[#111111] text-white">
 
-      {/* ─── Bande CTA verte (masquée sur les pages outils) ─── */}
+      {/* ─── Bande CTA (masquée sur les pages outils) ─── */}
       {!isToolPage && (
-      <div className="bg-aquiz-green">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-white">
-            Un conseiller peut négocier pour vous.
-            <span className="text-white/75 font-normal ml-1.5">Sans engagement.</span>
-          </p>
-          <div className="flex gap-2.5">
-            <Link
-              href="/simulateur"
-              className="px-5 py-2.5 bg-white text-aquiz-black font-semibold rounded-lg hover:bg-aquiz-gray-lightest transition-colors text-xs"
-            >
-              Lancer une simulation
-            </Link>
-            <Link
-              href="https://calendly.com/contact-aquiz/30min"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-5 py-2.5 bg-white/15 text-white font-semibold rounded-lg hover:bg-white/25 border border-white/25 transition-colors text-xs"
-            >
-              Prendre rendez-vous
-            </Link>
+        <div className="bg-aquiz-green">
+          <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white text-center sm:text-left">
+              Un conseiller peut négocier pour vous.
+              <span className="text-white/75 font-normal ml-1.5">Sans engagement.</span>
+            </p>
+            <div className="flex gap-2.5 w-full sm:w-auto">
+              <Link
+                href="/simulateur"
+                className="flex-1 sm:flex-none text-center px-5 py-2.5 bg-white text-aquiz-black font-semibold rounded-lg hover:bg-aquiz-gray-lightest transition-colors text-xs"
+              >
+                Lancer une simulation
+              </Link>
+              <Link
+                href="https://calendly.com/contact-aquiz/30min"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 sm:flex-none text-center px-5 py-2.5 bg-white/15 text-white font-semibold rounded-lg hover:bg-white/25 border border-white/25 transition-colors text-xs"
+              >
+                Prendre rendez-vous
+              </Link>
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {/* ─── Contenu principal ─── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-14">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-12 gap-8 lg:gap-6">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 pt-14 pb-10 md:pt-16 md:pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
 
-          {/* Col 1 — Marque + coordonnées (lg:4) */}
-          <div className="col-span-2 md:col-span-3 lg:col-span-4">
-            <Link href="/" className="inline-flex items-center gap-2.5 mb-5">
-              <div className="w-8 h-8">
-                <Image
-                  src="/image AQUIZ.jpeg"
-                  alt="AQUIZ"
-                  width={32}
-                  height={32}
-                  className="w-full h-full object-contain rounded-md"
-                />
-              </div>
-              <span className="text-lg font-bold text-white">AQUIZ</span>
+          {/* ── Col gauche : Logo + desc + contacts + socials ── */}
+          <div className="lg:col-span-4">
+            <Link href="/" className="inline-block relative h-14 w-[150px] mb-5">
+              <Image
+                src="/logo-aquiz-white.png"
+                alt="AQUIZ — Conseil en acquisition immobilière à Paris"
+                fill
+                className="object-contain object-left"
+                sizes="150px"
+              />
             </Link>
-            <p className="text-[13px] text-white/40 leading-relaxed mb-5 max-w-xs">
-              Conseil en acquisition immobilière à Paris et en Île-de-France. Nous accompagnons primo-accédants et investisseurs à chaque étape.
+
+            <p className="text-[13px] text-white/40 leading-relaxed mb-6 max-w-xs">
+              Conseil en acquisition immobilière à Paris et en Île-de-France. Nous accompagnons primo-accédants et investisseurs.
             </p>
 
-            <div className="space-y-2.5 text-[13px]">
+            {/* Contacts */}
+            <div className="space-y-2.5 text-[13px] mb-6">
               <a href="tel:+33749520106" className="flex items-center gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Phone className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                 07 49 52 01 06
@@ -142,11 +147,10 @@ export function Footer() {
             </div>
 
             {/* Réseaux sociaux */}
-            <div className="flex gap-2 mt-5">
+            <div className="flex gap-2">
               {[
-                { name: 'Instagram', letter: 'in', url: 'https://www.instagram.com/aquiz.eu/' },
-                { name: 'Facebook', letter: 'fb', url: 'https://www.facebook.com/' },
-                { name: 'LinkedIn', letter: 'Li', url: 'https://www.linkedin.com/' },
+                { name: 'Instagram', letter: 'Ig', url: 'https://www.instagram.com/aquiz.eu/' },
+                { name: 'LinkedIn', letter: 'Li', url: 'https://www.linkedin.com/company/aquiz/' },
               ].map((social) => (
                 <a
                   key={social.name}
@@ -154,81 +158,93 @@ export function Footer() {
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={social.name}
-                  className="w-8 h-8 rounded-lg bg-white/[0.06] hover:bg-aquiz-green/20 hover:text-aquiz-green flex items-center justify-center transition-all"
+                  className="w-8 h-8 rounded-lg bg-white/[0.06] hover:bg-aquiz-green/15 flex items-center justify-center transition-all group"
                 >
-                  <span className="text-[10px] font-bold text-white/40 hover:text-aquiz-green">{social.letter}</span>
+                  <span className="text-[10px] font-bold text-white/30 group-hover:text-aquiz-green transition-colors">{social.letter}</span>
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Col 2 — Services (lg:2) */}
-          <div className="col-span-1 lg:col-span-2">
-            <h4 className="text-[11px] font-semibold text-white/25 uppercase tracking-widest mb-4">
-              Services
-            </h4>
-            <ul className="space-y-2.5">
-              {FOOTER_SERVICES.map((link) => (
-                <li key={link.label}>
-                  <FooterLink href={link.href} label={link.label} />
-                </li>
-              ))}
-            </ul>
-          </div>
+          {/* ── 4 colonnes de liens ── */}
+          <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-6">
 
-          {/* Col 3 — Outils (lg:2) */}
-          <div className="col-span-1 lg:col-span-2">
-            <h4 className="text-[11px] font-semibold text-white/25 uppercase tracking-widest mb-4">
-              Outils gratuits
-            </h4>
-            <ul className="space-y-2.5">
-              {FOOTER_OUTILS.map((link) => (
-                <li key={link.href}>
-                  <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
+            {/* Services */}
+            <nav aria-label="Services">
+              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+                Services
+              </h4>
+              <ul className="space-y-3">
+                {FOOTER_SERVICES.map((link) => (
+                  <li key={link.label}>
+                    <FooterLink href={link.href} label={link.label} />
+                  </li>
+                ))}
+              </ul>
+            </nav>
 
-          {/* Col 4 — Liens utiles (lg:2) */}
-          <div className="col-span-1 lg:col-span-2">
-            <h4 className="text-[11px] font-semibold text-white/25 uppercase tracking-widest mb-4">
-              Navigation
-            </h4>
-            <ul className="space-y-2.5">
-              {FOOTER_LIENS.map((link) => (
-                <li key={link.label}>
-                  <FooterLink href={link.href} label={link.label} />
-                </li>
-              ))}
-            </ul>
-          </div>
+            {/* Outils */}
+            <nav aria-label="Outils gratuits">
+              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+                Outils gratuits
+              </h4>
+              <ul className="space-y-3">
+                {FOOTER_OUTILS.map((link) => (
+                  <li key={link.href}>
+                    <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
 
-          {/* Col 5 — Légal (lg:2) */}
-          <div className="col-span-1 lg:col-span-2">
-            <h4 className="text-[11px] font-semibold text-white/25 uppercase tracking-widest mb-4">
-              Légal
-            </h4>
-            <ul className="space-y-2.5">
-              {FOOTER_LEGAL.map((link) => (
-                <li key={link.href}>
-                  <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
-                    {link.label}
-                  </Link>
+            {/* Navigation */}
+            <nav aria-label="Navigation du site">
+              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+                Navigation
+              </h4>
+              <ul className="space-y-3">
+                {FOOTER_LIENS.map((link) => (
+                  <li key={link.label}>
+                    <FooterLink href={link.href} label={link.label} />
+                  </li>
+                ))}
+              </ul>
+            </nav>
+
+            {/* Légal */}
+            <nav aria-label="Informations légales">
+              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+                Légal
+              </h4>
+              <ul className="space-y-3">
+                {FOOTER_LEGAL.map((link) => (
+                  <li key={link.href}>
+                    <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <button
+                    onClick={reopenCookieBanner}
+                    className="text-[13px] text-white/50 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Gérer les cookies
+                  </button>
                 </li>
-              ))}
-            </ul>
+              </ul>
+            </nav>
           </div>
         </div>
       </div>
 
       {/* ─── Barre copyright ─── */}
       <div className="border-t border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-2 text-[11px] text-white/25">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/20">
           <p>© {new Date().getFullYear()} AQUIZ — Tous droits réservés</p>
-          <p>Simulation indicative, non contractuelle · Données DVF data.gouv.fr</p>
+          <p>Conception : Yamine Moussaoui · Données data.gouv.fr</p>
         </div>
       </div>
     </footer>

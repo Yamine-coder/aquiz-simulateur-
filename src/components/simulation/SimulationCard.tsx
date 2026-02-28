@@ -54,7 +54,7 @@ const MODE_CONFIG = {
   },
   B: {
     title: 'Puis-je acheter ce bien ?',
-    subtitle: 'Ce qu\'il faut pour l\'acheter',
+    subtitle: 'Puis-je acheter ce bien ?',
     icon: Home
   }
 }

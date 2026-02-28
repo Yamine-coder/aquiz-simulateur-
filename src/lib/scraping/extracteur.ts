@@ -415,8 +415,20 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   
   // ===== DPE =====
-  const dpeMatch = html.match(/(?:dpe|energyClass|energy.?rating)["\s:]*"?([A-G])"?/i) ||
-                   html.match(/classe\s*(?:énergie|énergétique)["\s:]*([A-G])/i)
+  // IMPORTANT: Patterns ordonnés du plus fiable au moins fiable.
+  // On évite les patterns trop larges qui capturent les lettres de l'échelle DPE (A, B, C...)
+  // au lieu de la valeur réelle. SeLoger affiche un barème avec data-dpe="A", data-dpe="B" etc.
+  const dpeMatch =
+    // 1. JSON structuré : "dpe":"D" ou "energyClass":"D" (le plus fiable)
+    html.match(/"(?:dpe|energyClass|energy[_.]?[rR]ating|energyPerformanceDiagnostic|diagnosticPerformanceEnergetique)"\s*:\s*"([A-G])"/i) ||
+    // 2. JSON sans guillemets sur la valeur : "dpe": D ou "energyClass":D
+    html.match(/"(?:dpe|energyClass|energyPerformanceDiagnostic)"\s*:\s*([A-G])\b/i) ||
+    // 3. Attribut HTML indiquant la valeur active/courante
+    html.match(/data-(?:current-?dpe|dpe-?value|dpe-?class|energy-?class|active-?dpe)[=:]\s*"?([A-G])"?/i) ||
+    // 4. Texte visible : "classe énergie : D", "Classe énergétique : D"
+    html.match(/classe\s*(?:énergie|énergétique)\s*:?\s*([A-G])\b/i) ||
+    // 5. Texte visible avec séparateur explicite : "DPE : D" (le : est OBLIGATOIRE pour éviter l'échelle)
+    html.match(/\bDPE\s*:\s*([A-G])\b/i)
   if (dpeMatch) {
     data.dpe = dpeMatch[1].toUpperCase() as ClasseDPE
   } else {
@@ -424,10 +436,18 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   
   // ===== GES =====
-  const gesMatch = html.match(/(?:ges|greenHouseGas|ghg|emissionClass)["\s:]*"?([A-G])"?/i) ||
-                   html.match(/gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre["\s:]*([A-G])/i) ||
-                   html.match(/classe\s*(?:GES|climat)["\s:]*([A-G])/i) ||
-                   html.match(/"ges"\s*:\s*"?([A-G])"?/i)
+  const gesMatch =
+    // 1. JSON structuré (le plus fiable)
+    html.match(/"(?:ges|ghg|greenHouseGas|emissionClass|greenhouseGasEmission)"\s*:\s*"([A-G])"/i) ||
+    // 2. JSON sans guillemets
+    html.match(/"(?:ges|greenhouseGasEmission|emissionClass)"\s*:\s*([A-G])\b/i) ||
+    // 3. Attribut HTML valeur active
+    html.match(/data-(?:current-?ges|ges-?value|ges-?class|emission-?class)[=:]\s*"?([A-G])"?/i) ||
+    // 4. Texte visible avec label explicite
+    html.match(/gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*:?\s*([A-G])\b/i) ||
+    html.match(/classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i) ||
+    // 5. Texte "GES : D" (: obligatoire)
+    html.match(/\bGES\s*:\s*([A-G])\b/i)
   if (gesMatch) {
     data.ges = gesMatch[1].toUpperCase() as ClasseDPE
   }
@@ -453,7 +473,7 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   
   // ===== ANNÉE CONSTRUCTION =====
-  const anneePatterns = [
+  const anneePatterns: RegExp[] = [
     // JSON-LD / Schema.org / structured data
     /"yearBuilt"\s*:\s*"?((?:19|20)\d{2})"?/i,
     /"constructionYear"\s*:\s*"?((?:19|20)\d{2})"?/i,
@@ -469,11 +489,16 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     /"value"\s*:\s*"?((?:19|20)\d{2})"?[^}]*"construction_year"/i,
     // Attributs HTML data-*
     /data-(?:year|annee|construction)[^"]*="((?:19|20)\d{2})"/i,
+    // SeLoger / sites avec label et valeur séparés par des tags HTML
+    /[Aa]nn[ée]e\s*(?:de\s*)?construction[^<]{0,5}<[^>]*>[^<]*<[^>]*>\s*((?:18|19|20)\d{2})/,
+    /[Aa]nn[ée]e\s*(?:de\s*)?construction(?:<[^>]*>|\s)*?((?:18|19|20)\d{2})/,
     // Texte libre dans le HTML
     /(?:construit|construction|année)\s*(?:en\s*)?:?\s*((?:19|20)\d{2})/i,
     /(?:bâti|édifié|livré)\s*(?:en\s*)?((?:19|20)\d{2})/i,
     /(?:immeuble|résidence|copropriété|bâtiment)\s+(?:de|du)\s+((?:19|20)\d{2})/i,
     /livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i,
+    // Très ancien (1800+)
+    /[Aa]nn[ée]e\s*(?:de\s*)?construction\D{0,30}((?:18|19|20)\d{2})/,
   ]
   for (const pattern of anneePatterns) {
     const match = html.match(pattern)
@@ -810,7 +835,8 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
   
   // ===== DPE =====
   if (!data.dpe) {
-    const dpe = item.energyClass ?? item.energyRating ?? item.dpe ?? item.energyPerformance
+    const dpe = item.energyClass ?? item.energyRating ?? item.dpe ?? item.energyPerformance ??
+                item.energyPerformanceDiagnostic ?? item.diagnosticPerformanceEnergetique
     if (typeof dpe === 'string' && /^[A-G]$/i.test(dpe)) {
       data.dpe = dpe.toUpperCase() as ClasseDPE
     }
@@ -818,7 +844,8 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
   
   // ===== GES =====
   if (!data.ges) {
-    const ges = item.emissionClass ?? item.ghgEmission ?? item.ges ?? item.greenHouseGas
+    const ges = item.emissionClass ?? item.ghgEmission ?? item.ges ?? item.greenHouseGas ??
+                item.greenhouseGasEmission
     if (typeof ges === 'string' && /^[A-G]$/i.test(ges)) {
       data.ges = ges.toUpperCase() as ClasseDPE
     }
@@ -841,7 +868,9 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
   
   // ===== ANNÉE CONSTRUCTION =====
   if (!data.anneeConstruction) {
-    const year = item.yearBuilt ?? item.constructionYear ?? item.dateBuilt ?? item.buildYear
+    const year = item.yearBuilt ?? item.constructionYear ?? item.dateBuilt ?? item.buildYear ??
+                 item.yearOfConstruction ?? item.anneeConstruction ?? item.anneeDeCnstruction ??
+                 item.buildPeriod
     if (year !== undefined) {
       const n = parseInt(String(year))
       if (n >= 1800 && n <= 2030) data.anneeConstruction = n
@@ -863,6 +892,152 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
     if (charges !== undefined) {
       const n = parseInt(String(charges))
       if (n > 0 && n < 5000) data.chargesMensuelles = n
+    }
+  }
+}
+
+// ============================================
+// EXTRACTION DEPUIS __NEXT_DATA__ (Next.js)
+// ============================================
+
+/**
+ * Parse le bloc <script id="__NEXT_DATA__"> pour extraire les données structurées.
+ * SeLoger et d'autres sites immobiliers utilisent Next.js et embarquent les props
+ * de la page dans ce bloc. C'est la source la plus fiable car c'est le même JSON
+ * que le serveur utilise pour hydrater la page.
+ */
+export function parseNextData(html: string): Partial<NouvelleAnnonce> {
+  const data: Partial<NouvelleAnnonce> = {}
+  
+  const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)
+  if (!nextDataMatch) return data
+  
+  try {
+    const json = JSON.parse(nextDataMatch[1])
+    // Next.js stocke les données dans props.pageProps
+    extractFromNestedJson(json, data, 0)
+  } catch {
+    // JSON invalide, on skip
+  }
+  
+  return data
+}
+
+/**
+ * Recherche récursive dans un objet JSON pour trouver les données immobilières.
+ * Parcourt l'arbre en profondeur et extrait DPE, GES, année, prix, surface, etc.
+ * Priorité au PREMIER objet trouvé avec ces propriétés (généralement le listing principal).
+ */
+function extractFromNestedJson(
+  obj: unknown,
+  data: Partial<NouvelleAnnonce>,
+  depth: number
+): void {
+  if (depth > 20 || !obj || typeof obj !== 'object') return
+  
+  const record = obj as Record<string, unknown>
+  
+  // --- DPE ---
+  if (!data.dpe) {
+    const dpeVal = record.energyPerformanceDiagnostic ?? record.energyClass ??
+                   record.energyRating ?? record.dpe ?? record.classeDpe ??
+                   record.diagnosticPerformanceEnergetique ?? record.energy_class
+    if (typeof dpeVal === 'string' && /^[A-G]$/i.test(dpeVal)) {
+      data.dpe = dpeVal.toUpperCase() as ClasseDPE
+    }
+    // Objet imbriqué ex: {dpe: {grade: "D", value: 350}}
+    if (typeof dpeVal === 'object' && dpeVal !== null) {
+      const dpeObj = dpeVal as Record<string, unknown>
+      const grade = dpeObj.grade ?? dpeObj.letter ?? dpeObj.classe ?? dpeObj.value ?? dpeObj.label
+      if (typeof grade === 'string' && /^[A-G]$/i.test(grade)) {
+        data.dpe = grade.toUpperCase() as ClasseDPE
+      }
+    }
+  }
+  
+  // --- GES ---
+  if (!data.ges) {
+    const gesVal = record.greenhouseGasEmission ?? record.ges ?? record.ghgEmission ??
+                   record.emissionClass ?? record.classeGes ?? record.greenHouseGas ??
+                   record.ghg_class ?? record.emission_class
+    if (typeof gesVal === 'string' && /^[A-G]$/i.test(gesVal)) {
+      data.ges = gesVal.toUpperCase() as ClasseDPE
+    }
+    if (typeof gesVal === 'object' && gesVal !== null) {
+      const gesObj = gesVal as Record<string, unknown>
+      const grade = gesObj.grade ?? gesObj.letter ?? gesObj.classe ?? gesObj.value ?? gesObj.label
+      if (typeof grade === 'string' && /^[A-G]$/i.test(grade)) {
+        data.ges = grade.toUpperCase() as ClasseDPE
+      }
+    }
+  }
+  
+  // --- Année de construction ---
+  if (!data.anneeConstruction) {
+    const yearVal = record.yearBuilt ?? record.constructionYear ?? record.yearOfConstruction ??
+                    record.anneeConstruction ?? record.buildYear ?? record.dateBuilt ??
+                    record.anneeDeCnstruction ?? record.buildPeriod ?? record.construction_year
+    if (yearVal !== undefined) {
+      const n = parseInt(String(yearVal))
+      if (n >= 1800 && n <= 2030) data.anneeConstruction = n
+    }
+  }
+  
+  // --- Prix ---
+  if (!data.prix) {
+    const priceVal = record.price ?? record.prix ?? record.amount
+    if (priceVal !== undefined) {
+      const n = typeof priceVal === 'number' ? priceVal : parseInt(String(priceVal).replace(/\D/g, ''))
+      if (n > 10000 && n < 50000000) data.prix = n
+    }
+  }
+  
+  // --- Surface ---
+  if (!data.surface) {
+    const surfVal = record.livingArea ?? record.surface ?? record.surfaceArea ??
+                    record.area ?? record.floorSize ?? record.livingSpace
+    if (surfVal !== undefined) {
+      const raw = typeof surfVal === 'object' && surfVal !== null
+        ? (surfVal as Record<string, unknown>).value
+        : surfVal
+      const n = parseFloat(String(raw))
+      if (n >= 9 && n <= 2000) data.surface = n
+    }
+  }
+  
+  // --- Pièces ---
+  if (!data.pieces) {
+    const roomsVal = record.numberOfRooms ?? record.rooms ?? record.nbRooms ?? record.pieces
+    if (roomsVal !== undefined) {
+      const n = parseInt(String(roomsVal))
+      if (n >= 1 && n <= 20) data.pieces = n
+    }
+  }
+  
+  // --- Ville / Code postal ---
+  if (!data.ville || !data.codePostal) {
+    const loc = (record.location ?? record.address ?? record.localisation) as Record<string, unknown> | undefined
+    if (loc && typeof loc === 'object') {
+      if (!data.ville) {
+        const city = loc.city ?? loc.addressLocality ?? loc.ville ?? loc.name
+        if (typeof city === 'string' && city.length > 1) data.ville = city
+      }
+      if (!data.codePostal) {
+        const cp = String(loc.postalCode ?? loc.zipcode ?? loc.zipCode ?? loc.codePostal ?? '')
+        if (/^\d{5}$/.test(cp)) data.codePostal = cp
+      }
+    }
+  }
+  
+  // --- Récursion dans les valeurs ---
+  for (const value of Object.values(record)) {
+    if (Array.isArray(value)) {
+      // Pour les arrays, ne parcourir que les 5 premiers éléments (éviter les listings similaires)
+      for (let i = 0; i < Math.min(value.length, 5); i++) {
+        extractFromNestedJson(value[i], data, depth + 1)
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      extractFromNestedJson(value, data, depth + 1)
     }
   }
 }

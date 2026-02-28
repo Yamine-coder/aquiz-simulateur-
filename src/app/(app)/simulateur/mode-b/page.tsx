@@ -1,31 +1,11 @@
 'use client'
 
-import {
-    AlertTriangle,
-    ArrowLeft,
-    ArrowRight,
-    Building,
-    CheckCircle,
-    Download,
-    Home,
-    Info,
-    MapPin,
-    Phone,
-    PiggyBank,
-    TrendingUp
-} from 'lucide-react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
-import { ContactModal } from '@/components/contact'
-import { SimulationPDFModeB } from '@/components/pdf/SimulationPDFModeB'
 import { LocalisationSearch } from '@/components/simulateur'
 import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MoneyInput } from '@/components/ui/MoneyInput'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
     Select,
@@ -44,8 +24,35 @@ import {
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
 import { logger } from '@/lib/logger'
+import type { EnrichissementPDF } from '@/lib/pdf/enrichirPourPDF'
+import { enrichirPourPDF } from '@/lib/pdf/enrichirPourPDF'
 import { formatMontant } from '@/lib/utils/formatters'
 import { calculerMontantPTZ, getInfoPTZ } from '@/lib/utils/zonePTZ'
+import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
+import {
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    Building,
+    Check,
+    CheckCircle,
+    FileDown,
+    Home,
+    Info,
+    Loader2,
+    Mail,
+    MapPin,
+    Phone,
+    PiggyBank,
+    TrendingUp
+} from 'lucide-react'
+import dynamic from 'next/dynamic'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
+const SimulationPDFModeB = dynamic(() => import('@/components/pdf/SimulationPDFModeB').then(m => ({ default: m.SimulationPDFModeB })), { ssr: false })
 
 /**
  * Mode B - "Ce qu'il faut pour acheter"
@@ -64,7 +71,14 @@ export default function ModeBPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
-  const { simulations, isLoaded, save, getPending } = useSimulationSave()
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfEmailValue, setPdfEmailValue] = useState('')
+  const [pdfEmailSent, setPdfEmailSent] = useState(false)
+  const [pdfEmailLoading, setPdfEmailLoading] = useState(false)
+  const [cachedEnrichissement, setCachedEnrichissement] = useState<EnrichissementPDF | null>(null)
+  const leadStore = useLeadStore()
+  const hasLead = useLeadStore(hasValidEmail)
+  const { simulations, isLoaded, save } = useSimulationSave()
 
   // États du formulaire
   const [prixBien, setPrixBien] = useState(0)
@@ -149,13 +163,16 @@ export default function ModeBPage() {
     })
 
     // Données pour le graphique camembert (répartition du coût)
+    const fraisNotaireArrondi = Math.round(fraisNotaire)
+    const fraisAnnexesArrondi = Math.round(fraisAnnexes)
+    const coutTotalCreditArrondi = Math.round(coutTotalCredit)
     const repartitionCout = [
       { label: 'Prix du bien', value: prixBien, color: '#1a1a1a' },
-      { label: 'Frais de notaire', value: Math.round(fraisNotaire), color: '#6b7280' },
-      { label: 'Frais annexes', value: Math.round(fraisAnnexes), color: '#9ca3af' },
-      { label: 'Intérêts + Assurance', value: Math.round(coutTotalCredit), color: '#22c55e' },
+      { label: 'Frais de notaire', value: fraisNotaireArrondi, color: '#6b7280' },
+      { label: 'Frais annexes', value: fraisAnnexesArrondi, color: '#9ca3af' },
+      { label: 'Intérêts + Assurance', value: coutTotalCreditArrondi, color: '#22c55e' },
     ]
-    const totalProjet = prixBien + fraisNotaire + fraisAnnexes + coutTotalCredit
+    const totalProjet = prixBien + fraisNotaireArrondi + fraisAnnexesArrondi + coutTotalCreditArrondi
 
     return {
       fraisNotaire,
@@ -253,6 +270,7 @@ export default function ModeBPage() {
     ptzRaison: string
     nomCommune: string | null
     prixLocalM2: number | null
+    prixFallbackM2: number | null
     surfaceEstimee: number | null
     nbVentes: number | null
     source: string | null
@@ -284,6 +302,7 @@ export default function ModeBPage() {
       ptzRaison: ptzResult.raison || '',
       nomCommune: null,
       prixLocalM2: null,
+      prixFallbackM2: null,
       surfaceEstimee: null,
       nbVentes: null,
       source: null,
@@ -306,8 +325,13 @@ export default function ModeBPage() {
         const prixLocalM2 = typeLogement === 'appartement' 
           ? data.prixM2Appartement 
           : data.prixM2Maison
-        const surfaceEstimee = prixLocalM2 && prixBien > 0 
-          ? Math.round(prixBien / prixLocalM2) 
+        // Fallback : si maison n'a pas de données, proposer le prix appartement comme référence
+        const prixFallbackM2 = (!prixLocalM2 && typeLogement === 'maison' && data.prixM2Appartement > 0)
+          ? data.prixM2Appartement
+          : null
+        const prixPourSurface = prixLocalM2 || prixFallbackM2
+        const surfaceEstimee = prixPourSurface && prixBien > 0 
+          ? Math.round(prixBien / prixPourSurface) 
           : null
         const nbVentes = typeLogement === 'appartement'
           ? data.nbVentesAppart
@@ -317,9 +341,10 @@ export default function ModeBPage() {
           ...prev,
           nomCommune: data.nomCommune,
           prixLocalM2,
+          prixFallbackM2,
           surfaceEstimee,
           nbVentes,
-          source: `DVF ${data.annee}`,
+          source: `Prix ${data.annee}`,
           isLoading: false,
         } : null)
       })
@@ -334,7 +359,7 @@ export default function ModeBPage() {
   }, [codePostal, prixBien, typeBien, typeLogement])
 
   // Export PDF — Rapport Mode B
-  const generatePDF = useCallback(async () => {
+  const generatePDF = useCallback(async (enrichissement?: EnrichissementPDF) => {
     const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
     const { pdf } = await import('@react-pdf/renderer')
@@ -375,6 +400,8 @@ export default function ModeBPage() {
           surfaceEstimee: infoLocalisation.surfaceEstimee,
           nbVentes: infoLocalisation.nbVentes,
         } : null}
+        quartier={enrichissement?.quartier}
+        syntheseIA={enrichissement?.syntheseIA}
       />
     ).toBlob()
 
@@ -389,6 +416,58 @@ export default function ModeBPage() {
     URL.revokeObjectURL(url)
   }, [prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs, infoLocalisation])
 
+  /** Capture email bonus + génère le PDF en local */
+  const handleSendPdfEmail = useCallback(async () => {
+    if (!pdfEmailValue || pdfEmailLoading) return
+    setPdfEmailLoading(true)
+    try {
+      // 1. Enregistrer le lead via API
+      await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pdfEmailValue,
+          source: 'simulateur-b',
+          contexte: { prixBien, typeBien, dureeAns, apport }
+        })
+      })
+      // 2. Sync lead store
+      leadStore.capture(pdfEmailValue, 'simulateur-b', undefined, { prixBien, typeBien, dureeAns, apport })
+      // 3. Enrichir le PDF avec IA + données quartier (Mode B = a codePostal)
+      const enrichissement = await enrichirPourPDF({
+        mode: 'B',
+        codePostal: codePostal || undefined,
+        typeBien,
+        typeLogement,
+        nomCommune: nomCommune || undefined,
+        age: 30, // Mode B n'a pas l'âge — valeur neutre
+        statutProfessionnel: 'non_renseigne',
+        situationFoyer: 'non_renseigne',
+        nombreEnfants: 0,
+        revenusMensuels: calculs.revenusMinimums33,
+        chargesMensuelles: 0,
+        prixAchatMax: prixBien,
+        capitalEmpruntable: calculs.montantAEmprunter,
+        apport,
+        dureeAns,
+        tauxInteret,
+        mensualite: calculs.mensualiteTotal,
+        scoreFaisabilite: calculs.apportSuffisant ? 75 : 45,
+        tauxEndettement: 33,
+        resteAVivre: calculs.revenusMinimums33 - calculs.mensualiteTotal,
+      })
+      // 4. Cacher l'enrichissement pour re-téléchargement + générer PDF
+      setCachedEnrichissement(enrichissement)
+      await generatePDF(enrichissement)
+      setPdfEmailSent(true)
+    } catch (err) {
+      logger.error('Erreur envoi lead Mode B', err)
+    } finally {
+      setPdfEmailLoading(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfEmailValue, pdfEmailLoading, prixBien, typeBien, typeLogement, codePostal, dureeAns, apport, tauxInteret, calculs.revenusMinimums33, calculs.montantAEmprunter, calculs.mensualiteTotal, calculs.apportSuffisant, generatePDF])
+
   // Système de sauvegarde
   const hasCheckedRef = useRef(false)
   const [pendingToResume, setPendingToResume] = useState<typeof simulations[0] | null>(null)
@@ -397,7 +476,9 @@ export default function ModeBPage() {
     if (sim.modeBData) {
       setPrixBien(sim.modeBData.prixBien)
       setTypeBien(sim.modeBData.typeBien)
+      if (sim.modeBData.typeLogement) setTypeLogement(sim.modeBData.typeLogement)
       setCodePostal(sim.modeBData.codePostal)
+      if (sim.modeBData.nomCommune) setNomCommune(sim.modeBData.nomCommune)
       setApport(sim.modeBData.apport)
       setDureeAns(sim.modeBData.dureeAns)
       setTauxInteret(sim.modeBData.tauxInteret)
@@ -415,12 +496,14 @@ export default function ModeBPage() {
       const sim = simulations.find(s => s.id === restoreId)
       if (sim) { restoreSimulation(sim); setCurrentSaveId(restoreId); return }
     }
-    const pending = getPending('B')
-    if (pending && pending.modeBData && pending.modeBData.prixBien > 0) {
-      setPendingToResume(pending)
+    // Chercher la simulation Mode B la plus récente (en_cours OU terminee)
+    const lastB = simulations.find(s => s.mode === 'B' && s.modeBData && s.modeBData.prixBien > 0)
+    if (lastB) {
+      // Toujours proposer la reprise via la modale
+      setPendingToResume(lastB)
       setShowResumeModal(true)
     }
-  }, [isLoaded, simulations, getPending, restoreSimulation])
+  }, [isLoaded, simulations, restoreSimulation])
 
   const handleResume = useCallback(() => {
     if (pendingToResume) restoreSimulation(pendingToResume)
@@ -445,7 +528,9 @@ export default function ModeBPage() {
       modeBData: {
         prixBien,
         typeBien,
+        typeLogement,
         codePostal,
+        nomCommune,
         apport,
         dureeAns,
         tauxInteret
@@ -458,7 +543,7 @@ export default function ModeBPage() {
       } : null
     })
     setCurrentSaveId(savedSim.id)
-  }, [save, currentSaveId, etape, prixBien, typeBien, codePostal, apport, dureeAns, tauxInteret, calculs.mensualiteTotal])
+  }, [save, currentSaveId, etape, prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs.mensualiteTotal])
 
   // Auto-save : Ctrl+S + auto-save au changement d'étape
   const autoSave = useAutoSave(handleSave, prixBien === 0)
@@ -471,6 +556,14 @@ export default function ModeBPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etape])
+
+  // Pré-remplir l'email du CTA PDF depuis le lead store
+  useEffect(() => {
+    if (hasLead && leadStore.email && !pdfEmailValue) {
+      setPdfEmailValue(leadStore.email)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLead])
 
   // Étapes pour la barre de progression
   const ETAPES = [
@@ -505,7 +598,17 @@ export default function ModeBPage() {
       <div className="border-b border-aquiz-gray-lighter/60 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Desktop */}
-          <div className="hidden md:flex items-center py-4">
+          <div className="hidden md:flex items-center py-4 relative">
+            {/* Bouton retour desktop — label contextuel */}
+            <button
+              type="button"
+              onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
+              className="flex items-center gap-1.5 mr-5 px-3 py-1.5 rounded-lg text-sm text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              {etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}
+            </button>
+            <div className="w-px h-6 bg-aquiz-gray-lighter mr-5" />
             {ETAPES.map((e, index) => {
               const isActive = e.id === etape
               const isPassed = index < etapeActuelleIndex
@@ -545,35 +648,48 @@ export default function ModeBPage() {
                 </div>
               )
             })}
-              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="ml-auto" />
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="absolute right-0 top-1/2 -translate-y-1/2" />
           </div>
           
           {/* Mobile */}
-          <div className="md:hidden py-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-aquiz-green text-white text-sm font-bold flex items-center justify-center shadow-md shadow-aquiz-green/20">
-                {etapeActuelleIndex + 1}
-              </div>
+          <div className="md:hidden py-3.5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              {/* Bouton retour mobile — label contextuel */}
+              <button
+                type="button"
+                onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
+                className="w-8 h-8 rounded-full bg-aquiz-gray-lightest flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lighter transition-colors"
+                aria-label={etapeActuelleIndex === 0 ? 'Retour' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
               <div>
-                <p className="text-sm font-bold text-gray-900">{ETAPES[etapeActuelleIndex].label}</p>
-                <p className="text-xs text-gray-500">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
+                <p className="text-sm font-semibold text-aquiz-black">{ETAPES[etapeActuelleIndex].label}</p>
+                <p className="text-[11px] text-aquiz-gray">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
               <div className="flex gap-1.5">
-              {ETAPES.map((_, index) => (
-                <div 
-                  key={index}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    index < etapeActuelleIndex 
-                      ? 'bg-aquiz-green w-5' 
-                      : index === etapeActuelleIndex 
-                        ? 'bg-aquiz-green w-7' 
-                        : 'bg-gray-200 w-5'
-                  }`}
-                />
-              ))}
+              {ETAPES.map((e, index) => {
+                const isClickable = canGoToEtape(e.id)
+                return (
+                  <button
+                    type="button"
+                    key={e.id}
+                    onClick={() => isClickable && goToEtape(e.id)}
+                    disabled={!isClickable}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      index < etapeActuelleIndex 
+                        ? 'bg-aquiz-green w-5' 
+                        : index === etapeActuelleIndex 
+                          ? 'bg-aquiz-green w-7' 
+                          : 'bg-aquiz-gray-lighter w-5'
+                    } ${isClickable ? 'cursor-pointer hover:opacity-70' : 'cursor-not-allowed'}`}
+                    aria-label={`Étape ${index + 1}: ${e.label}`}
+                  />
+                )
+              })}
               </div>
             </div>
           </div>
@@ -597,7 +713,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
-                    <h2 className="font-semibold text-aquiz-black text-sm">Prix du bien</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Prix du bien</h3>
                   </div>
                   <Tooltip>
                     <TooltipTrigger>
@@ -609,16 +725,12 @@ export default function ModeBPage() {
                   </Tooltip>
                 </div>
                 <div className="p-5">
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      placeholder="250 000"
-                      className="h-11 text-base pr-10 bg-white border border-aquiz-gray-lighter rounded-lg font-medium placeholder:text-aquiz-gray-light"
-                      value={prixBien || ''}
-                      onChange={(e) => setPrixBien(Number(e.target.value))}
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray font-medium">€</span>
-                  </div>
+                  <MoneyInput
+                    value={prixBien}
+                    onChange={setPrixBien}
+                    placeholder="450 000"
+                    className="h-11 text-base bg-white border border-aquiz-gray-lighter rounded-lg font-medium placeholder:text-aquiz-gray-light"
+                  />
                 </div>
               </div>
 
@@ -627,7 +739,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
-                    <h2 className="font-semibold text-aquiz-black text-sm">Type de bien</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Type de bien</h3>
                   </div>
                 </div>
                 <div className="p-5 space-y-5">
@@ -710,7 +822,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
-                    <h2 className="font-semibold text-aquiz-black text-sm">Localisation</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Localisation</h3>
                     <Badge variant="secondary" className="text-[10px] font-normal">Optionnel</Badge>
                   </div>
                 </div>
@@ -748,7 +860,7 @@ export default function ModeBPage() {
                       {infoLocalisation.isLoading ? (
                         <div className="flex items-center gap-2 text-sm text-aquiz-gray">
                           <div className="w-4 h-4 border-2 border-aquiz-green border-t-transparent rounded-full animate-spin" />
-                          <span>Chargement des prix DVF...</span>
+                          <span>Chargement des prix du marché...</span>
                         </div>
                       ) : (
                         <>
@@ -782,9 +894,24 @@ export default function ModeBPage() {
                                 </div>
                               )}
                             </>
+                          ) : infoLocalisation.prixFallbackM2 ? (
+                            <>
+                              <div className="text-xs text-orange-500 mb-2">
+                                Peu ou pas de ventes de maisons dans cette commune
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-aquiz-gray">Prix médian (appartement)</span>
+                                <span className="font-medium text-aquiz-black">
+                                  {formatMontant(infoLocalisation.prixFallbackM2)} €/m²
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-aquiz-gray italic">
+                                Référence appartement (à titre indicatif)
+                              </div>
+                            </>
                           ) : (
                             <div className="text-xs text-orange-500">
-                              Pas de données DVF pour ce code postal
+                              Pas de données de prix pour ce code postal
                             </div>
                           )}
                         </>
@@ -802,7 +929,7 @@ export default function ModeBPage() {
                 <div className="bg-aquiz-green/5 rounded-xl border border-aquiz-green/20 overflow-hidden animate-fade-in">
                   <div className="px-5 py-3.5 border-b border-aquiz-green/20 flex items-center gap-3">
                     <TrendingUp className="w-4 h-4 text-aquiz-green" />
-                    <h2 className="font-semibold text-aquiz-black text-sm">Récapitulatif des coûts</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Récapitulatif des coûts</h3>
                   </div>
                   <div className="p-5">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -854,34 +981,34 @@ export default function ModeBPage() {
               {prixBien > 0 && (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Option 1 : Continuer la simulation */}
+                    {/* Option 1 : Être accompagné (CTA principal) */}
+                    <button
+                      type="button"
+                      onClick={() => setShowContactModal(true)}
+                      className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 flex items-center gap-4"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
+                        <Phone className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-white">Je veux être accompagné</p>
+                        <p className="text-xs text-white/60 mt-0.5">Un conseiller me rappelle gratuitement</p>
+                      </div>
+                    </button>
+                    
+                    {/* Option 2 : Continuer la simulation */}
                     <button
                       type="button"
                       onClick={goToNextEtape}
                       disabled={!validations.canProceed}
-                      className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
-                    >
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                        <ArrowRight className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-semibold text-white">Continuer ma simulation</p>
-                        <p className="text-xs text-white/60 mt-0.5">Voir les mensualités et revenus requis</p>
-                      </div>
-                    </button>
-                    
-                    {/* Option 2 : Être accompagné */}
-                    <button
-                      type="button"
-                      onClick={() => setShowContactModal(true)}
-                      className="group p-4 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all flex items-center gap-4"
+                      className="group p-4 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
                     >
                       <div className="w-10 h-10 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green/20 transition-colors">
-                        <Phone className="w-5 h-5 text-aquiz-green" />
+                        <ArrowRight className="w-5 h-5 text-aquiz-green" />
                       </div>
                       <div className="text-left">
-                        <p className="font-semibold text-aquiz-green">Je veux être accompagné</p>
-                        <p className="text-xs text-aquiz-gray mt-0.5">Un conseiller me rappelle gratuitement</p>
+                        <p className="font-semibold text-aquiz-green">Continuer ma simulation</p>
+                        <p className="text-xs text-aquiz-gray mt-0.5">Voir les mensualités et revenus requis</p>
                       </div>
                     </button>
                   </div>
@@ -907,15 +1034,6 @@ export default function ModeBPage() {
         {/* ÉTAPE 2 : Financement souhaité */}
         {etape === 2 && (
           <div className="animate-fade-in">
-            {/* Bouton retour */}
-            <button
-              type="button"
-              onClick={goToPrevEtape}
-              className="flex items-center gap-2 text-aquiz-gray hover:text-aquiz-black transition-colors text-sm mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Retour
-            </button>
 
             {/* Header simple */}
             <div className="mb-6">
@@ -938,7 +1056,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
-                    <h2 className="font-semibold text-aquiz-black text-sm">Apport personnel</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Apport personnel</h3>
                   </div>
                   <Tooltip>
                     <TooltipTrigger>
@@ -950,16 +1068,12 @@ export default function ModeBPage() {
                   </Tooltip>
                 </div>
                 <div className="p-5 space-y-4">
-                  <div className="relative">
-                    <Input
-                      type="number"
-                      placeholder="30 000"
-                      className="h-11 text-base pr-10 bg-white border border-aquiz-gray-lighter rounded-lg font-medium placeholder:text-aquiz-gray-light"
-                      value={apport || ''}
-                      onChange={(e) => setApport(Number(e.target.value))}
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray font-medium">€</span>
-                  </div>
+                  <MoneyInput
+                    value={apport}
+                    onChange={setApport}
+                    placeholder="30 000"
+                    className="h-11 text-base bg-white border border-aquiz-gray-lighter rounded-lg font-medium placeholder:text-aquiz-gray-light"
+                  />
 
                   {/* Indicateur de suffisance */}
                   <div className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm ${
@@ -970,7 +1084,7 @@ export default function ModeBPage() {
                     {calculs.apportSuffisant ? (
                       <>
                         <CheckCircle className="w-4 h-4 shrink-0" />
-                        <span>Apport suffisant ({((apport / prixBien) * 100).toFixed(0)}% du prix)</span>
+                        <span>Apport suffisant ({prixBien > 0 ? ((apport / prixBien) * 100).toFixed(0) : 0}% du prix)</span>
                       </>
                     ) : (
                       <>
@@ -1006,7 +1120,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
-                    <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h3>
                   </div>
                 </div>
                 <div className="p-5 space-y-6">
@@ -1052,7 +1166,7 @@ export default function ModeBPage() {
 
               {/* Aperçu mensualité */}
               {calculs.mensualiteTotal > 0 && (
-                <div className="bg-aquiz-green/5 rounded-xl border border-aquiz-green/20 overflow-hidden animate-fade-in">
+                <div className="bg-aquiz-green/5 rounded-xl border border-aquiz-green/20 overflow-hidden animate-fade-in" aria-live="polite">
                   <div className="p-5 text-center">
                     <p className="text-xs text-aquiz-gray uppercase tracking-wide">Mensualité estimée</p>
                     <p className="text-3xl font-bold text-aquiz-green mt-1">
@@ -1111,7 +1225,7 @@ export default function ModeBPage() {
                 onClick={goToNextEtape}
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
-                Voir ce qu&apos;il faut
+                Lancer la vérification
               </Button>
             </div>
           </div>
@@ -1119,27 +1233,94 @@ export default function ModeBPage() {
 
         {/* ÉTAPE 3 : Résultat - Ce qu'il FAUT */}
         {etape === 3 && (
-          <div className="animate-fade-in">
-            {/* Bouton retour */}
-            <button
-              type="button"
-              onClick={goToPrevEtape}
-              className="flex items-center gap-2 text-aquiz-gray hover:text-aquiz-black transition-colors text-sm mb-4"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Modifier le financement
-            </button>
+          <div className="animate-fade-in" aria-live="polite">
 
-            {/* Header résultat */}
-            <div className="mb-6">
-              <h2 className="text-xl font-bold text-aquiz-black">Ce qu&apos;il faut pour ce bien</h2>
-              <p className="text-aquiz-gray text-sm mt-0.5">
-                {formatMontant(prixBien)} € • {typeBien === 'neuf' ? 'Neuf' : 'Ancien'} • {dureeAns} ans
-              </p>
+            {/* Header résultat — blanc/vert, sobre */}
+            <div className="mb-6 rounded-2xl border border-aquiz-gray-lighter bg-white overflow-hidden shadow-sm">
+              {/* Accent vert */}
+              <div className="h-1 bg-aquiz-green" />
+
+              <div className="px-5 sm:px-7 py-5 sm:py-6">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-lg sm:text-xl font-bold text-aquiz-black leading-tight">
+                      Ce qu&apos;il me faut pour acheter
+                    </h2>
+                    <p className="text-sm text-aquiz-gray mt-1">
+                      {formatMontant(prixBien)} € · {typeBien === 'neuf' ? 'Bien neuf' : 'Bien ancien'}{nomCommune ? ` · ${nomCommune}` : ''}
+                    </p>
+                  </div>
+
+                  {/* Actions desktop */}
+                  <div className="hidden sm:flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={goToPrevEtape}
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-xs font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById('pdf-gate')
+                        if (!el) return
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        el.classList.add('animate-pulse-highlight')
+                        setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                      }}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Mon étude PDF
+                    </button>
+                  </div>
+                </div>
+
+                {/* Actions mobile */}
+                <div className="sm:hidden flex gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={goToPrevEtape}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-sm font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.98] transition-all duration-200"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('pdf-gate')
+                      if (!el) return
+                      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      el.classList.add('animate-pulse-highlight')
+                      setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-aquiz-black text-white text-sm font-semibold hover:bg-aquiz-black/85 active:scale-[0.98] transition-all duration-200"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    Mon étude PDF
+                  </button>
+                </div>
+              </div>
+
+              {/* Keyframe for pulse highlight */}
+              <style>{`
+                @keyframes pulseHighlight {
+                  0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+                  40% { box-shadow: 0 0 0 12px rgba(34,197,94,0.15); }
+                  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+                }
+                .animate-pulse-highlight {
+                  animation: pulseHighlight 0.9s ease-out 2;
+                }
+              `}</style>
             </div>
 
             <div className="space-y-5">
-              {/* Chiffre clé : Revenus minimums */}
+
+              {/* Chiffre clé : Revenus minimums (flouté) */}
               <div className="bg-aquiz-green rounded-xl p-6 text-center">
                 <p className="text-xs uppercase tracking-wider text-white/60 mb-2">
                   Revenus mensuels requis
@@ -1167,7 +1348,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
-                  <h2 className="font-semibold text-aquiz-black text-sm">Détail du financement</h2>
+                  <h3 className="font-semibold text-aquiz-black text-sm">Détail du financement</h3>
                 </div>
                 <div className="divide-y divide-aquiz-gray-lighter">
                   <div className="flex justify-between px-5 py-3">
@@ -1205,7 +1386,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
-                  <h2 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h2>
+                  <h3 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h3>
                 </div>
               <div className="p-5">
                 {/* Barre de répartition horizontale minimaliste */}
@@ -1215,7 +1396,7 @@ export default function ModeBPage() {
                       key={i}
                       className="h-full"
                       style={{
-                        width: `${(item.value / calculs.totalProjet) * 100}%`,
+                        width: `${calculs.totalProjet > 0 ? (item.value / calculs.totalProjet) * 100 : 0}%`,
                         backgroundColor: item.color
                       }}
                     />
@@ -1233,7 +1414,7 @@ export default function ModeBPage() {
                         <div className="flex justify-between items-baseline">
                           <span className="text-xs text-aquiz-gray">{item.label}</span>
                           <span className="text-xs text-aquiz-gray ml-2">
-                            {((item.value / calculs.totalProjet) * 100).toFixed(0)}%
+                            {calculs.totalProjet > 0 ? ((item.value / calculs.totalProjet) * 100).toFixed(0) : 0}%
                           </span>
                         </div>
                         <p className="text-sm font-semibold text-aquiz-black">
@@ -1255,7 +1436,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
-                  <h2 className="font-semibold text-aquiz-black text-sm">Mensualité selon la durée</h2>
+                  <h3 className="font-semibold text-aquiz-black text-sm">Mensualité selon la durée</h3>
                 </div>
               <div className="p-5">
                 {/* Graphique barres minimaliste */}
@@ -1308,7 +1489,7 @@ export default function ModeBPage() {
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">4</div>
-                  <h2 className="font-semibold text-aquiz-black text-sm">Mensualité</h2>
+                  <h3 className="font-semibold text-aquiz-black text-sm">Mensualité</h3>
                 </div>
               <div className="p-5">
                 <div className="flex items-end justify-between mb-4">
@@ -1325,12 +1506,12 @@ export default function ModeBPage() {
                 <div className="h-2 bg-aquiz-gray-lighter rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-aquiz-green rounded-full"
-                    style={{ width: `${(calculs.mensualiteCredit / calculs.mensualiteTotal) * 100}%` }}
+                    style={{ width: `${calculs.mensualiteTotal > 0 ? (calculs.mensualiteCredit / calculs.mensualiteTotal) * 100 : 0}%` }}
                   />
                 </div>
                 <div className="flex justify-between mt-1 text-xs text-aquiz-gray">
-                  <span>Crédit ({((calculs.mensualiteCredit / calculs.mensualiteTotal) * 100).toFixed(0)}%)</span>
-                  <span>Assurance ({((calculs.mensualiteAssurance / calculs.mensualiteTotal) * 100).toFixed(0)}%)</span>
+                  <span>Crédit ({calculs.mensualiteTotal > 0 ? ((calculs.mensualiteCredit / calculs.mensualiteTotal) * 100).toFixed(0) : 0}%)</span>
+                  <span>Assurance ({calculs.mensualiteTotal > 0 ? ((calculs.mensualiteAssurance / calculs.mensualiteTotal) * 100).toFixed(0) : 0}%)</span>
                 </div>
               </div>
             </div>
@@ -1340,7 +1521,7 @@ export default function ModeBPage() {
                 <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <PiggyBank className="w-4 h-4 text-aquiz-green" />
-                    <h2 className="font-semibold text-aquiz-black text-sm">Apport recommandé</h2>
+                    <h3 className="font-semibold text-aquiz-black text-sm">Apport recommandé</h3>
                   </div>
                   {apport > 0 && (
                     <span className={`text-xs px-2 py-1 rounded-full ${
@@ -1365,7 +1546,7 @@ export default function ModeBPage() {
                   </div>
                   {apport > 0 && (
                     <p className="mt-3 text-sm text-aquiz-gray text-center">
-                      Votre apport : <span className="font-semibold text-aquiz-black">{formatMontant(apport)} €</span> ({((apport / prixBien) * 100).toFixed(0)}%)
+                      Votre apport : <span className="font-semibold text-aquiz-black">{formatMontant(apport)} €</span> ({prixBien > 0 ? ((apport / prixBien) * 100).toFixed(0) : 0}%)
                     </p>
                   )}
                 </div>
@@ -1374,7 +1555,7 @@ export default function ModeBPage() {
               {/* Comparatif durées - compact */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter">
-                  <h2 className="font-semibold text-aquiz-black text-sm">Autres durées possibles</h2>
+                  <h3 className="font-semibold text-aquiz-black text-sm">Autres durées possibles</h3>
                 </div>
               <div className="divide-y divide-aquiz-gray-lighter">
                 {calculs.simulationsDuree.map((sim) => (
@@ -1413,7 +1594,7 @@ export default function ModeBPage() {
                   <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <MapPin className="w-4 h-4 text-aquiz-green" />
-                      <h2 className="font-semibold text-aquiz-black text-sm">Localisation</h2>
+                      <h3 className="font-semibold text-aquiz-black text-sm">Localisation</h3>
                     </div>
                     <span className="text-xs text-aquiz-gray">{codePostal}</span>
                   </div>
@@ -1525,43 +1706,90 @@ export default function ModeBPage() {
                 </Button>
               </div>
 
-              {/* CTA Télécharger PDF */}
-              <div className="relative overflow-hidden rounded-2xl border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/10 mt-6">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-aquiz-green/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-aquiz-green/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-                <div className="relative p-6 sm:p-8 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-4">
-                    <Download className="w-7 h-7 text-aquiz-green" />
+              {/* CTA Bonus — Recevez votre étude personnalisée PDF (email capture) */}
+              <div id="pdf-gate" className="mt-6">
+                <div className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+                  <div className="px-5 py-5">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                        <FileDown className="w-5 h-5 text-aquiz-green" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-aquiz-black">
+                          Votre étude personnalisée est prête
+                        </h3>
+                        <p className="text-aquiz-gray text-xs">
+                          Analyse IA, données de quartier, financement et conseils sur mesure
+                        </p>
+                      </div>
+                    </div>
+
+                    {!pdfEmailSent ? (
+                      <>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                            <input
+                              type="email"
+                              value={pdfEmailValue}
+                              onChange={e => setPdfEmailValue(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && handleSendPdfEmail()}
+                              placeholder="votre@email.fr"
+                              className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            disabled={pdfEmailLoading || !pdfEmailValue}
+                            onClick={handleSendPdfEmail}
+                            className="h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl px-5 transition-colors"
+                          >
+                            {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Recevoir'}
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2.5 text-[10px] text-aquiz-gray">
+                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Analyse IA</span>
+                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Gratuit</span>
+                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Sans spam</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-aquiz-green text-sm">
+                          <CheckCircle className="w-5 h-5 text-aquiz-green" />
+                          <span className="font-medium">Étude téléchargée !</span>
+                        </div>
+                        <Button
+                          type="button"
+                          disabled={pdfLoading}
+                          onClick={async () => {
+                            setPdfLoading(true)
+                            try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
+                          }}
+                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                        >
+                          {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                          Re-télécharger mon étude
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <h3 className="text-lg font-bold text-aquiz-black mb-1">Votre étude d&apos;achat</h3>
-                  <p className="text-sm text-aquiz-gray mb-5 max-w-md mx-auto">
-                    Téléchargez votre étude complète : financement détaillé, mensualités selon la durée, apport recommandé et conseils personnalisés.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={generatePDF}
-                    className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-aquiz-green hover:bg-aquiz-green/90 text-white font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all hover:shadow-lg hover:shadow-aquiz-green/30 hover:-translate-y-0.5"
-                  >
-                    <Download className="w-5 h-5" />
-                    Télécharger mon rapport PDF
-                  </button>
-                  <p className="text-[10px] text-aquiz-gray mt-3">Gratuit • Aucune inscription requise</p>
                 </div>
               </div>
 
-              {/* CTA Concrétiser mon projet */}
+              {/* CTA Accompagnement projet */}
               <div className="mt-6 bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                      <Phone className="w-5 h-5 text-aquiz-green" />
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                      <Phone className="w-5 h-5 text-slate-600" />
                     </div>
                     <div>
                       <h3 className="text-aquiz-black font-semibold text-sm">
-                        Prêt à concrétiser votre projet ?
+                        Besoin d&apos;aide pour la suite ?
                       </h3>
                       <p className="text-aquiz-gray text-xs">
-                        Réservez un créneau avec un conseiller — 100% gratuit
+                        Échangez avec un conseiller pour valider votre projet — sans engagement
                       </p>
                     </div>
                   </div>
@@ -1569,9 +1797,9 @@ export default function ModeBPage() {
                     href="https://calendly.com/contact-aquiz/30min"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full sm:w-auto h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
+                    className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
                   >
-                    Prendre rendez-vous
+                    Échanger avec un conseiller
                     <ArrowRight className="w-4 h-4" />
                   </a>
                 </div>
@@ -1583,6 +1811,29 @@ export default function ModeBPage() {
                 Vous avez les revenus ? Testez le <Link href="/simulateur/mode-a" className="underline hover:text-aquiz-black">Mode A</Link> pour connaître votre capacité réelle.
               </p>
             </div>
+
+              {/* Mobile sticky bar */}
+              <div className="lg:hidden fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter z-20">
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => document.getElementById('pdf-gate')?.scrollIntoView({ behavior: 'smooth' })}
+                    className="flex-1 h-11 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-2 text-sm"
+                  >
+                    <FileDown className="w-4 h-4 shrink-0" />
+                    Mon PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setShowContactModal(true)}
+                    className="flex-1 h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-2 text-sm"
+                  >
+                    <Phone className="w-4 h-4 shrink-0" />
+                    Conseiller
+                  </Button>
+                </div>
+              </div>
+              <div className="lg:hidden h-20" />
           </div>
         )}
       </main>
@@ -1606,7 +1857,7 @@ export default function ModeBPage() {
     
     {/* Toast de succès */}
     {showSuccessToast && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-fade-in" role="status" aria-live="polite">
         <div className="flex items-center gap-3 px-5 py-3 bg-aquiz-green text-white rounded-xl shadow-lg">
           <CheckCircle className="w-5 h-5 shrink-0" />
           <div>

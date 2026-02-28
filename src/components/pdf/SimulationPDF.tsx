@@ -5,6 +5,7 @@
  */
 import type { ScoreDetail } from '@/lib/calculs/scoreFaisabilite'
 import type { ResultatConseilsAvances } from '@/lib/conseils/genererConseilsAvances'
+import type { DonneesMarcheLocal, DonneesQuartier, SyntheseIA } from '@/lib/pdf/enrichirPourPDF'
 import { Document, Image, Link, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ───
@@ -47,6 +48,10 @@ export interface SimulationPDFProps {
   pieData: PieData
   // Conseils
   conseils: ResultatConseilsAvances
+  // Enrichissements premium (optionnels)
+  marche?: DonneesMarcheLocal | null
+  quartier?: DonneesQuartier | null
+  syntheseIA?: SyntheseIA | null
 }
 
 // ─── Couleurs charte AQUIZ ───
@@ -446,6 +451,42 @@ const s = StyleSheet.create({
     color: C.gray,
     lineHeight: 1.5,
   },
+  recoImpact: {
+    backgroundColor: C.greenLight,
+    borderRadius: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    marginTop: 4,
+  },
+  recoImpactText: {
+    fontSize: 6,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+  },
+  recoAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  recoActionLabel: {
+    backgroundColor: C.grayBg,
+    borderRadius: 3,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    fontSize: 5.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  recoActionMeta: {
+    fontSize: 5.5,
+    color: C.grayLight,
+  },
+  recoActionGain: {
+    fontSize: 5.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+  },
   // Scénarios
   scenarioCard: {
     borderRadius: 4,
@@ -496,6 +537,177 @@ const s = StyleSheet.create({
     color: C.grayLight,
     marginTop: 1,
   },
+  scenarioDetailsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  scenarioDetailsCol: {
+    flex: 1,
+  },
+  scenarioDetailsTitle: {
+    fontSize: 5.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.grayLight,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  scenarioDetailItem: {
+    fontSize: 6,
+    color: C.gray,
+    lineHeight: 1.5,
+  },
+  scenarioKPIs: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+    backgroundColor: C.white,
+    borderRadius: 3,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  scenarioKPI: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  scenarioKPIValue: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  scenarioKPILabel: {
+    fontSize: 5,
+    color: C.grayLight,
+    marginTop: 1,
+  },
+  // IA Synthèse
+  iaCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 12,
+  },
+  iaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
+  iaBadgeIcon: {
+    backgroundColor: C.green,
+    borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  iaBadgeText: {
+    fontSize: 5.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.white,
+    letterSpacing: 0.5,
+  },
+  iaTitle: {
+    fontSize: 8,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  iaText: {
+    fontSize: 7,
+    color: C.gray,
+    lineHeight: 1.6,
+  },
+  iaCliffhanger: {
+    fontSize: 7,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+    lineHeight: 1.5,
+    marginTop: 6,
+  },
+  iaEconomie: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: C.white,
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 0.5,
+    borderColor: '#bbf7d0',
+  },
+  iaEconomieValue: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+  },
+  iaEconomieLabel: {
+    fontSize: 6,
+    color: C.gray,
+  },
+  // Marché local
+  marcheGrid: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  marcheMetric: {
+    flex: 1,
+    backgroundColor: C.white,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: C.grayBorder,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+  },
+  marcheMetricValue: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  marcheMetricLabel: {
+    fontSize: 5.5,
+    color: C.grayLight,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  quartierRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 8,
+  },
+  quartierItem: {
+    flex: 1,
+    backgroundColor: C.grayBg,
+    borderRadius: 3,
+    paddingVertical: 5,
+    paddingHorizontal: 2,
+    alignItems: 'center',
+  },
+  quartierScore: {
+    fontSize: 10,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  quartierLabel: {
+    fontSize: 5,
+    color: C.grayLight,
+    marginTop: 1,
+  },
+  quartierMax: {
+    fontSize: 4.5,
+    color: C.grayLight,
+    marginTop: 0.5,
+  },
+  quartierDesc: {
+    fontSize: 4,
+    color: C.grayLight,
+    textAlign: 'center' as const,
+    marginTop: 1.5,
+    lineHeight: 1.3,
+  },
   // CTA
   ctaCard: {
     backgroundColor: C.black,
@@ -529,31 +741,33 @@ const s = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     color: C.white,
   },
-  // Footer
+  // Footer — léger et discret
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: C.black,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 28,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: C.grayBorder,
   },
   footerLogo: {
-    width: 70,
-    height: 22,
+    width: 40,
+    height: 14,
     objectFit: 'contain' as const,
+    opacity: 0.5,
   },
   footerDisclaimer: {
     fontSize: 5,
-    color: '#787878',
+    color: C.grayLight,
   },
   footerPage: {
-    fontSize: 6,
-    color: '#969696',
+    fontSize: 5.5,
+    color: C.grayLight,
   },
   // Page 2 header
   pageTitle: {
@@ -571,6 +785,15 @@ const s = StyleSheet.create({
     alignItems: 'baseline',
     paddingHorizontal: 28,
     paddingTop: 18,
+  },
+  // Page 2+ : wrapping automatique sur plusieurs pages
+  pageWrap: {
+    fontFamily: 'Helvetica',
+    fontSize: 8,
+    color: C.black,
+    backgroundColor: C.white,
+    paddingTop: 24,
+    paddingBottom: 40,
   },
 })
 
@@ -603,13 +826,16 @@ function getRavColor(rav: number, min: number): string {
 
 // ─── Components ───
 
-function Footer({ pageNum, logoUrl }: { pageNum: number; logoUrl: string }) {
+function Footer({ logoUrl }: { logoUrl: string }) {
   return (
     <View style={s.footer} fixed>
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
       <Image src={logoUrl} style={s.footerLogo} />
       <Text style={s.footerDisclaimer}>Simulation indicative — Ne constitue pas une offre de prêt</Text>
-      <Text style={s.footerPage}>Page {pageNum}</Text>
+      <Text
+        style={s.footerPage}
+        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+      />
     </View>
   )
 }
@@ -655,6 +881,7 @@ export function SimulationPDF(props: SimulationPDFProps) {
     tauxEndettementProjet, resteAVivre, mensualiteAssurance,
     mensualiteMax, dureeAns, tauxInteret, apport,
     scoreFaisabilite, scoreDetails, pieData, conseils,
+    marche, quartier, syntheseIA,
   } = props
 
   const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -795,19 +1022,22 @@ export function SimulationPDF(props: SimulationPDFProps) {
           </View>
         </View>
 
-        <Footer pageNum={1} logoUrl={logoUrl} />
+        <Footer logoUrl={logoUrl} />
       </Page>
 
-      {/* ═══════ PAGE 2 : DIAGNOSTIC & CONSEILS ═══════ */}
-      <Page size="A4" style={s.page}>
-        <View style={s.pageTitleRow}>
-          <Text style={s.pageTitle}>DIAGNOSTIC BANCAIRE</Text>
-          <Text style={s.pageSub}>Analyse de votre dossier</Text>
-        </View>
+      {/* ═══════ PAGE 2+ : DIAGNOSTIC & CONSEILS (auto-wrap) ═══════ */}
+      <Page size="A4" style={s.pageWrap}>
+        <Footer logoUrl={logoUrl} />
 
         <View style={s.content}>
+          {/* Titre de section */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
+            <Text style={s.pageTitle}>DIAGNOSTIC BANCAIRE</Text>
+            <Text style={s.pageSub}>Analyse de votre dossier</Text>
+          </View>
+
           {/* Carte score */}
-          <View style={s.diagnosticCard}>
+          <View style={s.diagnosticCard} wrap={false}>
             <View style={s.diagScoreContainer}>
               <Text style={s.diagScore}>{diag.scoreGlobal}</Text>
               <Text style={s.diagScoreMax}>/100</Text>
@@ -829,7 +1059,7 @@ export function SimulationPDF(props: SimulationPDFProps) {
           </View>
 
           {/* Points forts / Points d'attention */}
-          <View style={s.pointsRow}>
+          <View style={s.pointsRow} wrap={false}>
             <View style={s.pointsCol}>
               <View style={[s.pointsHeader, { backgroundColor: C.greenLight }]}>
                 <Text style={[s.pointsHeaderText, { color: C.greenDark }]}>POINTS FORTS</Text>
@@ -853,14 +1083,121 @@ export function SimulationPDF(props: SimulationPDFProps) {
           </View>
 
           {/* Résumé */}
-          <View style={s.resumeCard}>
+          <View style={s.resumeCard} wrap={false}>
             <Text style={s.resumeTitle}>RÉSUMÉ</Text>
             <Text style={s.resumeText}>{conseils.resumeExecutif}</Text>
           </View>
 
-          {/* Recommandations */}
-          <Text style={s.recoTitle}>RECOMMANDATIONS PERSONNALISÉES</Text>
-          {conseils.conseils.slice(0, 4).map((conseil, idx) => (
+          {/* ═══ SYNTHÈSE IA PERSONNALISÉE (premium) ═══ */}
+          {syntheseIA && (
+            <View style={s.iaCard} wrap={false}>
+              <View style={s.iaBadge}>
+                <View style={s.iaBadgeIcon}>
+                  <Text style={s.iaBadgeText}>IA</Text>
+                </View>
+                <Text style={[s.iaBadgeText, { color: C.green, fontWeight: 'bold', marginLeft: 4 }]}>Analyse personnalisée AQUIZ</Text>
+              </View>
+              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
+              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
+                <View style={s.iaEconomie}>
+                  <Text style={s.iaEconomieValue}>
+                    Jusqu&apos;à {fmt(syntheseIA.economieEstimee)} EUR
+                  </Text>
+                  <Text style={s.iaEconomieLabel}>
+                    d&apos;économie potentielle avec un accompagnement optimisé
+                  </Text>
+                </View>
+              )}
+              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
+            </View>
+          )}
+
+          {/* ═══ ÉTUDE DE MARCHÉ LOCALE (premium) ═══ */}
+          {marche && (
+            <View style={{ marginTop: 14 }} wrap={false}>
+              <SectionTitle title={`ÉTUDE DE MARCHÉ — ${marche.codePostal}`} />
+              <View style={s.marcheGrid}>
+                <View style={s.marcheMetric}>
+                  <Text style={s.marcheMetricValue}>{fmt(marche.prixM2Median)} €/m²</Text>
+                  <Text style={s.marcheMetricLabel}>Prix médian au m²</Text>
+                </View>
+                <View style={s.marcheMetric}>
+                  <Text style={s.marcheMetricValue}>{marche.surfaceEstimee} m²</Text>
+                  <Text style={s.marcheMetricLabel}>Surface accessible</Text>
+                </View>
+                <View style={s.marcheMetric}>
+                  <Text style={[s.marcheMetricValue, {
+                    color: marche.evolution12Mois !== null
+                      ? marche.evolution12Mois > 0 ? C.red : C.greenDark
+                      : C.gray
+                  }]}>
+                    {marche.evolution12Mois !== null
+                      ? `${marche.evolution12Mois > 0 ? '+' : ''}${marche.evolution12Mois.toFixed(1)}%`
+                      : 'N/A'}
+                  </Text>
+                  <Text style={s.marcheMetricLabel}>Évolution 12 mois</Text>
+                </View>
+                <View style={s.marcheMetric}>
+                  <Text style={s.marcheMetricValue}>{marche.nbTransactions}</Text>
+                  <Text style={s.marcheMetricLabel}>Transactions récentes</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Scores quartier */}
+          {quartier && (
+            <View style={{ marginTop: marche ? 8 : 14 }} wrap={false}>
+              {!marche && <SectionTitle title="QUALITÉ DU QUARTIER" />}
+              <View style={s.quartierRow}>
+                {[
+                  { label: 'Score global', score: quartier.scoreGlobal / 10, desc: 'Score composite' },
+                  { label: 'Transports', score: quartier.transports / 10, desc: 'Bus, métro, tram, gare' },
+                  { label: 'Commerces', score: quartier.commerces / 10, desc: 'Supermarchés, boulangeries' },
+                  { label: 'Écoles', score: quartier.ecoles / 10, desc: 'Écoles, collèges, lycées' },
+                  { label: 'Santé', score: quartier.sante / 10, desc: 'Médecins, pharmacies' },
+                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, desc: 'Parcs, jardins, aires de jeux' },
+                ].map((item) => (
+                  <View key={item.label} style={s.quartierItem}>
+                    <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
+                      {item.score.toFixed(1)}
+                    </Text>
+                    <Text style={s.quartierMax}>/10</Text>
+                    <Text style={s.quartierLabel}>{item.label}</Text>
+                    <Text style={s.quartierDesc}>{item.desc}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* Nouveaux scores enrichis */}
+              {(quartier.risques != null || quartier.niveauVie != null || quartier.qualiteAir != null) && (
+                <View style={[s.quartierRow, { marginTop: 4 }]}>
+                  {[
+                    quartier.risques != null ? { label: 'Risques', score: quartier.risques, desc: 'Inondation, industriel, radon' } : null,
+                    quartier.niveauVie != null ? { label: 'Niveau de vie', score: quartier.niveauVie, desc: 'Revenu médian INSEE' } : null,
+                    quartier.qualiteAir != null ? { label: 'Qualité air', score: quartier.qualiteAir, desc: 'Indice ATMO pollution' } : null,
+                  ]
+                    .filter((item): item is { label: string; score: number; desc: string } => item !== null)
+                    .map((item) => (
+                      <View key={item.label} style={s.quartierItem}>
+                        <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
+                          {item.score.toFixed(1)}
+                        </Text>
+                        <Text style={s.quartierMax}>/10</Text>
+                        <Text style={s.quartierLabel}>{item.label}</Text>
+                        <Text style={s.quartierDesc}>{item.desc}</Text>
+                      </View>
+                    ))}
+                </View>
+              )}
+              <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 3 }}>
+                {quartier.synthese}
+              </Text>
+            </View>
+          )}
+
+          {/* Recommandations — TOUTES */}
+          <Text style={s.recoTitle} minPresenceAhead={60}>RECOMMANDATIONS PERSONNALISÉES</Text>
+          {conseils.conseils.map((conseil, idx) => (
             <View key={conseil.id} style={s.recoCard} wrap={false}>
               <View style={s.recoBadge}>
                 <Text style={s.recoBadgeText}>{idx + 1}</Text>
@@ -868,32 +1205,89 @@ export function SimulationPDF(props: SimulationPDFProps) {
               <View style={s.recoContent}>
                 <Text style={s.recoCardTitle}>{conseil.titre}</Text>
                 <Text style={s.recoCardText}>{conseil.conseil}</Text>
+                {conseil.impact && (
+                  <View style={s.recoImpact}>
+                    <Text style={s.recoImpactText}>+ {conseil.impact}</Text>
+                  </View>
+                )}
+                {conseil.action && (
+                  <View style={s.recoAction}>
+                    <Text style={s.recoActionLabel}>{'>'} {conseil.action.label}</Text>
+                    {conseil.action.timeline && (
+                      <Text style={s.recoActionMeta}>{conseil.action.timeline}</Text>
+                    )}
+                    {conseil.action.gain && (
+                      <Text style={s.recoActionGain}>{conseil.action.gain}</Text>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
           ))}
 
-          {/* Scénarios */}
+          {/* Scénarios — TOUS avec détails complets */}
           {conseils.scenarios.length > 0 && (
             <>
-              <Text style={s.recoTitle}>SCÉNARIOS ALTERNATIFS</Text>
-              {conseils.scenarios.slice(0, 2).map((scenario) => {
+              <Text style={s.recoTitle} minPresenceAhead={60}>SCÉNARIOS ALTERNATIFS</Text>
+              {conseils.scenarios.map((scenario) => {
                 const isPositif = scenario.resultats.economieOuCout > 0
                 return (
-                  <View key={scenario.id} style={[s.scenarioCard, { backgroundColor: scenario.recommande ? C.greenLight : C.grayBg }]} wrap={false}>
-                    <View style={s.scenarioLeft}>
-                      {scenario.recommande && (
-                        <View style={s.scenarioBadge}>
-                          <Text style={s.scenarioBadgeText}>RECOMMANDÉ</Text>
-                        </View>
-                      )}
-                      <Text style={s.scenarioTitle}>{scenario.titre}</Text>
-                      <Text style={s.scenarioDesc}>{scenario.description}</Text>
+                  <View key={scenario.id} style={[s.scenarioCard, { backgroundColor: scenario.recommande ? C.greenLight : C.grayBg, flexDirection: 'column' }]} wrap={false}>
+                    {/* Header du scénario */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <View style={s.scenarioLeft}>
+                        {scenario.recommande && (
+                          <View style={s.scenarioBadge}>
+                            <Text style={s.scenarioBadgeText}>RECOMMANDÉ</Text>
+                          </View>
+                        )}
+                        <Text style={s.scenarioTitle}>{scenario.titre}</Text>
+                        <Text style={s.scenarioDesc}>{scenario.description}</Text>
+                      </View>
+                      <View style={s.scenarioRight}>
+                        <Text style={[s.scenarioImpact, { color: isPositif ? C.green : C.black }]}>
+                          {isPositif ? '+' : '-'}{fmt(Math.abs(scenario.resultats.economieOuCout))} EUR
+                        </Text>
+                        <Text style={s.scenarioImpactLabel}>sur le budget</Text>
+                      </View>
                     </View>
-                    <View style={s.scenarioRight}>
-                      <Text style={[s.scenarioImpact, { color: isPositif ? C.green : C.black }]}>
-                        {isPositif ? '+' : '-'}{fmt(Math.abs(scenario.resultats.economieOuCout))} EUR
-                      </Text>
-                      <Text style={s.scenarioImpactLabel}>sur le budget</Text>
+
+                    {/* Avantages / Inconvénients */}
+                    {(scenario.avantages.length > 0 || scenario.inconvenients.length > 0) && (
+                      <View style={s.scenarioDetailsRow}>
+                        {scenario.avantages.length > 0 && (
+                          <View style={s.scenarioDetailsCol}>
+                            <Text style={s.scenarioDetailsTitle}>Avantages</Text>
+                            {scenario.avantages.map((a, i) => (
+                              <Text key={i} style={s.scenarioDetailItem}>+ {a}</Text>
+                            ))}
+                          </View>
+                        )}
+                        {scenario.inconvenients.length > 0 && (
+                          <View style={s.scenarioDetailsCol}>
+                            <Text style={s.scenarioDetailsTitle}>Inconvénients</Text>
+                            {scenario.inconvenients.map((inc, i) => (
+                              <Text key={i} style={s.scenarioDetailItem}>• {inc}</Text>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* KPIs chiffrés */}
+                    <View style={s.scenarioKPIs}>
+                      <View style={s.scenarioKPI}>
+                        <Text style={s.scenarioKPIValue}>{fmt(scenario.resultats.nouveauBudget)} €</Text>
+                        <Text style={s.scenarioKPILabel}>Nouveau budget</Text>
+                      </View>
+                      <View style={s.scenarioKPI}>
+                        <Text style={s.scenarioKPIValue}>{scenario.resultats.nouveauTaux.toFixed(2)}%</Text>
+                        <Text style={s.scenarioKPILabel}>Taux estimé</Text>
+                      </View>
+                      <View style={s.scenarioKPI}>
+                        <Text style={s.scenarioKPIValue}>{fmt(scenario.resultats.nouvellesMensualites)} €</Text>
+                        <Text style={s.scenarioKPILabel}>Mensualité</Text>
+                      </View>
                     </View>
                   </View>
                 )
@@ -916,8 +1310,6 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </Link>
           </View>
         </View>
-
-        <Footer pageNum={2} logoUrl={logoUrl} />
       </Page>
     </Document>
   )

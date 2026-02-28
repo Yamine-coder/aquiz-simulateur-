@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs'
-import { join, relative } from 'path'
+import { join, relative, sep } from 'path'
 
 const ROOT = process.cwd()
 const SRC = join(ROOT, 'src')
@@ -301,6 +301,7 @@ if (nextConfig) {
 
 // Check for empty alt attributes
 const allTsx = findFiles(SRC, /\.tsx$/)
+  .filter(f => !f.includes(`${sep}pdf${sep}`)) // Exclure composants @react-pdf (pas de DOM)
 let emptyAlts = 0
 let totalImages = 0
 const emptyAltFiles = []

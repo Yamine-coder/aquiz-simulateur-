@@ -54,7 +54,7 @@ export function AutoSaveIndicator({ lastSavedAt, className = '' }: AutoSaveIndic
       {/* Badge inline dans le stepper */}
       <div className={`flex items-center gap-1.5 text-xs rounded-full px-3 py-1.5 transition-all duration-500 ${
         showCheck 
-          ? 'bg-aquiz-green/10 text-aquiz-green ring-1 ring-aquiz-green/20 scale-105' 
+          ? 'bg-aquiz-green/10 text-aquiz-green' 
           : 'bg-aquiz-gray-lightest text-aquiz-gray'
       } ${className}`}>
         {showCheck ? (
@@ -67,16 +67,16 @@ export function AutoSaveIndicator({ lastSavedAt, className = '' }: AutoSaveIndic
         </span>
       </div>
 
-      {/* Toast flottant — apparaît brièvement pour rassurer le client */}
+      {/* Toast flottant — au-dessus du bouton fixe mobile */}
       {showToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
-          <div className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-aquiz-black text-white shadow-xl shadow-black/20">
-            <div className="w-6 h-6 rounded-full bg-aquiz-green flex items-center justify-center shrink-0">
-              <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+        <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300 w-auto max-w-[calc(100vw-2rem)]" role="status" aria-live="polite">
+          <div className="flex items-center gap-2 sm:gap-2.5 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-aquiz-black text-white shadow-xl shadow-black/20">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-aquiz-green flex items-center justify-center shrink-0">
+              <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" strokeWidth={3} />
             </div>
-            <div className="text-sm">
-              <span className="font-semibold">Progression sauvegardée</span>
-              <span className="text-white/60 ml-1.5">· {formatTime(lastSavedAt)}</span>
+            <div className="text-xs sm:text-sm whitespace-nowrap">
+              <span className="font-semibold">Sauvegardé</span>
+              <span className="text-white/60 ml-1 sm:ml-1.5">· {formatTime(lastSavedAt)}</span>
             </div>
           </div>
         </div>

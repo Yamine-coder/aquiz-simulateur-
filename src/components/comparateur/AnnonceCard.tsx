@@ -13,6 +13,7 @@ import {
     Building2,
     Check,
     ChevronRight,
+    Copy,
     ExternalLink,
     Heart,
     Home,
@@ -23,7 +24,8 @@ import {
     Trash2
 } from 'lucide-react'
 import Image from 'next/image'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { ImageCarousel } from './ImageCarousel'
 
 interface AnnonceCardProps {
   annonce: Annonce
@@ -33,7 +35,14 @@ interface AnnonceCardProps {
   onSelect?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  onDuplicate?: () => void
   onToggleFavori?: () => void
+  /** Mode gestion (multi-sélection pour suppression) */
+  manageMode?: boolean
+  /** Sélectionné pour suppression en mode gestion */
+  isManageSelected?: boolean
+  /** Toggle sélection en mode gestion */
+  onManageToggle?: () => void
   compact?: boolean
 }
 
@@ -45,12 +54,28 @@ export function AnnonceCard({
   onSelect,
   onEdit,
   onDelete,
+  onDuplicate,
   onToggleFavori,
+  manageMode = false,
+  isManageSelected = false,
+  onManageToggle,
   compact = false
 }: AnnonceCardProps) {
   const IconType = annonce.type === 'maison' ? Home : Building2
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Construire la liste d'images pour le carousel
+  const allImages = useMemo(() => {
+    const imgs: string[] = []
+    if (annonce.imageUrl) imgs.push(annonce.imageUrl)
+    if (annonce.images?.length) {
+      for (const img of annonce.images) {
+        if (!imgs.includes(img)) imgs.push(img)
+      }
+    }
+    return imgs
+  }, [annonce.imageUrl, annonce.images])
 
   // ─── VUE LISTE (compact) ───
   if (compact) {
@@ -58,29 +83,39 @@ export function AnnonceCard({
       <div
         className={`
           group relative flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 cursor-pointer
-          ${isSelected
-            ? 'bg-aquiz-green/5 ring-1 ring-aquiz-green/30'
-            : 'bg-white hover:bg-aquiz-gray-lightest/50 border border-aquiz-gray-lighter hover:border-aquiz-gray-light'
+          ${manageMode && isManageSelected
+            ? 'bg-rose-50 ring-1 ring-rose-300'
+            : isSelected
+              ? 'bg-aquiz-green/5 ring-1 ring-aquiz-green/30'
+              : 'bg-white hover:bg-aquiz-gray-lightest/50 border border-aquiz-gray-lighter hover:border-aquiz-gray-light'
           }
         `}
-        onClick={onSelect}
+        onClick={manageMode ? onManageToggle : onSelect}
       >
         {/* Thumbnail ou icône */}
         <div className="relative w-16 h-16 rounded-lg bg-aquiz-gray-lightest shrink-0 overflow-hidden">
           {annonce.imageUrl ? (
-            <Image src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="64px" unoptimized />
+            <Image src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="64px" />
           ) : (
             <div className="flex items-center justify-center h-full">
               <IconType className="h-6 w-6 text-aquiz-gray-light" />
             </div>
           )}
-          {isSelected && (
+          {manageMode ? (
+            <div className={`absolute inset-0 flex items-center justify-center ${isManageSelected ? 'bg-rose-500/20' : 'bg-black/5'}`}>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                isManageSelected ? 'bg-rose-500' : 'bg-white/80 border-2 border-aquiz-gray-light'
+              }`}>
+                {isManageSelected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+              </div>
+            </div>
+          ) : isSelected ? (
             <div className="absolute inset-0 bg-aquiz-green/20 flex items-center justify-center">
               <div className="w-5 h-5 rounded-full bg-aquiz-green flex items-center justify-center">
                 <Check className="h-3 w-3 text-white" strokeWidth={3} />
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Infos */}
@@ -126,25 +161,48 @@ export function AnnonceCard({
     )
   }
 
+  // Carte réellement désactivée ? (max 4 sélections atteint et pas déjà sélectionnée)
+  const isDisabled = selectionDisabled && !isSelected
+
   // ─── VUE GRILLE (card) ───
   return (
     <div
       className={`
         group relative flex flex-col rounded-2xl overflow-hidden transition-all duration-200
-        ${isSelected
-          ? 'ring-2 ring-aquiz-green shadow-md shadow-aquiz-green/10'
-          : 'border border-aquiz-gray-lighter hover:border-aquiz-gray-light hover:shadow-lg hover:shadow-black/5'
+        ${isDisabled ? 'cursor-default opacity-60' : 'cursor-pointer'}
+        ${manageMode && isManageSelected
+          ? 'ring-2 ring-rose-400 shadow-md shadow-rose-400/10'
+          : manageMode
+            ? 'border border-aquiz-gray-lighter hover:border-rose-300 hover:shadow-lg hover:shadow-rose-400/10'
+            : isSelected
+              ? 'ring-2 ring-aquiz-green shadow-md shadow-aquiz-green/10'
+              : isDisabled
+                ? 'border border-aquiz-gray-lighter'
+                : 'border border-aquiz-gray-lighter hover:border-aquiz-green/40 hover:shadow-lg hover:shadow-aquiz-green/5'
         }
       `}
+      onClick={() => {
+        if (isDisabled) return
+        if (manageMode) {
+          onManageToggle?.()
+        } else {
+          onSelect?.()
+        }
+      }}
     >
       {/* ── Image zone ── */}
       <div
-        className="relative h-40 bg-gradient-to-br from-slate-50 to-slate-100 cursor-pointer overflow-hidden"
-        onClick={onSelect}
+        className="relative h-24 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100 overflow-hidden"
       >
-        {annonce.imageUrl ? (
+        {allImages.length > 1 ? (
+          <ImageCarousel
+            images={allImages}
+            alt={annonce.titre || 'Bien immobilier'}
+            className="h-full w-full"
+          />
+        ) : allImages.length === 1 ? (
           <Image
-            src={annonce.imageUrl}
+            src={allImages[0]}
             alt={annonce.titre || 'Bien immobilier'}
             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
             fill
@@ -161,28 +219,65 @@ export function AnnonceCard({
         )}
 
         {/* Gradient overlay bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/30 to-transparent pointer-events-none" />
 
-        {/* Selection checkbox top-left */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onSelect?.() }}
-          disabled={selectionDisabled && !isSelected}
-          aria-label={isSelected ? 'Désélectionner ce bien' : 'Sélectionner ce bien'}
-          className={`
-            absolute top-2.5 left-2.5 min-w-11 min-h-11 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200
-            ${isSelected
-              ? 'bg-aquiz-green shadow-sm'
-              : 'bg-white/80 backdrop-blur-sm border border-white/50 opacity-0 group-hover:opacity-100 hover:bg-white'
-            }
-            ${selectionDisabled && !isSelected ? 'cursor-not-allowed' : 'cursor-pointer'}
-          `}
-        >
-          {isSelected ? (
-            <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-          ) : (
-            <span className="w-2 h-2 rounded-full border-2 border-aquiz-gray-light" />
-          )}
-        </button>
+        {/* Hover overlay — manage mode (red) or comparison hint (green) — desktop only */}
+        {manageMode && !isManageSelected ? (
+          <div className="absolute inset-0 bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none hidden sm:flex items-center justify-center">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-sm flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
+              <Trash2 className="h-4 w-4 text-rose-500" />
+              <span className="text-xs font-semibold text-rose-500">Sélectionner pour supprimer</span>
+            </div>
+          </div>
+        ) : !manageMode && !isSelected && !isDisabled ? (
+          <div className="absolute inset-0 bg-aquiz-green/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none hidden sm:flex items-center justify-center">
+            <div className="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-sm flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
+              <Check className="h-4 w-4 text-aquiz-green" strokeWidth={2.5} />
+              <span className="text-xs font-semibold text-aquiz-green">Cliquer pour comparer</span>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Selection checkbox top-left — manage mode (rose) or normal (green) */}
+        {manageMode ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onManageToggle?.() }}
+            aria-label={isManageSelected ? 'Désélectionner' : 'Sélectionner pour suppression'}
+            className={`
+              absolute top-2.5 left-2.5 min-w-11 min-h-11 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 z-10
+              ${isManageSelected
+                ? 'bg-rose-500 shadow-sm'
+                : 'bg-white/80 backdrop-blur-sm border border-white/50 hover:bg-white'
+              }
+            `}
+          >
+            {isManageSelected ? (
+              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+            ) : (
+              <span className="w-2 h-2 rounded-full border-2 border-rose-300" />
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect?.() }}
+            disabled={isDisabled}
+            aria-label={isSelected ? 'Désélectionner ce bien' : 'Sélectionner ce bien'}
+            className={`
+              absolute top-2.5 left-2.5 min-w-11 min-h-11 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200
+              ${isSelected
+                ? 'bg-aquiz-green shadow-sm'
+                : 'bg-white/80 backdrop-blur-sm border border-white/50 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-white'
+              }
+              ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+            `}
+          >
+            {isSelected ? (
+              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+            ) : (
+              <span className="w-2 h-2 rounded-full border-2 border-aquiz-gray-light" />
+            )}
+          </button>
+        )}
 
         {/* Favori top-right */}
         {onToggleFavori && (
@@ -193,7 +288,7 @@ export function AnnonceCard({
               absolute top-2.5 right-2.5 min-w-11 min-h-11 w-7 h-7 rounded-full flex items-center justify-center transition-all
               ${annonce.favori
                 ? 'bg-rose-500 shadow-sm'
-                : 'bg-white/80 backdrop-blur-sm border border-white/50 opacity-0 group-hover:opacity-100 hover:bg-white'
+                : 'bg-white/80 backdrop-blur-sm border border-white/50 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-white'
               }
             `}
           >
@@ -221,49 +316,54 @@ export function AnnonceCard({
       </div>
 
       {/* ── Content ── */}
-      <div className="flex flex-col flex-1 p-4">
+      <div className="flex flex-col flex-1 p-3 sm:p-4">
         {/* Prix */}
-        <div className="flex items-baseline justify-between mb-2.5">
-          <div className="flex items-baseline gap-1">
-            <span className="text-xl font-extrabold text-aquiz-black tracking-tight">
+        <div className="flex items-baseline justify-between mb-1.5 sm:mb-2">
+          <div className="flex items-baseline gap-0.5 sm:gap-1">
+            <span className="text-sm sm:text-xl font-extrabold text-aquiz-black tracking-tight">
               {annonce.prix.toLocaleString('fr-FR')}
             </span>
-            <span className="text-sm font-medium text-aquiz-gray">€</span>
+            <span className="text-[10px] sm:text-sm font-medium text-aquiz-gray">€</span>
           </div>
-          <span className="text-[11px] font-semibold text-aquiz-gray bg-aquiz-gray-lightest px-2 py-0.5 rounded-md">
+          <span className="hidden sm:inline text-[11px] font-semibold text-aquiz-gray bg-aquiz-gray-lightest px-2 py-0.5 rounded-md">
             {annonce.prixM2.toLocaleString('fr-FR')} €/m²
           </span>
         </div>
 
         {/* Métriques — ligne d'icônes */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex items-center gap-1">
-            <Ruler className="h-3 w-3 text-aquiz-gray-light" />
-            <span className="text-xs font-semibold text-aquiz-black">{annonce.surface} m²</span>
+        <div className="flex items-center gap-1.5 sm:gap-3 mb-1.5 sm:mb-3">
+          <div className="flex items-center gap-0.5 sm:gap-1">
+            <Ruler className="h-3 w-3 text-aquiz-gray-light hidden sm:block" />
+            <span className="text-[10px] sm:text-xs font-semibold text-aquiz-black">{annonce.surface}m²</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Building2 className="h-3 w-3 text-aquiz-gray-light" />
-            <span className="text-xs text-aquiz-gray">{annonce.pieces} pièces</span>
+          <div className="flex items-center gap-0.5 sm:gap-1">
+            <Building2 className="h-3 w-3 text-aquiz-gray-light hidden sm:block" />
+            <span className="text-[10px] sm:text-xs text-aquiz-gray">{annonce.pieces}p</span>
           </div>
           {annonce.chambres > 0 && (
-            <div className="flex items-center gap-1">
-              <BedDouble className="h-3 w-3 text-aquiz-gray-light" />
-              <span className="text-xs text-aquiz-gray">{annonce.chambres} ch.</span>
+            <div className="flex items-center gap-0.5 sm:gap-1">
+              <BedDouble className="h-3 w-3 text-aquiz-gray-light hidden sm:block" />
+              <span className="text-[10px] sm:text-xs text-aquiz-gray">{annonce.chambres}ch</span>
             </div>
           )}
         </div>
 
-        {/* Localisation */}
-        <div className="flex items-center gap-1.5 mb-3">
+        {/* Localisation — hidden on mobile */}
+        <div className="hidden sm:flex items-center gap-1.5 mb-3">
           <MapPin className="h-3 w-3 text-aquiz-gray-light shrink-0" />
-          <span className="text-xs text-aquiz-gray truncate">
+          <span className="text-[11px] sm:text-xs text-aquiz-gray truncate">
             {annonce.adresse || annonce.ville}
           </span>
           <span className="text-[10px] text-aquiz-gray-light shrink-0">({annonce.codePostal})</span>
         </div>
 
-        {/* Tags/Features — pills compacts */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        {/* Ville on mobile only (compact) */}
+        <p className="sm:hidden text-[10px] text-aquiz-gray truncate mb-1.5">
+          {annonce.ville}
+        </p>
+
+        {/* Tags/Features — hidden on mobile */}
+        <div className="hidden sm:flex flex-wrap gap-1.5 mb-3">
           {/* DPE */}
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
             annonce.dpe === 'A' || annonce.dpe === 'B' ? 'bg-emerald-50 text-emerald-600' :
@@ -293,9 +393,9 @@ export function AnnonceCard({
           )}
         </div>
 
-        {/* Faisabilité message */}
+        {/* Faisabilité message — hidden on mobile */}
         {faisabilite && (
-          <div className={`text-[11px] px-3 py-2 rounded-lg mb-3 font-medium ${
+          <div className={`hidden sm:block text-[11px] px-3 py-2 rounded-lg mb-3 font-medium ${
             faisabilite.niveau === 'confortable' ? 'bg-emerald-50 text-emerald-700' :
             faisabilite.niveau === 'limite' ? 'bg-amber-50 text-amber-700' :
             'bg-rose-50 text-rose-700'
@@ -304,32 +404,37 @@ export function AnnonceCard({
           </div>
         )}
 
-        {/* Charges */}
+        {/* Charges — hidden on mobile */}
         {annonce.chargesMensuelles && (
-          <p className="text-[10px] text-aquiz-gray mb-3">
+          <p className="hidden sm:block text-[10px] text-aquiz-gray mb-3">
             Charges : {annonce.chargesMensuelles} €/mois
           </p>
         )}
 
         {/* ── Actions footer ── */}
-        <div className="mt-auto pt-3 border-t border-aquiz-gray-lighter/70 flex items-center gap-1.5">
+        <div className="mt-auto pt-1.5 sm:pt-3 border-t border-aquiz-gray-lighter/70 flex items-center gap-1 sm:gap-1.5">
           <Button
             variant={isSelected ? 'default' : 'outline'}
             size="sm"
-            onClick={onSelect}
-            disabled={selectionDisabled && !isSelected}
-            className={`text-[11px] h-7 rounded-lg flex-1 font-semibold transition-all ${
+            onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect?.() }}
+            disabled={isDisabled}
+            className={`text-[9px] sm:text-[11px] h-6 sm:h-8 rounded-lg flex-1 font-semibold transition-all ${
               isSelected
                 ? 'bg-aquiz-green hover:bg-aquiz-green/90 text-white border-0'
-                : 'border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-black hover:border-aquiz-gray-light'
-            }`}
+                : 'border-aquiz-green/30 text-aquiz-green hover:bg-aquiz-green hover:text-white hover:border-aquiz-green'
+            } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
           >
             {isSelected ? (
               <>
-                <Check className="h-3 w-3 mr-1" strokeWidth={3} />
-                Sélectionné
+                <Check className="h-3 w-3 sm:mr-1" strokeWidth={3} />
+                <span className="hidden sm:inline">Sélectionné</span>
               </>
-            ) : 'Comparer'}
+            ) : (
+              <>
+                <Check className="h-3 w-3 sm:mr-1 opacity-50" />
+                <span className="hidden sm:inline">Comparer</span>
+              </>
+            )}
           </Button>
 
           {annonce.url && (
@@ -337,15 +442,16 @@ export function AnnonceCard({
               href={annonce.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-7 w-7 rounded-lg flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              className="hidden sm:flex h-7 w-7 rounded-lg items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors shrink-0"
               title="Voir l'annonce"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
 
-          {/* Menu contextuel "..." */}
-          <div className="relative" ref={menuRef}>
+          {/* Menu contextuel "..." — hidden on mobile */}
+          <div className="relative hidden sm:block" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
               aria-label="Menu actions"
@@ -373,6 +479,15 @@ export function AnnonceCard({
                     >
                       <Heart className={`h-3 w-3 ${annonce.favori ? 'fill-rose-500 text-rose-500' : ''}`} />
                       {annonce.favori ? 'Retirer favori' : 'Ajouter favori'}
+                    </button>
+                  )}
+                  {onDuplicate && (
+                    <button
+                      onClick={() => { onDuplicate(); setShowMenu(false) }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+                    >
+                      <Copy className="h-3 w-3" />
+                      Dupliquer
                     </button>
                   )}
                   {onDelete && (

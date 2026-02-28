@@ -35,7 +35,9 @@ export interface SavedModeAData {
 export interface SavedModeBData {
   prixBien: number
   typeBien: 'neuf' | 'ancien'
+  typeLogement: 'appartement' | 'maison'
   codePostal: string
+  nomCommune: string
   apport: number
   dureeAns: number
   tauxInteret: number

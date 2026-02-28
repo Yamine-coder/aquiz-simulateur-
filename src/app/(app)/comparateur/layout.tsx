@@ -1,3 +1,4 @@
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 
@@ -37,6 +38,7 @@ export default function ComparateurLayout({ children }: { children: React.ReactN
   return (
     <>
       <ComparateurJsonLd />
+      <Breadcrumbs items={[{ label: 'Comparateur' }]} />
       <Suspense fallback={
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="w-8 h-8 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin" />

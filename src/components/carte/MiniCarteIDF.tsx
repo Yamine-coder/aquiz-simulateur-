@@ -35,7 +35,7 @@ const DEPT_NAMES: Record<string, string> = {
   '95': "Val-d'Oise"
 }
 
-// Couleur selon surface accessible — palette moderne et contrastée
+// Couleur selon surface accessible — palette moderne et contrastée (4 niveaux)
 function getSurfaceColor(surface: number): string {
   if (surface >= 80) return '#059669'     // Vert émeraude foncé — très grand
   if (surface >= 40) return '#34d399'     // Vert émeraude — confortable
@@ -71,6 +71,8 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
   const [isMounted, setIsMounted] = useState(false)
   const [geoData, setGeoData] = useState<GeoJSON.FeatureCollection | null>(null)
   const layersRef = useRef<Map<string, L.Layer>>(new Map())
+  const labelMarkersRef = useRef<L.Marker[]>([])
+  const boundsRef = useRef<L.LatLngBounds | null>(null)
 
   // Map des données par code département
   const dataByCode = useMemo(() => {
@@ -105,20 +107,34 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
 
     let cancelled = false
 
+    /** Recalcule la taille de la carte ET recadre sur les bounds IDF (sans animation) */
+    const refreshMap = () => {
+      const m = mapInstanceRef.current
+      if (!m) return
+      m.invalidateSize()
+      if (boundsRef.current) {
+        m.fitBounds(boundsRef.current, { padding: [15, 15], animate: false })
+      }
+    }
+
     const initMap = async () => {
       try {
         const L = (await import('leaflet')).default
-        // @ts-expect-error - Leaflet CSS has no type declaration
+        // @ts-expect-error -- CSS import has no type declarations
         await import('leaflet/dist/leaflet.css')
 
         if (cancelled || !mapRef.current) return
+
+        // Désactiver le drag sur mobile pour ne pas capturer le scroll tactile
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
         const leafletMap = L.map(mapRef.current, {
           center: [48.7, 2.5],
           zoom: 9,
           zoomControl: false,
           scrollWheelZoom: false,
-          dragging: true,
+          dragging: !isTouchDevice,
+          touchZoom: false,
           doubleClickZoom: false,
           attributionControl: false,
         })
@@ -136,18 +152,78 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         mapInstanceRef.current = leafletMap
         setMap(leafletMap)
         setIsLoaded(true)
+
+        // Forcer invalidateSize + fitBounds avec des délais progressifs
+        // pour garantir la bonne taille après navigation/transitions
+        setTimeout(refreshMap, 150)
+        setTimeout(refreshMap, 400)
+        setTimeout(refreshMap, 800)
+        setTimeout(refreshMap, 1500)
       } catch (error) {
         logger.error('Erreur initialisation carte:', error)
-        setIsLoaded(true) // Marquer comme chargé même en cas d'erreur pour éviter boucle
+        setIsLoaded(true)
       }
     }
 
     // Petit délai pour s'assurer que le DOM est prêt
-    const timer = setTimeout(initMap, 100)
+    const timer = setTimeout(initMap, 50)
+
+    // Debounce pour éviter les appels multiples pendant le redimensionnement
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null
+    const debouncedRefresh = () => {
+      if (resizeTimeout) clearTimeout(resizeTimeout)
+      resizeTimeout = setTimeout(() => {
+        const m = mapInstanceRef.current
+        if (!m) return
+        m.invalidateSize()
+        if (boundsRef.current) {
+          m.fitBounds(boundsRef.current, { padding: [15, 15], animate: false })
+        }
+      }, 150)
+    }
+
+    // ResizeObserver pour détecter les changements de taille du conteneur
+    let resizeObserver: ResizeObserver | null = null
+    if (mapRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        debouncedRefresh()
+      })
+      resizeObserver.observe(mapRef.current)
+    }
+
+    // window resize : recadrer quand la fenêtre / le viewport change
+    // (couvre le cas DevTools responsive ↔ desktop)
+    const handleWindowResize = () => {
+      debouncedRefresh()
+    }
+    window.addEventListener('resize', handleWindowResize)
+
+    // pageshow : recadrer après retour via bfcache (bouton retour navigateur)
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setTimeout(refreshMap, 100)
+        setTimeout(refreshMap, 500)
+      }
+    }
+
+    // visibilitychange : recadrer quand l'onglet redevient visible
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setTimeout(refreshMap, 100)
+      }
+    }
+
+    window.addEventListener('pageshow', handlePageShow)
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       cancelled = true
       clearTimeout(timer)
+      if (resizeTimeout) clearTimeout(resizeTimeout)
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', handleWindowResize)
+      window.removeEventListener('pageshow', handlePageShow)
+      document.removeEventListener('visibilitychange', handleVisibility)
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove()
         mapInstanceRef.current = null
@@ -165,6 +241,10 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
       // Supprimer les anciennes couches
       layersRef.current.forEach(layer => map.removeLayer(layer))
       layersRef.current.clear()
+
+      // Supprimer les anciens labels pour éviter la duplication
+      labelMarkersRef.current.forEach(marker => map.removeLayer(marker))
+      labelMarkersRef.current = []
 
       // Créer une couche GeoJSON avec les vrais contours officiels
       const geoJsonLayer = L.geoJSON(geoData, {
@@ -198,7 +278,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
             </div>`
             layer.bindTooltip(tooltipContent, {
               direction: 'top',
-              sticky: true,
+              sticky: !('ontouchstart' in window),
               className: 'dept-tooltip',
               opacity: 1,
             })
@@ -269,11 +349,24 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
           iconSize: [isSmall ? 28 : 110, 18],
           iconAnchor: [isSmall ? 14 : 55, 9],
         });
-        L.marker(adjustedCenter, { icon: label, interactive: false }).addTo(map);
+        const labelMarker = L.marker(adjustedCenter, { icon: label, interactive: false }).addTo(map);
+        labelMarkersRef.current.push(labelMarker);
       });
 
       // Ajuster la vue sur les vrais bounds du GeoJSON
-      map.fitBounds(geoJsonLayer.getBounds(), { padding: [15, 15] })
+      const layerBounds = geoJsonLayer.getBounds()
+      boundsRef.current = layerBounds
+      map.invalidateSize()
+      map.fitBounds(layerBounds, { padding: [15, 15] })
+      // Re-fit avec délais pour couvrir les transitions de layout
+      setTimeout(() => {
+        map.invalidateSize()
+        map.fitBounds(layerBounds, { padding: [15, 15] })
+      }, 250)
+      setTimeout(() => {
+        map.invalidateSize()
+        map.fitBounds(layerBounds, { padding: [15, 15] })
+      }, 700)
     }
 
     addLayers()
@@ -282,7 +375,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
   // Placeholder de chargement
   if (!isMounted || !geoData) {
     return (
-      <div className={`w-full h-[400px] bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl overflow-hidden ${className}`}>
+      <div className={`w-full h-[320px] sm:h-[400px] bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl overflow-hidden ${className}`}>
         <div className="relative w-full h-full flex items-center justify-center">
           <div className="text-center">
             <div className="w-10 h-10 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
@@ -298,7 +391,7 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
       {/* Carte Leaflet */}
       <div 
         ref={mapRef} 
-        className="w-full h-[420px] overflow-hidden"
+        className="w-full h-[320px] sm:h-[420px] overflow-hidden"
         style={{ background: '#f1f5f9', zIndex: 0 }}
       />
 
@@ -330,8 +423,8 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
       )}
 
       {/* Légende — compacte, fond glass */}
-      <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 px-3 py-2 z-[5]">
-        <div className="flex items-center gap-3">
+      <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-md rounded-xl shadow-lg border border-white/50 px-2.5 sm:px-3 py-1.5 sm:py-2 z-[5]">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ background: '#059669' }} />
             <span className="text-[9px] text-slate-600 font-medium">≥80m²</span>
@@ -363,9 +456,25 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         </button>
       )}
 
+      {/* Badge flottant — découverte communes */}
+      {onExplore && isLoaded && (
+        <button
+          type="button"
+          onClick={onExplore}
+          className="absolute bottom-14 sm:bottom-12 right-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-md text-emerald-700 text-[10px] font-bold px-2.5 py-1.5 rounded-full shadow-lg border border-emerald-200 z-[5] cursor-pointer hover:bg-emerald-50 transition-all group"
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+          </span>
+          {departements.reduce((sum, d) => sum + (d.nbOpportunites || 0), 0)} communes accessibles
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-emerald-500 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+        </button>
+      )}
+
       {/* Source */}
       <div className="absolute bottom-3 right-3 text-[8px] text-slate-400 bg-white/70 px-1.5 py-0.5 rounded z-[5]">
-        DVF • France-GeoJSON
+data.gouv.fr • France-GeoJSON
       </div>
 
       {/* CSS pour tooltips et labels */}

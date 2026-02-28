@@ -7,6 +7,7 @@ import {
     Building2,
     Calculator,
     CheckCircle,
+    Clock,
     FileSearch,
     Handshake,
     Home,
@@ -18,7 +19,6 @@ import {
     Shield,
     Star,
     Target,
-    TrendingUp,
     Users,
     Wallet,
 } from 'lucide-react'
@@ -36,30 +36,30 @@ import {
 // STATS BAR (nouveau)
 // ============================================
 
-const stats = [
-  { value: 150, suffix: '+', label: 'Projets accompagnés', icon: Users },
-  { value: 98, suffix: '%', label: 'Clients satisfaits', icon: TrendingUp },
+const stats: { value: number; suffix: string; label: string; icon: typeof Users }[] = [
+  { value: 20, suffix: '+', label: 'Projets accompagnés', icon: Users },
+  { value: 90, suffix: 'j', label: 'Délai moyen jusqu\'aux clés', icon: Clock },
   { value: 8, suffix: '', label: 'Départements couverts', icon: MapPin },
-  { value: 15, suffix: 'M€', label: 'Volume de transactions', icon: BarChart3 },
+  { value: 98, suffix: '%', label: 'Taux de satisfaction', icon: Star },
 ]
 
 export function StatsBar() {
   return (
-    <section className="relative -mt-10 z-20 pb-4">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl shadow-xl shadow-black/8 p-5 md:p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+    <section className="relative -mt-8 sm:-mt-10 z-20 pb-4">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-2xl shadow-xl shadow-black/8 p-4 sm:p-5 md:p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
             {stats.map((stat) => {
               const Icon = stat.icon
               return (
                 <div key={stat.label} className="text-center">
                   <div className="flex items-center justify-center gap-1.5 mb-0.5">
                     <Icon className="w-3.5 h-3.5 text-aquiz-green" />
-                    <span className="text-xl md:text-2xl font-bold text-aquiz-black">
+                    <span className="text-lg sm:text-xl md:text-2xl font-bold text-aquiz-black">
                       <CountUp end={stat.value} suffix={stat.suffix} duration={2.5} />
                     </span>
                   </div>
-                  <p className="text-[11px] md:text-xs text-aquiz-gray">{stat.label}</p>
+                  <p className="text-[10px] sm:text-[11px] md:text-xs text-aquiz-gray leading-tight">{stat.label}</p>
                 </div>
               )
             })}
@@ -103,7 +103,7 @@ const services = [
 
 export function ServicesSection() {
   return (
-    <section className="py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="services">
+    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="services">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <FadeIn className="text-center mb-16">
@@ -114,7 +114,7 @@ export function ServicesSection() {
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
             Un accompagnement <span className="text-aquiz-green">complet</span>
           </h2>
-          <p className="text-lg text-aquiz-gray max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-aquiz-gray max-w-2xl mx-auto">
             Du conseil stratégique à la remise des clés, nous sommes à vos côtés
             pour transformer votre projet immobilier en réalité.
           </p>
@@ -130,7 +130,7 @@ export function ServicesSection() {
                   className="group relative bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
                 >
                   {/* Image */}
-                  <div className="relative h-52 overflow-hidden">
+                  <div className="relative h-44 sm:h-52 overflow-hidden">
                     <Image
                       src={service.image}
                       alt={service.title}
@@ -187,8 +187,8 @@ export function ServicesSection() {
         </StaggerContainer>
 
         {/* ─── Types de biens — sous-section intégrée ─── */}
-        <div className="mt-24 pt-16 border-t border-aquiz-gray-lighter/50">
-          <FadeIn className="text-center mb-14">
+        <div className="mt-16 sm:mt-24 pt-12 sm:pt-16 border-t border-aquiz-gray-lighter/50">
+          <FadeIn className="text-center mb-10 sm:mb-14">
             <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-aquiz-green/10 text-aquiz-green text-sm font-medium mb-4">
               <Home className="w-4 h-4" />
               Types de biens
@@ -201,78 +201,120 @@ export function ServicesSection() {
             </p>
           </FadeIn>
 
-          <div className="space-y-12 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-8">
-            {/* Appartement */}
-            <FadeIn>
-              <div className="group">
-                <div className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-5">
-                  <Image
-                    src="/images/hero-appartement.jpg"
-                    alt="Appartement parisien"
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-linear-to-t from-aquiz-black/60 to-transparent" />
-                  <div className="absolute bottom-4 left-4">
-                    <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-xs font-medium text-white border border-white/15">
-                      Ancien &amp; contemporain
-                    </span>
-                  </div>
-                </div>
-                <h4 className="text-lg font-bold text-aquiz-black mb-2">Appartement</h4>
-                <p className="text-sm text-aquiz-gray leading-relaxed">
-                  Nous vous accompagnons dans la recherche d&apos;appartements correspondant à vos critères : localisation stratégique, optimisation de l&apos;espace, potentiel locatif ou qualité de vie. Primo-accédant ou investisseur, bénéficiez de notre expertise du marché urbain et des opportunités off-market.
-                </p>
-              </div>
-            </FadeIn>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 lg:gap-8">
+            {[
+              {
+                title: 'Appartement',
+                image: '/images/hero-appartement.jpg',
+                alt: 'Appartement parisien',
+                subtitle: 'Du studio au duplex, en coeur de ville.',
+                delay: 0,
+              },
+              {
+                title: 'Maison',
+                image: '/images/hall-maison.jpg',
+                alt: 'Maison résidentielle',
+                subtitle: 'Pavillon, meulière ou contemporaine.',
+                delay: 0.1,
+              },
+              {
+                title: 'VEFA',
+                image: '/images/plans-vefa.jpg',
+                alt: 'Plans VEFA neuf',
+                subtitle: 'Neuf sur plan, du programme à la livraison.',
+                delay: 0.2,
+              },
+            ].map((item) => (
+              <FadeIn key={item.title} delay={item.delay}>
+                <motion.div
+                  className="group relative aspect-[16/10] rounded-2xl overflow-hidden cursor-pointer"
+                  whileHover="hover"
+                  initial="rest"
+                  animate="rest"
+                  variants={{
+                    rest: { y: 0 },
+                    hover: { y: -6 },
+                  }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                >
+                  {/* Image — zoom doux */}
+                  <motion.div
+                    className="absolute inset-0"
+                    variants={{
+                      rest: { scale: 1 },
+                      hover: { scale: 1.06 },
+                    }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 30 }}
+                  >
+                    <Image
+                      src={item.image}
+                      alt={item.alt}
+                      fill
+                      className="object-cover"
+                    />
+                  </motion.div>
 
-            {/* Maison */}
-            <FadeIn delay={0.1}>
-              <div className="group">
-                <div className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-5">
-                  <Image
-                    src="/images/hall-maison.jpg"
-                    alt="Maison résidentielle"
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 bg-linear-to-t from-aquiz-black/60 to-transparent" />
-                  <div className="absolute bottom-4 left-4">
-                    <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-xs font-medium text-white border border-white/15">
-                      Résidentiel &amp; familial
-                    </span>
-                  </div>
-                </div>
-                <h4 className="text-lg font-bold text-aquiz-black mb-2">Maison</h4>
-                <p className="text-sm text-aquiz-gray leading-relaxed">
-                  Vous rêvez d&apos;un jardin, de volumes ouverts ou d&apos;un cadre de vie plus paisible ? Grâce à une connaissance approfondie des quartiers résidentiels, des typologies et des évolutions de prix, nous vous guidons vers une maison qui combine confort, valeur patrimoniale et sérénité.
-                </p>
-              </div>
-            </FadeIn>
+                  {/* Gradient bas permanent (pour titre au repos) */}
+                  <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
 
-            {/* VEFA */}
-            <FadeIn delay={0.2}>
-              <div className="group">
-                <div className="relative aspect-[16/10] rounded-2xl overflow-hidden mb-5">
-                  <Image
-                    src="/images/plans-vefa.jpg"
-                    alt="Plans VEFA neuf"
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-700"
+                  {/* Overlay hover — fond flou qui couvre toute l'image */}
+                  <motion.div
+                    className="absolute inset-0 bg-black/40 backdrop-blur-[4px]"
+                    variants={{
+                      rest: { opacity: 0 },
+                      hover: { opacity: 1 },
+                    }}
+                    transition={{ duration: 0.4, ease: 'easeOut' }}
                   />
-                  <div className="absolute inset-0 bg-linear-to-t from-aquiz-black/60 to-transparent" />
-                  <div className="absolute bottom-4 left-4">
-                    <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-sm text-xs font-medium text-white border border-white/15">
-                      Neuf sur plan
-                    </span>
+
+                  {/* Ligne verte */}
+                  <motion.div
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-aquiz-green/80"
+                    variants={{
+                      rest: { scaleX: 0 },
+                      hover: { scaleX: 1 },
+                    }}
+                    style={{ originX: 0 }}
+                    transition={{ type: 'spring', stiffness: 250, damping: 28, delay: 0.05 }}
+                  />
+
+                  {/* Titre — positionné en bas, glisse vers le centre au hover */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center p-5 sm:p-6">
+                    <motion.div
+                      className="text-center"
+                      variants={{
+                        rest: { y: '60%' },
+                        hover: { y: '0%' },
+                      }}
+                      transition={{ type: 'spring', stiffness: 220, damping: 22 }}
+                    >
+                      <motion.h4
+                        className="text-xl sm:text-2xl font-bold text-white tracking-wide"
+                        variants={{
+                          rest: { scale: 1 },
+                          hover: { scale: 1.08 },
+                        }}
+                        transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+                      >
+                        {item.title}
+                      </motion.h4>
+
+                      {/* Sous-titre — apparaît au hover */}
+                      <motion.p
+                        className="text-sm text-white/80 mt-2 max-w-[220px] mx-auto"
+                        variants={{
+                          rest: { opacity: 0, y: 6 },
+                          hover: { opacity: 1, y: 0 },
+                        }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 24, delay: 0.08 }}
+                      >
+                        {item.subtitle}
+                      </motion.p>
+                    </motion.div>
                   </div>
-                </div>
-                <h4 className="text-lg font-bold text-aquiz-black mb-2">VEFA</h4>
-                <p className="text-sm text-aquiz-gray leading-relaxed">
-                  La VEFA permet d&apos;acquérir un bien sur plan, mais exige un accompagnement rigoureux. Nous intervenons à chaque étape : choix du programme, analyse des plans, personnalisation des prestations, vérification du contrat, jusqu&apos;à la livraison. Notre rôle : sécuriser votre projet et négocier les meilleures conditions auprès des promoteurs.
-                </p>
-              </div>
-            </FadeIn>
+                </motion.div>
+              </FadeIn>
+            ))}
           </div>
         </div>      </div>
     </section>
@@ -288,7 +330,7 @@ const outils = [
     icon: Wallet,
     title: 'Ce que je peux acheter',
     subtitle: 'Mode A — Capacité d\'achat',
-    description: 'Calculez votre budget maximum selon vos revenus, charges et apport personnel. Résultat conforme aux critères HCSF 2025.',
+    description: 'Calculez votre budget maximum selon vos revenus, charges et apport personnel. Résultat conforme aux normes bancaires 2026.',
     features: ['Budget maximum', 'Mensualités estimées', 'Carte interactive IDF', 'Taux d\'endettement'],
     href: '/simulateur/mode-a',
     color: 'from-emerald-500/20 to-teal-500/10',
@@ -296,7 +338,7 @@ const outils = [
   },
   {
     icon: Home,
-    title: 'Ce qu\'il faut pour acheter',
+    title: 'Ce qu\'il me faut pour acheter',
     subtitle: 'Mode B — Faisabilité',
     description: 'Vous avez repéré un bien ? Découvrez les revenus minimum nécessaires et l\'apport conseillé pour l\'acquérir.',
     features: ['Faisabilité instantanée', 'Revenus requis', 'Apport optimal', 'Solutions alternatives'],
@@ -318,8 +360,8 @@ const outils = [
     icon: BarChart3,
     title: 'Carte des prix',
     subtitle: 'Prix réels Île-de-France',
-    description: 'Carte interactive des prix au m² basée sur les données DVF officielles. Visualisez le marché en temps réel.',
-    features: ['Données DVF officielles', 'Prix au m² réels', 'Vue par département', 'Historique des ventes'],
+    description: 'Carte interactive des prix au m² basée sur les données officielles. Visualisez le marché en temps réel.',
+    features: ['Données officielles', 'Prix au m² réels', 'Vue par département', 'Historique des ventes'],
     href: '/carte',
     color: 'from-amber-500/20 to-orange-500/10',
     popular: false,
@@ -328,7 +370,7 @@ const outils = [
 
 export function OutilsSection() {
   return (
-    <section className="py-24 md:py-32 bg-aquiz-black relative overflow-hidden scroll-mt-20 md:scroll-mt-24" id="outils">
+    <section className="py-16 sm:py-24 md:py-32 bg-aquiz-black relative overflow-hidden scroll-mt-20 md:scroll-mt-24" id="outils">
       {/* Background effects */}
       <div className="absolute inset-0">
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-aquiz-green/8 rounded-full blur-[80px]" />
@@ -352,15 +394,15 @@ export function OutilsSection() {
               <Calculator className="w-4 h-4" />
               Outils gratuits
             </span>
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-5 leading-tight">
-              Simulez votre projet,{' '}
-              <span className="text-aquiz-green">gratuitement.</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-5 leading-tight">
+              Simulez votre projet{' '}
+              <span className="text-aquiz-green">en quelques clics.</span>
             </h2>
-            <p className="text-lg text-white/45 leading-relaxed mb-8 max-w-lg">
+            <p className="text-base sm:text-lg text-white/45 leading-relaxed mb-6 sm:mb-8 max-w-lg">
               Nos outils en ligne analysent votre capacité d&apos;emprunt, comparent des biens et cartographient les prix du marché — le tout sans inscription.
             </p>
 
-            <div className="flex flex-wrap gap-6 mb-8">
+            <div className="flex flex-wrap gap-4 sm:gap-6 mb-6 sm:mb-8">
               <div>
                 <p className="text-2xl font-bold text-white">4</p>
                 <p className="text-xs text-white/30">Outils disponibles</p>
@@ -372,8 +414,8 @@ export function OutilsSection() {
               </div>
               <div className="w-px h-10 bg-white/10" />
               <div>
-                <p className="text-2xl font-bold text-white">HCSF</p>
-                <p className="text-xs text-white/30">Normes 2025 respectées</p>
+                <p className="text-2xl font-bold text-white">2 min</p>
+                <p className="text-xs text-white/30">Résultat instantané</p>
               </div>
             </div>
 
@@ -386,7 +428,118 @@ export function OutilsSection() {
             </Link>
           </FadeIn>
 
-          {/* Right — floating UI mockups */}
+          {/* Right — floating UI mockups (mobile: full-width stacked) */}
+          <FadeIn delay={0.2} className="lg:hidden mt-8">
+            <div className="space-y-3">
+              {/* Card: Simulateur result — compact */}
+              <div className="rounded-2xl border border-white/10 bg-[#1e1e1e] shadow-xl shadow-black/30 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-white/8">
+                  <div className="flex gap-1.5">
+                    <div className="w-2 h-2 rounded-full bg-red-400/60" />
+                    <div className="w-2 h-2 rounded-full bg-yellow-400/60" />
+                    <div className="w-2 h-2 rounded-full bg-green-400/60" />
+                  </div>
+                  <p className="text-[9px] text-white/25 ml-1">AQUIZ — Simulateur</p>
+                </div>
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-aquiz-green/15 flex items-center justify-center">
+                        <Wallet className="w-3.5 h-3.5 text-aquiz-green" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white">Capacité d&apos;achat</p>
+                        <p className="text-[10px] text-white/30">Mode A — Résultat</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-aquiz-green/10 border border-aquiz-green/20">
+                      <div className="w-1.5 h-1.5 rounded-full bg-aquiz-green" />
+                      <p className="text-[9px] text-aquiz-green font-medium">Finançable</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-center py-2.5 rounded-xl bg-white/4 border border-white/8">
+                      <p className="text-[9px] text-white/25 uppercase tracking-wider mb-0.5">Budget max</p>
+                      <p className="text-xl font-bold text-aquiz-green">324 000 €</p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="text-center px-3 py-1.5 rounded-lg bg-white/3 border border-white/6">
+                        <p className="text-[8px] text-white/20">Mensualité</p>
+                        <p className="text-[10px] font-semibold text-white/70">1 247 €</p>
+                      </div>
+                      <div className="text-center px-3 py-1.5 rounded-lg bg-white/3 border border-white/6">
+                        <p className="text-[8px] text-white/20">Endettement</p>
+                        <p className="text-[10px] font-semibold text-aquiz-green">31,2%</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row: Carte des prix + Comparateur side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Card: Carte des prix */}
+                <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-xl shadow-black/30 p-3">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <div className="w-5 h-5 rounded-md bg-amber-500/15 flex items-center justify-center">
+                      <BarChart3 className="w-2.5 h-2.5 text-amber-400" />
+                    </div>
+                    <p className="text-[10px] font-semibold text-white/60">Carte des prix</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] text-white/30">Paris 8e</p>
+                      <p className="text-[9px] font-semibold text-white/70">12 450 €</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] text-white/30">Boulogne</p>
+                      <p className="text-[9px] font-semibold text-white/70">8 900 €</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] text-white/30">Montreuil</p>
+                      <p className="text-[9px] font-semibold text-white/70">5 200 €</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-8 rounded-lg bg-white/3 border border-white/6 flex items-end justify-around px-1.5 pb-1">
+                    <div className="w-2 bg-aquiz-green/40 rounded-sm" style={{ height: '60%' }} />
+                    <div className="w-2 bg-aquiz-green/50 rounded-sm" style={{ height: '80%' }} />
+                    <div className="w-2 bg-aquiz-green/70 rounded-sm" style={{ height: '100%' }} />
+                    <div className="w-2 bg-aquiz-green/40 rounded-sm" style={{ height: '45%' }} />
+                    <div className="w-2 bg-aquiz-green/30 rounded-sm" style={{ height: '35%' }} />
+                  </div>
+                </div>
+
+                {/* Card: Comparateur */}
+                <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-xl shadow-black/30 p-3">
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <div className="w-5 h-5 rounded-md bg-purple-500/15 flex items-center justify-center">
+                      <Scale className="w-2.5 h-2.5 text-purple-400" />
+                    </div>
+                    <p className="text-[10px] font-semibold text-white/60">Comparateur</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-center py-1.5 rounded-lg bg-aquiz-green/8 border border-aquiz-green/15">
+                      <p className="text-[9px] text-aquiz-green/60">Bien A</p>
+                      <p className="text-[10px] font-bold text-aquiz-green">285k€</p>
+                      <p className="text-[8px] text-aquiz-green/50">★ Meilleur</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <div className="text-center py-1.5 rounded-lg bg-white/3 border border-white/6">
+                        <p className="text-[8px] text-white/25">Bien B</p>
+                        <p className="text-[9px] font-bold text-white/60">310k€</p>
+                      </div>
+                      <div className="text-center py-1.5 rounded-lg bg-white/3 border border-white/6">
+                        <p className="text-[8px] text-white/25">Bien C</p>
+                        <p className="text-[9px] font-bold text-white/60">340k€</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FadeIn>
+
+          {/* Right — floating UI mockups (desktop: absolute positioned) */}
           <FadeIn delay={0.2} className="hidden lg:block">
             <div className="relative h-[460px]">
               {/* Main card: Simulateur result */}
@@ -549,11 +702,6 @@ export function OutilsSection() {
                       <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center group-hover:bg-aquiz-green/15 group-hover:border-aquiz-green/25 transition-all duration-300">
                         <Icon className="w-5 h-5 text-white/50 group-hover:text-aquiz-green transition-colors duration-300" />
                       </div>
-                      {outil.popular && (
-                        <span className="px-2 py-0.5 rounded-full bg-aquiz-green/15 text-aquiz-green text-[9px] font-bold uppercase tracking-wider">
-                          Populaire
-                        </span>
-                      )}
                     </div>
 
                     <p className="text-[10px] font-semibold text-white/25 uppercase tracking-wider mb-0.5">
@@ -567,7 +715,7 @@ export function OutilsSection() {
                     </p>
 
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-aquiz-green group-hover:gap-2.5 transition-all">
-                      Essayer
+                      Découvrir
                       <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                     </span>
                   </div>
@@ -592,7 +740,7 @@ export function OutilsSection() {
             <span className="hidden sm:block w-px h-3 bg-white/10" />
             <span className="flex items-center gap-1.5">
               <CheckCircle className="w-3.5 h-3.5 text-aquiz-green/60" />
-              Données officielles DVF
+              Données officielles
             </span>
           </div>
         </FadeIn>
@@ -623,8 +771,8 @@ const steps = [
   {
     number: '03',
     title: 'Négociation & financement',
-    description: 'Nous négocions le meilleur prix en nous appuyant sur les données DVF réelles du marché. En parallèle, nos courtiers partenaires obtiennent les conditions de financement optimales.',
-    details: ['Négociation basée sur les données DVF', 'Mise en relation courtier', 'Montage dossier bancaire'],
+    description: 'Nous négocions le meilleur prix en nous appuyant sur les données réelles du marché. En parallèle, nos courtiers partenaires obtiennent les conditions de financement optimales.',
+    details: ['Négociation basée sur les prix réels', 'Mise en relation courtier', 'Montage dossier bancaire'],
     icon: Handshake,
   },
   {
@@ -638,17 +786,17 @@ const steps = [
 
 export function ProcessSection() {
   return (
-    <section className="py-24 md:py-32 bg-white overflow-hidden scroll-mt-20 md:scroll-mt-24" id="methode">
+    <section className="py-16 sm:py-24 md:py-32 bg-white overflow-hidden scroll-mt-20 md:scroll-mt-24" id="methode">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn className="text-center mb-16">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-aquiz-green/10 text-aquiz-green text-sm font-medium mb-4">
             <ArrowRight className="w-4 h-4" />
             Notre méthode
           </span>
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
             4 étapes pour <span className="text-aquiz-green">réussir</span> votre acquisition
           </h2>
-          <p className="text-lg text-aquiz-gray max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-aquiz-gray max-w-2xl mx-auto">
             Un parcours clair et structuré, du premier clic à la remise des clés.
           </p>
         </FadeIn>
@@ -753,27 +901,29 @@ export function ProcessSection() {
 
 const tarifs = [
   {
-    price: '5 000€',
+    price: '5 900€',
+    priceSuffix: ' TTC',
     label: 'Forfait Essentiel',
     condition: 'Pour un bien d\u2019une valeur',
     threshold: 'inférieure à 500 000€',
     features: ['Accompagnement complet', 'Négociation incluse', 'Suivi notaire'],
-    popular: false,
-  },
-  {
-    price: '8 900€',
-    label: 'Forfait Premium',
-    condition: 'Pour un bien d\u2019une valeur comprise',
-    threshold: 'entre 500 000€ et 1 000 000€',
-    features: ['Accompagnement premium', 'Chasse immobilière', 'Suivi personnalisé', 'Off-market'],
     popular: true,
   },
   {
-    price: '1,2%',
-    priceSuffix: ' HT',
+    price: '8 900€',
+    priceSuffix: ' TTC',
+    label: 'Forfait Premium',
+    condition: 'Pour un bien d\u2019une valeur comprise',
+    threshold: 'entre 500 000€ et 800 000€',
+    features: ['Accompagnement premium', 'Chasse immobilière', 'Suivi personnalisé', 'Off-market'],
+    popular: false,
+  },
+  {
+    price: '2%',
+    priceSuffix: ' TTC',
     label: 'Sur mesure',
-    condition: 'Pour un bien d\u2019une valeur',
-    threshold: 'supérieure à 1 000 000€',
+    condition: 'Pour un bien d\u2019une valeur comprise',
+    threshold: 'entre 800 000€ et 1 000 000€',
     features: ['Service dédié', 'Chasse exclusive', 'Conseil patrimonial', 'Conciergerie'],
     popular: false,
   },
@@ -781,13 +931,13 @@ const tarifs = [
 
 export function TarifsSection() {
   return (
-    <section className="py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="tarifs">
+    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="tarifs">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
             Nos <span className="text-aquiz-green">tarifs</span>
           </h2>
-          <p className="text-lg text-aquiz-gray max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-aquiz-gray max-w-2xl mx-auto">
             Des honoraires clairs et compétitifs, sans frais cachés. Vous ne payez qu&apos;au succès.
           </p>
         </FadeIn>
@@ -910,7 +1060,7 @@ const testimonials = [
     avatarBg: 'bg-blue-100 text-blue-700',
   },
   {
-    quote: 'Le simulateur est vraiment bien fait, avec les données DVF réelles. Et l\'accompagnement ensuite est à la hauteur des promesses.',
+    quote: 'Le simulateur est vraiment bien fait, avec les données de prix réelles. Et l\'accompagnement ensuite est à la hauteur des promesses.',
     name: 'Karim B.',
     role: 'Investisseur, Saint-Denis',
     rating: 5,
@@ -920,7 +1070,7 @@ const testimonials = [
 
 export function TestimonialsSection() {
   return (
-    <section className="py-16 md:py-20 bg-aquiz-gray-lightest scroll-mt-20 md:scroll-mt-24" id="temoignages">
+    <section className="py-12 sm:py-16 md:py-20 bg-aquiz-gray-lightest scroll-mt-20 md:scroll-mt-24" id="temoignages">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header compact + note globale */}
@@ -940,7 +1090,7 @@ export function TestimonialsSection() {
         <StaggerContainer className="grid md:grid-cols-3 gap-4" staggerDelay={0.1}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
-              <div className="relative bg-white rounded-xl p-5 h-full border border-aquiz-gray-lighter/40 hover:border-aquiz-green/30 hover:shadow-md transition-all duration-300">
+              <article className="relative bg-white rounded-xl p-5 h-full border border-aquiz-gray-lighter/40 hover:border-aquiz-green/30 hover:shadow-md transition-all duration-300">
                 {/* Top: stars + quote icon */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex gap-0.5">
@@ -964,7 +1114,7 @@ export function TestimonialsSection() {
                     <p className="text-[11px] text-aquiz-gray">{t.role}</p>
                   </div>
                 </div>
-              </div>
+              </article>
             </StaggerItem>
           ))}
         </StaggerContainer>

@@ -1,7 +1,8 @@
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Calculer ma capacité d\'achat immobilière — Mode A',
+  title: 'Calculer ma capacité d\'achat immobilière — Simulateur gratuit',
   description:
     'Estimez votre budget maximum d\'achat immobilier à partir de vos revenus, charges et apport. Calcul conforme HCSF (35% max), résultats instantanés.',
   openGraph: {
@@ -37,6 +38,10 @@ export default function ModeALayout({ children }: { children: React.ReactNode })
   return (
     <>
       <ModeAJsonLd />
+      <Breadcrumbs items={[
+        { label: 'Simulateur', href: '/simulateur' },
+        { label: 'Capacit\u00e9 d\u2019achat' },
+      ]} />
       {children}
     </>
   )

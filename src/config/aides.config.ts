@@ -1,13 +1,13 @@
 /**
  * Configuration des aides financières (PTZ, PAS, Action Logement)
- * Données réglementaires France 2024-2025
+ * Données réglementaires France 2026
  */
 
 import type { ZonePTZ } from '@/types/aides'
 
 export const AIDES_CONFIG = {
   ptz: {
-    // Plafonds de revenus PTZ 2024 (revenus N-2) par zone et nombre de personnes
+    // Plafonds de revenus PTZ 2026 (revenus N-2) par zone et nombre de personnes
     plafondsRevenus: {
       Abis: { 1: 49000, 2: 73500, 3: 88200, 4: 102900, 5: 117600 },
       A: { 1: 49000, 2: 73500, 3: 88200, 4: 102900, 5: 117600 },
@@ -39,7 +39,7 @@ export const AIDES_CONFIG = {
   },
 
   pas: {
-    // Plafonds de ressources PAS 2024
+    // Plafonds de ressources PAS 2026
     plafondsRevenus: {
       A: { 1: 37000, 2: 51800, 3: 62900, 4: 74000, 5: 85100 },
       B: { 1: 30000, 2: 42000, 3: 51000, 4: 60000, 5: 69000 },

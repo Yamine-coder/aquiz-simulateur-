@@ -2,14 +2,19 @@
 
 /**
  * Analyse IA pour le comparateur d'annonces
- * Utilise le moteur de scoring professionnel unifié
+ * 
+ * - Moteur de scoring professionnel unifié (10 axes pondérés)
+ * - Enrichissement via APIs (DVF, Géorisques, OSM)
+ * - Synthèse IA Mistral Large (avec fallback déterministe)
  */
 
+import { useAnalyseEnrichie } from '@/hooks/useAnalyseEnrichie'
 import {
     calculerScorePro,
     genererSyntheseComparaison,
     type ScoreComparateurResult,
 } from '@/lib/comparateur/scoreComparateur'
+import { toEnrichiesScoring } from '@/lib/comparateur/toEnrichiesScoring'
 import type { Annonce, StatistiquesComparaison } from '@/types/annonces'
 import {
     AlertTriangle,
@@ -17,13 +22,18 @@ import {
     ChevronDown,
     ChevronUp,
     Lightbulb,
+    Loader2,
     Phone,
     Sparkles,
     Star,
     ThumbsDown,
     ThumbsUp
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
+// ============================================
+// TYPES
+// ============================================
 
 interface AnalyseIAProps {
   annonces: Annonce[]
@@ -39,30 +49,56 @@ interface ScoreAvecRang {
   rang: number
 }
 
-export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: AnalyseIAProps) {
+/** Réponse de l'API synthese-ia-comparaison */
+interface SyntheseIAResponse {
+  synthese: string
+  verdictFinal: string
+  conseilNego: string
+  cliffhanger: string
+}
+
+// ============================================
+// COMPOSANT PRINCIPAL
+// ============================================
+
+export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  
-  // Utilise le moteur de scoring professionnel unifié
+
+  // Enrichissement via APIs gratuites (DVF, Géorisques, OSM)
+  const {
+    getAnalyse: getAnalyseEnrichie,
+    isLoading: isLoadingEnrichie,
+  } = useAnalyseEnrichie(annonces)
+
+  // Synthèse IA
+  const [syntheseIA, setSyntheseIA] = useState<SyntheseIAResponse | null>(null)
+  const [isLoadingSyntheseIA, setIsLoadingSyntheseIA] = useState(false)
+  const [syntheseSource, setSyntheseSource] = useState<string>('')
+  const lastCallRef = useRef<string>('')
+
+  // Calcul des scores avec données enrichies
   const { sortedScores, syntheseTexte, conseilsCles } = useMemo(() => {
-    // Calcul du score pro pour chaque annonce (sans données enrichies DVF/Géo/OSM)
-    const scores: ScoreAvecRang[] = annonces.map(annonce => ({
-      annonceId: annonce.id,
-      result: calculerScorePro(annonce, annonces, undefined, budgetMax),
-      rang: 0,
-    }))
-    
-    // Synthèse via le moteur unifié
+    const scores: ScoreAvecRang[] = annonces.map(annonce => {
+      const enrichie = getAnalyseEnrichie(annonce.id)
+      const enrichiScoring = toEnrichiesScoring(enrichie ?? null)
+      return {
+        annonceId: annonce.id,
+        result: calculerScorePro(annonce, annonces, enrichiScoring, budgetMax),
+        rang: 0,
+      }
+    })
+
+    // Synthèse déterministe (fallback et affichage immédiat)
     const synthese = genererSyntheseComparaison(scores.map(s => s.result))
-    
+
     // Appliquer les rangs du classement
     synthese.classement.forEach(c => {
       const entry = scores.find(s => s.annonceId === c.annonceId)
       if (entry) entry.rang = c.rang
     })
-    
-    // Tri par rang
+
     const sorted = [...scores].sort((a, b) => a.rang - b.rang)
-    
+
     // Conseils clés
     const conseils: string[] = []
     if (synthese.conseilGeneral) {
@@ -78,15 +114,124 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
     if (conseils.length === 0) {
       conseils.push('Visitez les biens pour vous faire une idée du quartier et de l\'ambiance')
     }
-    
+
     return { sortedScores: sorted, syntheseTexte: synthese.syntheseGlobale, conseilsCles: conseils }
-  }, [annonces, budgetMax])
-  
+  }, [annonces, budgetMax, getAnalyseEnrichie])
+
+  // Appeler l'API synthèse IA une fois les scores prêts et les enrichissements chargés
+  const fetchSyntheseIA = useCallback(async () => {
+    if (annonces.length === 0 || isLoadingEnrichie) return
+
+    // Créer un fingerprint pour éviter les appels dupliqués
+    const fingerprint = sortedScores.map(s => `${s.annonceId}:${s.result.scoreGlobal}`).join('|')
+    if (fingerprint === lastCallRef.current) return
+    lastCallRef.current = fingerprint
+
+    setIsLoadingSyntheseIA(true)
+
+    try {
+      const biens = sortedScores.map(({ annonceId, result, rang }) => {
+        const annonce = annonces.find(a => a.id === annonceId)
+        if (!annonce) return null
+
+        const enrichie = getAnalyseEnrichie(annonceId)
+
+        return {
+          id: annonceId,
+          titre: annonce.titre || `${annonce.type === 'maison' ? 'Maison' : 'Appt'} ${annonce.pieces}p - ${annonce.ville}`,
+          prix: annonce.prix,
+          surface: annonce.surface,
+          prixM2: annonce.prixM2,
+          type: annonce.type,
+          pieces: annonce.pieces,
+          chambres: annonce.chambres,
+          ville: annonce.ville,
+          codePostal: annonce.codePostal,
+          dpe: annonce.dpe,
+          etage: annonce.etage,
+          anneeConstruction: annonce.anneeConstruction,
+          parking: annonce.parking,
+          balconTerrasse: annonce.balconTerrasse,
+          cave: annonce.cave,
+          ascenseur: annonce.ascenseur,
+          chargesMensuelles: annonce.chargesMensuelles,
+          taxeFonciere: annonce.taxeFonciere,
+          scoreGlobal: result.scoreGlobal,
+          rang,
+          verdict: result.verdict,
+          confiance: result.confiance,
+          axes: result.axes
+            .filter(a => a.disponible)
+            .map(a => ({
+              label: a.label,
+              score: a.score,
+              detail: a.detail,
+              impact: a.impact,
+            })),
+          estimations: result.estimations,
+          avantages: result.points.filter(p => p.type === 'avantage').map(p => p.texte),
+          attentions: result.points.filter(p => p.type === 'attention').map(p => p.texte),
+          conseilPerso: result.conseilPerso,
+          // Enrichissement data
+          marche: enrichie?.marche.success ? {
+            ecartPrixM2: enrichie.marche.ecartPrixM2,
+            evolution12Mois: enrichie.marche.evolution12Mois,
+            prixM2MedianMarche: enrichie.marche.prixM2MedianMarche,
+            nbTransactions: enrichie.marche.nbTransactions,
+          } : undefined,
+          risques: enrichie?.risques.success ? {
+            scoreRisque: enrichie.risques.scoreRisque,
+            zoneInondable: enrichie.risques.zoneInondable,
+            niveauRadon: enrichie.risques.niveauRadon,
+          } : undefined,
+          quartier: enrichie?.quartier.success ? {
+            scoreQuartier: enrichie.quartier.scoreQuartier,
+            transports: enrichie.quartier.transports,
+            commerces: enrichie.quartier.commerces,
+            ecoles: enrichie.quartier.ecoles,
+            sante: enrichie.quartier.sante,
+            espaceVerts: enrichie.quartier.espaceVerts,
+          } : undefined,
+        }
+      }).filter(Boolean)
+
+      const response = await fetch('/api/analyse/synthese-ia-comparaison', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          biens,
+          budgetMax,
+          syntheseDeterministe: syntheseTexte,
+        }),
+      })
+
+      const json = await response.json()
+
+      if (json.success && json.data) {
+        setSyntheseIA(json.data)
+        setSyntheseSource(json.source || 'unknown')
+      }
+    } catch {
+      // On garde la synthèse déterministe
+    } finally {
+      setIsLoadingSyntheseIA(false)
+    }
+  }, [annonces, sortedScores, budgetMax, isLoadingEnrichie, getAnalyseEnrichie, syntheseTexte])
+
+  // Déclencher l'appel IA quand les enrichissements sont chargés
+  useEffect(() => {
+    if (!isLoadingEnrichie && sortedScores.length > 0) {
+      fetchSyntheseIA()
+    }
+  }, [isLoadingEnrichie, sortedScores, fetchSyntheseIA])
+
   if (annonces.length === 0) return null
-  
+
   const getAnnonce = (id: string) => annonces.find(a => a.id === id)
   const meilleur = sortedScores[0]
-  
+  const isIAReady = syntheseIA !== null && !isLoadingSyntheseIA
+  const isMistral = syntheseSource.includes('mistral') || syntheseSource.includes('groq')
+
   return (
     <div className="bg-white rounded-2xl border border-aquiz-gray-lighter shadow-sm overflow-hidden">
       {/* Header */}
@@ -101,41 +246,85 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
               <p className="text-xs text-aquiz-gray">Scoring 10 axes — {annonces.length} bien{annonces.length > 1 ? 's' : ''}</p>
             </div>
           </div>
-          {meilleur && (
-            <div className="flex items-center gap-2 bg-aquiz-green/10 px-3 py-1.5 rounded-lg">
-              <Star className="w-4 h-4 text-aquiz-green" />
-              <span className="text-sm font-medium text-aquiz-green">
-                Score max : {meilleur.result.scoreGlobal}/100
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {isLoadingSyntheseIA && (
+              <div className="flex items-center gap-1.5 text-xs text-aquiz-gray animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Analyse IA...</span>
+              </div>
+            )}
+            {meilleur && (
+              <div className="flex items-center gap-2 bg-aquiz-green/10 px-3 py-1.5 rounded-lg">
+                <Star className="w-4 h-4 text-aquiz-green" />
+                <span className="text-sm font-medium text-aquiz-green">
+                  Score max : {meilleur.result.scoreGlobal}/100
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      
-      {/* Synthèse */}
-      <div className="px-4 py-3 bg-aquiz-black/[0.02] border-b border-aquiz-gray-lighter">
-        <p className="text-sm text-aquiz-gray-dark leading-relaxed">
-          {syntheseTexte}
-        </p>
+
+      {/* Synthèse IA ou déterministe */}
+      <div className="px-4 py-3 bg-aquiz-black/2 border-b border-aquiz-gray-lighter">
+        {isIAReady && syntheseIA ? (
+          <div className="space-y-2.5">
+            {/* Badge IA */}
+            {isMistral && (
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-aquiz-green/10 text-aquiz-green text-[10px] font-semibold rounded-full">
+                  <Sparkles className="w-3 h-3" />
+                  Analyse IA
+                </span>
+              </div>
+            )}
+            {/* Synthèse comparative */}
+            <p className="text-sm text-aquiz-gray-dark leading-relaxed">
+              {syntheseIA.synthese}
+            </p>
+            {/* Verdict final */}
+            {syntheseIA.verdictFinal && (
+              <div className="flex items-start gap-2 bg-aquiz-green/5 rounded-lg px-3 py-2">
+                <CheckCircle className="w-4 h-4 text-aquiz-green mt-0.5 shrink-0" />
+                <p className="text-xs text-aquiz-green-dark font-medium leading-relaxed">
+                  {syntheseIA.verdictFinal}
+                </p>
+              </div>
+            )}
+            {/* Conseil négociation */}
+            {syntheseIA.conseilNego && (
+              <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2">
+                <Lightbulb className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  {syntheseIA.conseilNego}
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-aquiz-gray-dark leading-relaxed">
+            {syntheseTexte}
+          </p>
+        )}
       </div>
-      
+
       {/* Classement des biens */}
       <div className="divide-y divide-aquiz-gray-lightest">
         {sortedScores.map(({ annonceId, result, rang }) => {
           const annonce = getAnnonce(annonceId)
           if (!annonce) return null
-          
+
           const isExpanded = expandedId === annonceId
           const avantages = result.points.filter(p => p.type === 'avantage')
           const attentions = result.points.filter(p => p.type === 'attention' || p.type === 'conseil')
           const isBest = rang === 1
-          
+
           return (
             <div key={annonceId}>
               <button
                 onClick={() => setExpandedId(isExpanded ? null : annonceId)}
                 className={`w-full px-4 py-3 flex items-center gap-4 hover:bg-aquiz-gray-lightest/50 transition-colors ${
-                  isBest ? 'bg-aquiz-green/[0.03]' : ''
+                  isBest ? 'bg-aquiz-green/3' : ''
                 }`}
               >
                 {/* Rang */}
@@ -144,7 +333,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                 }`}>
                   {rang}
                 </div>
-                
+
                 {/* Info bien */}
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex items-center gap-2">
@@ -165,7 +354,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                     <span className="text-aquiz-gray-dark">Confiance {result.confiance}%</span>
                   </div>
                 </div>
-                
+
                 {/* Score + indicateurs */}
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex items-center gap-1.5 text-xs">
@@ -178,7 +367,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                       {attentions.length}
                     </span>
                   </div>
-                  
+
                   {/* Score */}
                   <div className="w-12 text-right">
                     <span className={`text-lg font-bold ${
@@ -190,7 +379,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                     </span>
                     <span className="text-[10px] text-aquiz-gray">/100</span>
                   </div>
-                  
+
                   {/* Chevron */}
                   {isExpanded ? (
                     <ChevronUp className="w-4 h-4 text-aquiz-gray" />
@@ -199,7 +388,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                   )}
                 </div>
               </button>
-              
+
               {/* Détails */}
               {isExpanded && (
                 <div className="px-4 pb-4 bg-aquiz-gray-lightest/30">
@@ -227,7 +416,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="grid md:grid-cols-2 gap-3 pt-2">
                     {/* Points forts */}
                     <div className="bg-white rounded-lg border border-aquiz-green/20 p-3">
@@ -253,7 +442,7 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
                         <p className="text-xs text-aquiz-gray italic">Pas de point fort notable</p>
                       )}
                     </div>
-                    
+
                     {/* Points d'attention */}
                     <div className="bg-white rounded-lg border border-amber-200 p-3">
                       <div className="flex items-center gap-1.5 mb-2">
@@ -285,20 +474,34 @@ export function AnalyseIA({ annonces, statistiques, budgetMax, onRequestHelp }: 
           )
         })}
       </div>
-      
-      {/* Conseils + CTA */}
+
+      {/* Cliffhanger IA + CTA */}
       <div className="px-4 py-3 border-t border-aquiz-gray-lighter bg-aquiz-gray-lightest/30">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-              <span className="text-xs font-semibold text-aquiz-gray">Conseil</span>
-            </div>
-            <p className="text-xs text-aquiz-gray leading-relaxed">
-              {conseilsCles[0] || 'Visitez les biens pour vous faire une idée du quartier.'}
-            </p>
+            {isIAReady && syntheseIA?.cliffhanger ? (
+              <>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-aquiz-green" />
+                  <span className="text-xs font-semibold text-aquiz-green">Le saviez-vous ?</span>
+                </div>
+                <p className="text-xs text-aquiz-gray-dark leading-relaxed font-medium">
+                  {syntheseIA.cliffhanger}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-xs font-semibold text-aquiz-gray">Conseil</span>
+                </div>
+                <p className="text-xs text-aquiz-gray leading-relaxed">
+                  {conseilsCles[0] || 'Visitez les biens pour vous faire une idée du quartier.'}
+                </p>
+              </>
+            )}
           </div>
-          
+
           {onRequestHelp && (
             <button
               onClick={onRequestHelp}

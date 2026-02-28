@@ -128,6 +128,9 @@ export interface Annonce {
   
   /** URL de l'image principale */
   imageUrl?: string
+
+  /** URLs des images supplémentaires (carousel) */
+  images?: string[]
   
   /** Date d'ajout au comparateur */
   dateAjout: Date
@@ -172,6 +175,7 @@ export interface NouvelleAnnonce {
   titre?: string
   description?: string
   imageUrl?: string
+  images?: string[]
   notes?: string
   ges?: ClasseDPE
   anneeConstruction?: number

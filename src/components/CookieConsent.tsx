@@ -32,7 +32,7 @@ export function CookieConsent() {
       if (stored) {
         const prefs: CookiePreferences = JSON.parse(stored)
         if (prefs.version === COOKIE_CONSENT_VERSION) {
-          // Consentement déjà donné → afficher seulement l'icône
+          // Consentement déjà donné → rien de visible
           setState('icon')
           return
         }
@@ -43,6 +43,16 @@ export function CookieConsent() {
     // Premier visit → afficher le bandeau après un court délai
     const timer = setTimeout(() => setState('banner'), 1500)
     return () => clearTimeout(timer)
+  }, [])
+
+  // Écouter l'événement personnalisé pour réouvrir le bandeau (depuis le footer)
+  useEffect(() => {
+    const handler = () => {
+      setShowDetails(false)
+      setState('banner')
+    }
+    window.addEventListener('reopen-cookie-banner', handler)
+    return () => window.removeEventListener('reopen-cookie-banner', handler)
   }, [])
 
   const savePreferences = useCallback((analytics: boolean) => {
@@ -67,27 +77,12 @@ export function CookieConsent() {
 
   const acceptAll = useCallback(() => savePreferences(true), [savePreferences])
   const refuseAll = useCallback(() => savePreferences(false), [savePreferences])
-  const reopenBanner = useCallback(() => {
-    setShowDetails(false)
-    setState('banner')
-  }, [])
 
   // Rien pendant le chargement initial
   if (state === 'loading') return null
 
-  // ─── Petit bouton flottant (après consentement) ───
-  if (state === 'icon') {
-    return (
-      <button
-        onClick={reopenBanner}
-        className="fixed bottom-4 left-4 z-[9998] w-10 h-10 rounded-full bg-[#1a1a1a] border border-white/10 shadow-lg shadow-black/20 flex items-center justify-center hover:bg-[#2d2d2d] hover:scale-110 transition-all duration-200 cursor-pointer group"
-        aria-label="Paramètres des cookies"
-        title="Gérer les cookies"
-      >
-        <Cookie className="w-4 h-4 text-white/50 group-hover:text-[#22c55e] transition-colors" />
-      </button>
-    )
-  }
+  // Après consentement → rien de visible (le bandeau peut être réouvert via le footer)
+  if (state === 'icon') return null
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 animate-in slide-in-from-bottom-4 duration-500">
@@ -118,22 +113,31 @@ export function CookieConsent() {
               {/* ─── Détails expandables ─── */}
               {showDetails && (
                 <div className="mt-3 space-y-2.5 text-xs text-white/40">
-                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" />
+                  <div className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5">
+                    <div className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0 mt-1" />
                     <div className="flex-1">
                       <span className="text-white/70 font-medium">Cookies nécessaires</span>
-                      <p className="mt-0.5">Fonctionnement du site, sauvegarde locale de vos simulations. Toujours actifs.</p>
+                      <p className="mt-0.5">Toujours actifs — indispensables au fonctionnement du site.</p>
+                      <ul className="mt-1 space-y-0.5 text-white/30">
+                        <li><span className="font-mono text-white/50">aquiz-cookie-consent</span> — mémorise votre choix cookies</li>
+                        <li><span className="font-mono text-white/50">aquiz-simulateur</span> — sauvegarde locale de vos simulations</li>
+                        <li><span className="font-mono text-white/50">aquiz-comparateur</span> — sauvegarde locale de vos annonces comparées</li>
+                      </ul>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/5">
-                    <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                  <div className="flex items-start gap-3 p-2.5 rounded-lg bg-white/5">
+                    <div className="w-2 h-2 rounded-full bg-amber-400 shrink-0 mt-1" />
                     <div className="flex-1">
                       <span className="text-white/70 font-medium">Cookies d&apos;analyse</span>
-                      <p className="mt-0.5">Statistiques anonymes de fréquentation (Vercel Analytics). Aucune donnée personnelle transmise à des tiers.</p>
+                      <p className="mt-0.5">Statistiques anonymes de fréquentation via Vercel Analytics (pages vues, appareil, pays). Aucune donnée personnelle transmise à des tiers.</p>
                     </div>
                   </div>
                   <p className="pt-1">
                     Consultez notre{' '}
+                    <a href="/mentions-legales#cookies" className="text-[#22c55e] hover:underline">
+                      politique de cookies
+                    </a>{' '}
+                    et notre{' '}
                     <a href="/mentions-legales#confidentialite" className="text-[#22c55e] hover:underline">
                       politique de confidentialité
                     </a>{' '}

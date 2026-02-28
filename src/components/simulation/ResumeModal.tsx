@@ -4,6 +4,7 @@
 
 'use client'
 
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { SavedSimulation } from '@/types/simulation-save'
 import {
     ArrowRight,
@@ -80,6 +81,7 @@ function getEtapeLabel(etape: string, mode: 'A' | 'B'): string {
 }
 
 export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
+  const focusTrapRef = useFocusTrap(true)
   const progress = getProgress(simulation.etape, simulation.mode, simulation.status)
   const etapeLabel = getEtapeLabel(simulation.etape, simulation.mode)
   const isComplete = simulation.status === 'terminee' || progress === 100
@@ -93,13 +95,20 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-[400px] bg-white rounded-2xl border border-gray-100 shadow-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 overflow-hidden">
+      <div
+        ref={focusTrapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resume-modal-title"
+        className="w-full max-w-[400px] bg-white rounded-2xl border border-gray-100 shadow-xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 overflow-hidden"
+      >
         
         {/* Header - fond blanc, style aéré Apple-like */}
         <div className="relative px-7 pt-7 pb-5">
           {/* Bouton fermer */}
           <button 
             onClick={onNew}
+            aria-label="Fermer la modale"
             className="absolute top-5 right-5 p-1.5 rounded-full text-gray-300 hover:text-gray-500 hover:bg-gray-50 transition-colors"
           >
             <X className="w-4 h-4" />
@@ -116,7 +125,7 @@ export function ResumeModal({ simulation, onResume, onNew }: ResumeModalProps) {
           </span>
 
           {/* Titre */}
-          <h2 className="text-xl font-bold text-aquiz-black mt-1.5">
+          <h2 id="resume-modal-title" className="text-xl font-bold text-aquiz-black mt-1.5">
             {isComplete ? 'Revoir votre simulation ?' : 'Reprendre votre simulation ?'}
           </h2>
 

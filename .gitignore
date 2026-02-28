@@ -43,3 +43,17 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+/src/generated/prisma
+
+# prisma sqlite
+prisma/dev.db
+prisma/dev.db-journal
+dev.db
+dev.db-journal
+
+# video sub-project
+/video/
+
+# screenshots
+/screenshots/

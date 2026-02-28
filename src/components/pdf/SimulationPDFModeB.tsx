@@ -3,6 +3,7 @@
  * "Ce qu'il faut pour acheter ce bien"
  * Généré avec @react-pdf/renderer
  */
+import type { DonneesQuartier, SyntheseIA } from '@/lib/pdf/enrichirPourPDF'
 import { Document, Image, Link, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ───
@@ -63,6 +64,9 @@ export interface SimulationPDFModeBProps {
   repartitionCout: RepartitionCout[]
   // Localisation (optionnel)
   infoLocalisation: InfoLocalisationPDF | null
+  // Enrichissements premium (optionnels)
+  quartier?: DonneesQuartier | null
+  syntheseIA?: SyntheseIA | null
 }
 
 // ─── Couleurs charte AQUIZ ───
@@ -324,22 +328,117 @@ const s = StyleSheet.create({
     paddingVertical: 8,
   },
   ctaBtnText: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white },
-  // Footer
+  // Footer — léger et discret
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: C.black,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 28,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderTopWidth: 0.5,
+    borderTopColor: C.grayBorder,
   },
-  footerLogo: { width: 70, height: 22, objectFit: 'contain' as const },
-  footerDisclaimer: { fontSize: 5, color: '#787878' },
-  footerPage: { fontSize: 6, color: '#969696' },
+  footerLogo: { width: 40, height: 14, objectFit: 'contain' as const, opacity: 0.5 },
+  footerDisclaimer: { fontSize: 5, color: C.grayLight },
+  footerPage: { fontSize: 5.5, color: C.grayLight },
+  // IA Card
+  iaCard: {
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: C.green,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    backgroundColor: '#f0fdf4',
+  },
+  iaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  iaBadgeText: {
+    fontSize: 7,
+    fontFamily: 'Helvetica-Bold',
+    color: C.green,
+    backgroundColor: C.greenLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 3,
+  },
+  iaTitle: {
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+  },
+  iaText: {
+    fontSize: 7,
+    color: C.black,
+    lineHeight: 1.5,
+    marginTop: 4,
+  },
+  iaCliffhanger: {
+    fontSize: 7,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+    marginTop: 6,
+  },
+  iaEconomie: {
+    backgroundColor: C.greenLight,
+    borderRadius: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  iaEconomieText: {
+    fontSize: 7,
+    fontFamily: 'Helvetica-Bold',
+    color: C.greenDark,
+  },
+  // Quartier scores
+  quartierRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 8,
+  },
+  quartierItem: {
+    flex: 1,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: C.grayBorder,
+    paddingVertical: 5,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+  },
+  quartierLabel: {
+    fontSize: 5,
+    color: C.gray,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  quartierScore: {
+    fontSize: 11,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+    marginTop: 2,
+  },
+  quartierMax: {
+    fontSize: 5,
+    color: C.grayLight,
+    marginTop: 1,
+  },
+  quartierDesc: {
+    fontSize: 4.5,
+    color: C.grayLight,
+    textAlign: 'center' as const,
+    marginTop: 2,
+    lineHeight: 1.3,
+  },
   // Page 2 title
   pageTitleRow: {
     flexDirection: 'row',
@@ -349,6 +448,15 @@ const s = StyleSheet.create({
   },
   pageTitle: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.black },
   pageSub: { fontSize: 7, color: C.gray, marginLeft: 8 },
+  // Page 2+ : wrapping automatique sur plusieurs pages
+  pageWrap: {
+    fontFamily: 'Helvetica',
+    fontSize: 8,
+    color: C.black,
+    backgroundColor: C.white,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
 })
 
 // ─── Helpers ───
@@ -364,13 +472,16 @@ function fmt(n: number): string {
 
 // ─── Sub-components ───
 
-function Footer({ pageNum, logoUrl }: { pageNum: number; logoUrl: string }) {
+function Footer({ logoUrl }: { logoUrl: string }) {
   return (
     <View style={s.footer} fixed>
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
       <Image src={logoUrl} style={s.footerLogo} />
       <Text style={s.footerDisclaimer}>Simulation indicative — Ne constitue pas une offre de prêt</Text>
-      <Text style={s.footerPage}>Page {pageNum}</Text>
+      <Text
+        style={s.footerPage}
+        render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`}
+      />
     </View>
   )
 }
@@ -471,6 +582,8 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
     coutTotalCredit, totalProjet,
     simulationsDuree, repartitionCout,
     infoLocalisation,
+    quartier,
+    syntheseIA,
   } = props
 
   const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -480,7 +593,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
     <Document
       title="AQUIZ - Étude d'achat immobilier"
       author="AQUIZ"
-      subject="Ce qu'il faut pour acheter ce bien"
+      subject="Puis-je acheter ce bien ?"
     >
       {/* ═══════ PAGE 1 : CE QU'IL FAUT ═══════ */}
       <Page size="A4" style={s.page}>
@@ -492,7 +605,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
           </View>
           <View style={s.headerCenter}>
             <Text style={s.headerTitleText}>ÉTUDE D&apos;ACHAT IMMOBILIER</Text>
-            <Text style={s.headerSubText}>Ce qu&apos;il faut pour acheter ce bien • {dateStr}</Text>
+            <Text style={s.headerSubText}>Puis-je acheter ce bien ? • {dateStr}</Text>
           </View>
           <View style={s.headerRight}>
             <View style={s.heroBadge}>
@@ -620,17 +733,19 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
           </View>
         </View>
 
-        <Footer pageNum={1} logoUrl={logoUrl} />
+        <Footer logoUrl={logoUrl} />
       </Page>
 
-      {/* ═══════ PAGE 2 : COMPARAISON DURÉES & CONSEILS ═══════ */}
-      <Page size="A4" style={s.page}>
-        <View style={s.pageTitleRow}>
-          <Text style={s.pageTitle}>ANALYSE COMPARATIVE</Text>
-          <Text style={s.pageSub}>Durées de prêt & conseils personnalisés</Text>
-        </View>
+      {/* ═══════ PAGE 2+ : COMPARAISON DURÉES & CONSEILS (auto-wrap) ═══════ */}
+      <Page size="A4" style={s.pageWrap}>
+        <Footer logoUrl={logoUrl} />
 
         <View style={s.content}>
+          {/* Titre de section */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
+            <Text style={s.pageTitle}>ANALYSE COMPARATIVE</Text>
+            <Text style={s.pageSub}>Durées de prêt & conseils personnalisés</Text>
+          </View>
           {/* Tableau comparatif durées */}
           <View style={{ marginTop: 12 }}>
             <SectionTitle title="MENSUALITÉ SELON LA DURÉE DU PRÊT" />
@@ -713,7 +828,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
           )}
 
           {/* Conseils personnalisés */}
-          <View style={{ marginTop: 14 }}>
+          <View style={{ marginTop: 14 }} wrap={false}>
             <SectionTitle title="CONSEILS PERSONNALISÉS" />
             <View style={s.conseilCard}>
               {conseils.map((conseil, idx) => (
@@ -724,8 +839,79 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </View>
           </View>
 
+          {/* ═══ Synthèse IA ═══ */}
+          {syntheseIA && (
+            <View style={s.iaCard} wrap={false}>
+              <View style={s.iaBadge}>
+                <Text style={s.iaBadgeText}>IA</Text>
+                <Text style={s.iaTitle}>Analyse personnalisée AQUIZ</Text>
+              </View>
+              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
+              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
+                <View style={s.iaEconomie}>
+                  <Text style={s.iaEconomieText}>
+                    Économie potentielle estimée : {fmt(syntheseIA.economieEstimee)} EUR
+                  </Text>
+                </View>
+              )}
+              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
+            </View>
+          )}
+
+          {/* ═══ Qualité du quartier ═══ */}
+          {quartier && (
+            <View style={{ marginTop: 14 }} wrap={false}>
+              <SectionTitle title={`QUALITÉ DU QUARTIER — ${nomCommune || codePostal}`} />
+              <View style={s.quartierRow}>
+                {[
+                  { label: 'GLOBAL', score: quartier.scoreGlobal / 10, desc: 'Score composite' },
+                  { label: 'TRANSPORTS', score: quartier.transports / 10, desc: 'Bus, métro, tram, gare' },
+                  { label: 'COMMERCES', score: quartier.commerces / 10, desc: 'Supermarchés, boulangeries' },
+                  { label: 'ÉCOLES', score: quartier.ecoles / 10, desc: 'Écoles, collèges, lycées' },
+                  { label: 'SANTÉ', score: quartier.sante / 10, desc: 'Médecins, pharmacies' },
+                  { label: 'ESPACES VERTS', score: quartier.espaceVerts / 10, desc: 'Parcs, jardins, aires de jeux' },
+                ].map((item) => (
+                  <View key={item.label} style={s.quartierItem}>
+                    <Text style={s.quartierLabel}>{item.label}</Text>
+                    <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
+                      {item.score.toFixed(1)}
+                    </Text>
+                    <Text style={s.quartierMax}>/10</Text>
+                    <Text style={s.quartierDesc}>{item.desc}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* Scores enrichis : Risques, Niveau de vie, Qualité air */}
+              {(quartier.risques != null || quartier.niveauVie != null || quartier.qualiteAir != null) && (
+                <View style={[s.quartierRow, { marginTop: 6 }]}>
+                  {[
+                    quartier.risques != null ? { label: 'RISQUES', score: quartier.risques, desc: 'Inondation, industriel, radon' } : null,
+                    quartier.niveauVie != null ? { label: 'NIVEAU DE VIE', score: quartier.niveauVie, desc: 'Revenu médian INSEE' } : null,
+                    quartier.qualiteAir != null ? { label: 'QUALITÉ AIR', score: quartier.qualiteAir, desc: 'Indice ATMO pollution' } : null,
+                  ]
+                    .filter((item): item is { label: string; score: number; desc: string } => item !== null)
+                    .map((item) => (
+                      <View key={item.label} style={s.quartierItem}>
+                        <Text style={s.quartierLabel}>{item.label}</Text>
+                        <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
+                          {item.score.toFixed(1)}
+                        </Text>
+                        <Text style={s.quartierMax}>/10</Text>
+                        <Text style={s.quartierDesc}>{item.desc}</Text>
+                      </View>
+                    ))}
+                </View>
+              )}
+              {quartier.synthese && (
+                <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 6, lineHeight: 1.4 }}>
+                  {quartier.synthese}
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Résumé */}
-          <View style={{ marginTop: 14, backgroundColor: C.grayBg, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 12 }}>
+          <View style={{ marginTop: 14, backgroundColor: C.grayBg, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 12 }} wrap={false}>
             <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
               EN RÉSUMÉ
             </Text>
@@ -754,8 +940,6 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </Link>
           </View>
         </View>
-
-        <Footer pageNum={2} logoUrl={logoUrl} />
       </Page>
     </Document>
   )

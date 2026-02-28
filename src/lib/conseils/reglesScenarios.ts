@@ -101,7 +101,7 @@ const dureePlus5: RegleScenario = {
         nouveauBudget: nouveauPrix,
         nouveauTaux: d.tauxInteret + 0.1,
         nouvellesMensualites: d.mensualiteMax,
-        economieOuCout: coutSupp,
+        economieOuCout: nouveauPrix - d.prixAchat,
       },
       avantages: [
         `Budget achat : +${formatMontant(nouveauPrix - d.prixAchat)} €`,

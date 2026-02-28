@@ -33,7 +33,29 @@ interface ComparateurState {
   /** Budget max (importé depuis simulateur) */
   budgetMax: number | null
   
+  // --- Lead / Unlock ---
+  
+  /** Données débloquées par email */
+  unlocked: boolean
+  /** Email du lead */
+  leadEmail: string | null
+  /** Timestamp du déblocage (pour TTL) */
+  unlockedAt: number | null
+  /** IDs triés de la sélection au moment du déblocage (pour re-verrouiller si la sélection change) */
+  unlockedForSelection: string[] | null
+  /** Qualification faite */
+  qualificationDone: boolean
+  /** Lead chaud */
+  isHotLead: boolean
+  
   // --- Actions ---
+  
+  /** Débloquer les données (après email) */
+  unlock: (email: string) => void
+  /** Réinitialiser le déblocage */
+  resetUnlock: () => void
+  /** Marquer la qualification comme faite */
+  setQualified: (isHot: boolean) => void
   
   /** Ajouter une annonce */
   ajouterAnnonce: (annonce: NouvelleAnnonce) => string
@@ -43,6 +65,12 @@ interface ComparateurState {
   
   /** Supprimer une annonce */
   supprimerAnnonce: (id: string) => void
+  
+  /** Supprimer plusieurs annonces d'un coup */
+  supprimerPlusieurs: (ids: string[]) => void
+  
+  /** Dupliquer une annonce */
+  dupliquerAnnonce: (id: string) => string | null
   
   /** Toggle favori */
   toggleFavori: (id: string) => void
@@ -98,7 +126,13 @@ const initialState = {
   annonceSelectionnees: [] as string[],
   filtres: {} as FiltresAnnonces,
   tri: 'dateAjout-desc' as TriAnnonces,
-  budgetMax: null as number | null
+  budgetMax: null as number | null,
+  unlocked: false,
+  leadEmail: null as string | null,
+  unlockedAt: null as number | null,
+  unlockedForSelection: null as string[] | null,
+  qualificationDone: false,
+  isHotLead: false,
 }
 
 // ============================================
@@ -165,6 +199,34 @@ export const useComparateurStore = create<ComparateurState>()(
         }))
       },
       
+      supprimerPlusieurs: (ids) => {
+        const idsSet = new Set(ids)
+        set((state) => ({
+          annonces: state.annonces.filter((ann) => !idsSet.has(ann.id)),
+          annonceSelectionnees: state.annonceSelectionnees.filter((selId) => !idsSet.has(selId))
+        }))
+      },
+      
+      dupliquerAnnonce: (id) => {
+        const original = get().annonces.find((a) => a.id === id)
+        if (!original) return null
+        
+        const newId = generateId()
+        const copie: Annonce = {
+          ...original,
+          id: newId,
+          titre: original.titre ? `${original.titre} (copie)` : undefined,
+          dateAjout: new Date(),
+          favori: false,
+        }
+        
+        set((state) => ({
+          annonces: [...state.annonces, copie]
+        }))
+        
+        return newId
+      },
+      
       toggleFavori: (id) => {
         set((state) => ({
           annonces: state.annonces.map((ann) => 
@@ -210,17 +272,61 @@ export const useComparateurStore = create<ComparateurState>()(
         set({ budgetMax: budget })
       },
       
+      unlock: (email) => {
+        const selection = [...get().annonceSelectionnees].sort()
+        set({ unlocked: true, leadEmail: email, unlockedAt: Date.now(), unlockedForSelection: selection, qualificationDone: false, isHotLead: false })
+      },
+      
+      resetUnlock: () => {
+        set({ unlocked: false, unlockedAt: null, unlockedForSelection: null, qualificationDone: false, isHotLead: false })
+        // Note : leadEmail est conservé pour pré-remplir le champ email
+      },
+      
+      setQualified: (isHot) => {
+        set({ qualificationDone: true, isHotLead: isHot })
+      },
+      
       reset: () => {
         set(initialState)
       }
     }),
     {
       name: 'aquiz-comparateur',
+      version: 1,
       partialize: (state) => ({
         annonces: state.annonces,
         annonceSelectionnees: state.annonceSelectionnees,
-        budgetMax: state.budgetMax
-      })
+        budgetMax: state.budgetMax,
+        unlocked: state.unlocked,
+        leadEmail: state.leadEmail,
+        unlockedAt: state.unlockedAt,
+        unlockedForSelection: state.unlockedForSelection,
+        qualificationDone: state.qualificationDone,
+        isHotLead: state.isHotLead,
+      }),
+      migrate: (persisted, version) => {
+        const state = persisted as Record<string, unknown>
+        if (version === 0) {
+          // v0 → v1 : ajout de unlockedForSelection
+          // Si unlocked sans unlockedForSelection, re-verrouiller pour forcer un email frais
+          if (state.unlocked && !state.unlockedForSelection) {
+            state.unlockedForSelection = null
+            // On garde unlocked/unlockedAt intacts — isUnlocked() retournera false
+            // car unlockedForSelection est null et la sélection a pu changer
+          }
+        }
+        return state as unknown as ComparateurState
+      },
+      onRehydrateStorage: () => (state) => {
+        // Nettoyer les sélections orphelines (IDs qui ne correspondent plus à des annonces existantes)
+        if (state) {
+          const existingIds = new Set(state.annonces.map(a => a.id))
+          const cleanedSelection = state.annonceSelectionnees.filter(id => existingIds.has(id))
+          if (cleanedSelection.length !== state.annonceSelectionnees.length) {
+            state.annonceSelectionnees = cleanedSelection
+          }
+        }
+      },
     }
   )
 )
@@ -228,6 +334,29 @@ export const useComparateurStore = create<ComparateurState>()(
 // ============================================
 // SÉLECTEURS
 // ============================================
+
+/** TTL de 30 jours pour le déblocage */
+const UNLOCK_TTL_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * Vérifie si les données sont débloquées (avec TTL 30j)
+ * Après 30 jours → re-verrouillé pour re-engagement
+ */
+export function isUnlocked(state: ComparateurState): boolean {
+  if (!state.unlocked || !state.unlockedAt) return false
+  // TTL expiré → re-verrouillé
+  if (Date.now() - state.unlockedAt >= UNLOCK_TTL_MS) return false
+  // Sélection changée depuis le déblocage → re-verrouillé
+  if (state.unlockedForSelection) {
+    const currentSel = [...state.annonceSelectionnees].sort()
+    const unlockedSel = state.unlockedForSelection
+    if (currentSel.length !== unlockedSel.length ||
+        currentSel.some((id, i) => id !== unlockedSel[i])) {
+      return false
+    }
+  }
+  return true
+}
 
 /**
  * Récupère les annonces filtrées et triées

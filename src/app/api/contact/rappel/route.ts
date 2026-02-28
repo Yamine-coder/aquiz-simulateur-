@@ -1,4 +1,5 @@
 import { escapeHtml } from '@/lib/escapeHtml'
+import { prisma } from '@/lib/prisma'
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
@@ -60,9 +61,28 @@ export async function POST(request: NextRequest) {
     // Formater le téléphone
     const telFormate = data.telephone.replace(/\s/g, '')
     
-    // Créer la demande
+    // ── Sauvegarder en base de données ──────────────────
+    let rappelId: string | null = null
+    try {
+      const rappel = await prisma.rappel.create({
+        data: {
+          prenom: data.prenom,
+          telephone: telFormate,
+          creneau: data.creneau,
+          budget: data.budget ?? null,
+          situation: data.situation ?? null,
+          tauxEndettement: data.tauxEndettement ?? null,
+          ip,
+        },
+      })
+      rappelId = rappel.id
+    } catch (dbError) {
+      console.error('❌ Erreur sauvegarde BDD rappel:', dbError)
+    }
+
+    // Créer la demande (pour les logs et notifications)
     const demande = {
-      id: `rappel_${Date.now()}`,
+      id: rappelId ?? `rappel_${Date.now()}`,
       date: new Date().toISOString(),
       prenom: data.prenom,
       telephone: telFormate,
@@ -96,6 +116,13 @@ export async function POST(request: NextRequest) {
           })
         })
         console.info('✅ Webhook envoyé')
+        // Mettre à jour le flag webhookSent
+        if (rappelId) {
+          await prisma.rappel.update({
+            where: { id: rappelId },
+            data: { webhookSent: true },
+          }).catch(() => {/* ignore */})
+        }
       } catch (e) {
         console.error('❌ Erreur webhook:', e)
       }
@@ -251,6 +278,13 @@ export async function POST(request: NextRequest) {
         const emailResult = await emailResponse.json()
         if (emailResponse.ok) {
           console.info('✅ Email rappel envoyé - ID:', emailResult.id)
+          // Mettre à jour le flag emailSent
+          if (rappelId) {
+            await prisma.rappel.update({
+              where: { id: rappelId },
+              data: { emailSent: true },
+            }).catch(() => {/* ignore */})
+          }
         } else {
           console.error('❌ Erreur Resend:', emailResult)
         }

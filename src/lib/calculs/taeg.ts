@@ -109,10 +109,10 @@ export function calculerTAEG(params: TAEGParams): TAEGResult {
  * Vérifie si le TAEG dépasse le taux d'usure
  *
  * @param taeg - TAEG calculé
- * @param tauxUsure - Taux d'usure en vigueur (ex: 5.5%)
+ * @param tauxUsure - Taux d'usure en vigueur (ex: 5.48% — T1 2026, prêts ≥20 ans)
  * @returns True si le TAEG est valide
  */
-export function verifierTauxUsure(taeg: number, tauxUsure: number = 5.5): boolean {
+export function verifierTauxUsure(taeg: number, tauxUsure: number = 5.48): boolean {
   return taeg <= tauxUsure
 }
 
