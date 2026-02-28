@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
       'Simulez votre capacité d\'achat immobilier, explorez les prix en Île-de-France et découvrez vos aides. Conseil en acquisition à Paris & IDF.',
     start_url: '/',
     id: '/',
-    display: 'standalone',
+    display: 'browser',
     orientation: 'portrait',
     background_color: '#ffffff',
     theme_color: '#1a1a1a',
