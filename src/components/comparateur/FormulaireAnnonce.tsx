@@ -262,7 +262,7 @@ export function FormulaireAnnonce({
     }
     
     // Privilégier les images depuis l'API (haute résolution) quand on a une URL
-    const targetUrl = assistantUrl || data.url as string | undefined
+    const targetUrl = assistantUrl
     if (targetUrl) {
       try {
         const res = await fetch('/api/annonces/og-image', {
