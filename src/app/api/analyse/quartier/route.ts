@@ -467,7 +467,7 @@ export async function GET(request: NextRequest) {
       if (donors.length > 0) {
         // Prendre les lignes de la station la plus proche
         const closest = donors.sort((a, b) => a.distance - b.distance)[0]
-        poi.lignes = [...closest.lignes]
+        poi.lignes = [...(closest.lignes ?? [])]
       }
     }
     
