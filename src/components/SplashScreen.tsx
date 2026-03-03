@@ -85,6 +85,24 @@ const KEYFRAMES = `
     from { opacity: 0; }
     to   { opacity: 1; }
   }
+  @keyframes auroraGlow1 {
+    0%   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    50%  { opacity: 1; transform: translate(-50%, -2%) scale(1.06); }
+    100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+  @keyframes auroraGlow2 {
+    0%   { opacity: 1; transform: scale(1); }
+    50%  { opacity: 1; transform: scale(1.05); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes pillFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scanline {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
 `
 
 /**
@@ -143,7 +161,7 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
-            backgroundColor: '#0a0a0a',
+            background: '#0a0a0a',
             height: '100dvh',
             // Fade-out cinématique
             opacity: phase === 'fading' ? 0 : 1,
@@ -231,41 +249,32 @@ export function SplashScreen({ children }: { children: React.ReactNode }) {
                 </svg>
               </div>
 
-              {/* ═══ Loader avec shimmer ═══ */}
+            </div>
+          )}
+
+          {/* ═══ Barre de progression fine — tout en bas de l'écran ═══ */}
+          {showAnimation && (
+            <div
+              style={{
+                position: 'fixed',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '1px',
+                background: 'rgba(255,255,255,0.05)',
+                opacity: 0,
+                animation: `fadeIn 400ms ease ${LOADER_START}ms forwards`,
+              }}
+            >
               <div
                 style={{
-                  marginTop: '1.5rem',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  borderRadius: '9999px',
-                  width: '80px',
-                  height: '2px',
-                  backgroundColor: 'rgba(255,255,255,0.06)',
-                  opacity: 0,
-                  animation: `fadeIn 600ms ease ${LOADER_START}ms forwards`,
+                  height: '100%',
+                  background: 'linear-gradient(to right, rgba(16,185,129,0.4), rgba(52,211,153,0.9), rgba(16,185,129,0.4))',
+                  transformOrigin: 'left center',
+                  transform: 'scaleX(0)',
+                  animation: `loaderFill ${LOADER_DURATION}ms cubic-bezier(0.25,0.46,0.45,0.94) ${LOADER_START}ms forwards`,
                 }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: '9999px',
-                    background: 'linear-gradient(90deg, rgba(34,197,94,0.5), rgba(255,255,255,0.8))',
-                    transformOrigin: 'left center',
-                    transform: 'scaleX(0)',
-                    animation: `loaderFill ${LOADER_DURATION}ms cubic-bezier(0.25,0.46,0.45,0.94) ${LOADER_START}ms forwards`,
-                  }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    borderRadius: '9999px',
-                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
-                    animation: `shimmer 1500ms ease-in-out ${LOADER_START + 400}ms infinite`,
-                  }}
-                />
-              </div>
+              />
             </div>
           )}
 

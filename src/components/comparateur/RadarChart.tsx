@@ -2,7 +2,7 @@
 
 /**
  * Graphique Radar pour comparer les scores des biens
- * Affiche les dimensions : Prix, Quartier, Risques, Énergie, Équipements
+ * Affiche les dimensions : Prix, Quartier, Transports, Énergie, Confort, Budget
  */
 
 import { useMemo } from 'react'
@@ -32,7 +32,7 @@ interface RadarChartProps {
 const DIMENSIONS = [
   { key: 'prix', label: 'Prix' },
   { key: 'quartier', label: 'Quartier' },
-  { key: 'risques', label: 'Sécurité' },
+  { key: 'transports', label: 'Transports' },
   { key: 'energie', label: 'Énergie' },
   { key: 'confort', label: 'Confort' },
   { key: 'budget', label: 'Budget' }

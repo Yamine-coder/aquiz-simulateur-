@@ -47,13 +47,12 @@ import {
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 const MiniCarteIDF = dynamic(() => import('@/components/carte/MiniCarteIDF'), { ssr: false })
 const ConseilsAvances = dynamic(() => import('@/components/conseils').then(m => ({ default: m.ConseilsAvances })), { ssr: false })
 const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
-const SimulationPDF = dynamic(() => import('@/components/pdf/SimulationPDF').then(m => ({ default: m.SimulationPDF })), { ssr: false })
 
 const STATUTS_PROFESSIONNELS = [
   { value: 'cdi', label: 'CDI', description: 'Meilleure acceptation bancaire' },
@@ -98,6 +97,7 @@ function ModeAPageContent() {
   const [pdfEmailSent, setPdfEmailSent] = useState(false)
   const [pdfEmailValue, setPdfEmailValue] = useState('')
   const [pdfEmailLoading, setPdfEmailLoading] = useState(false)
+  const [pdfGenerating, setPdfGenerating] = useState(false)
   const [cachedEnrichissement, setCachedEnrichissement] = useState<EnrichissementPDF | null>(null)
   const leadStore = useLeadStore()
   const hasLead = useLeadStore(hasValidEmail)
@@ -272,6 +272,16 @@ function ModeAPageContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasLead])
+
+  // Précharger @react-pdf/renderer dès l'arrivée sur l'étape résultats
+  // pour que le premier téléchargement PDF soit quasi-instantané
+  useEffect(() => {
+    if (etape === 'resultats') {
+      // Dynamic imports en background — le navigateur met en cache les chunks
+      import('@react-pdf/renderer').catch(() => {})
+      import('@/components/pdf/SimulationPDF').catch(() => {})
+    }
+  }, [etape])
 
   const restoreSimulation = useCallback((sim: typeof simulations[0]) => {
     if (sim.profil) {
@@ -557,8 +567,9 @@ function ModeAPageContent() {
     const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
     const { pdf } = await import('@react-pdf/renderer')
+    const { SimulationPDF: SimulationPDFComponent } = await import('@/components/pdf/SimulationPDF')
     const blob = await pdf(
-      <SimulationPDF
+      <SimulationPDFComponent
         logoUrl={logoUrl}
         age={age}
         statutProfessionnel={statutProfessionnel}
@@ -645,52 +656,63 @@ function ModeAPageContent() {
     if (!pdfEmailValue.includes('@') || pdfEmailLoading) return
     setPdfEmailLoading(true)
     try {
-      const res = await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: pdfEmailValue,
-          source: 'simulateur-a',
-          contexte: {
+      // 1. Capture lead (non-bloquant — on génère le PDF même si ça échoue)
+      try {
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: pdfEmailValue,
+            source: 'simulateur-a',
+            contexte: {
+              type: 'pdf-bonus',
+              prixAchatMax: calculs.prixAchatMax,
+              capitalEmpruntable: calculs.capitalEmpruntable,
+              scoreFaisabilite,
+              tauxEndettement: calculs.tauxEndettementProjet,
+              dureeAns,
+              apport,
+            },
+          }),
+        })
+        if (res.ok) {
+          leadStore.capture(pdfEmailValue, 'simulateur-a', undefined, {
             type: 'pdf-bonus',
             prixAchatMax: calculs.prixAchatMax,
-            capitalEmpruntable: calculs.capitalEmpruntable,
-            scoreFaisabilite,
-            tauxEndettement: calculs.tauxEndettementProjet,
-            dureeAns,
-            apport,
-          },
-        }),
-      })
-      if (!res.ok) throw new Error('Erreur')
-      // Sync lead store
-      leadStore.capture(pdfEmailValue, 'simulateur-a', undefined, {
-        type: 'pdf-bonus',
-        prixAchatMax: calculs.prixAchatMax,
-      })
+          })
+        }
+      } catch { /* lead capture failed — continue anyway */ }
+      // 2. Toujours marquer comme envoyé et générer le PDF
       setPdfEmailSent(true)
-      // Enrichir le PDF avec IA + données marché (Mode A = pas de codePostal)
-      const enrichissement = await enrichirPourPDF({
-        mode: 'A',
-        age,
-        statutProfessionnel,
-        situationFoyer,
-        nombreEnfants,
-        revenusMensuels: calculs.revenusMensuelsTotal,
-        chargesMensuelles: calculs.chargesMensuellesTotal,
-        prixAchatMax: calculs.prixAchatMax,
-        capitalEmpruntable: calculs.capitalEmpruntable,
-        apport,
-        dureeAns,
-        tauxInteret,
-        mensualite: mensualiteMax,
-        scoreFaisabilite,
-        tauxEndettement: calculs.tauxEndettementProjet,
-        resteAVivre: calculs.resteAVivre,
-      })
-      setCachedEnrichissement(enrichissement)
+      // 3. Enrichir le PDF avec IA + données marché (Mode A = pas de codePostal)
+      let enrichissement: EnrichissementPDF | undefined
+      try {
+        enrichissement = await enrichirPourPDF({
+          mode: 'A',
+          age,
+          statutProfessionnel,
+          situationFoyer,
+          nombreEnfants,
+          revenusMensuels: calculs.revenusMensuelsTotal,
+          chargesMensuelles: calculs.chargesMensuellesTotal,
+          prixAchatMax: calculs.prixAchatMax,
+          capitalEmpruntable: calculs.capitalEmpruntable,
+          apport,
+          dureeAns,
+          tauxInteret,
+          mensualite: mensualiteMax,
+          scoreFaisabilite,
+          tauxEndettement: calculs.tauxEndettementProjet,
+          resteAVivre: calculs.resteAVivre,
+        })
+        setCachedEnrichissement(enrichissement)
+      } catch (enrichErr) {
+        console.error('[AQUIZ] Enrichissement PDF échoué, PDF généré sans enrichissement:', enrichErr)
+      }
       await generatePDF(enrichissement)
-    } catch { /* silent */ } finally {
+    } catch (pdfErr) {
+      console.error('[AQUIZ] Erreur génération PDF:', pdfErr)
+    } finally {
       setPdfEmailLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -702,108 +724,143 @@ function ModeAPageContent() {
         <h1 className="sr-only">Simulateur de capacité d&apos;achat immobilière</h1>
         {showResumeModal && pendingToResume && <ResumeModal simulation={pendingToResume} onResume={handleResume} onNew={handleNew} />}
 
-        {/* === STEPPER + ACTIONS === */}
-        <div className="border-b border-aquiz-gray-lighter/60 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Desktop - stepper + auto-save indicator */}
-            <div className="hidden md:flex items-center py-4 relative">
-              {/* Bouton retour desktop — label contextuel */}
+        {/* === STEPPER NAVIGATION (style Pretto/Stripe — stepper centré, pas de breadcrumb) === */}
+        {/* Schema.org BreadcrumbList caché pour le SEO */}
+        <ol className="sr-only" itemScope itemType="https://schema.org/BreadcrumbList">
+          <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+            <a href="/" itemProp="item"><span itemProp="name">Accueil</span></a>
+            <meta itemProp="position" content="1" />
+          </li>
+          <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+            <a href="/simulateur" itemProp="item"><span itemProp="name">Simulateur</span></a>
+            <meta itemProp="position" content="2" />
+          </li>
+          <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+            <span itemProp="name">Capacité d&apos;achat</span>
+            <meta itemProp="position" content="3" />
+          </li>
+        </ol>
+
+        <nav aria-label="Progression de la simulation" className="bg-white border-b border-gray-100 sticky top-0 z-30 md:static md:z-auto">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+
+            {/* ── Desktop ── */}
+            <div className="hidden md:flex items-center justify-center h-14 relative">
+              {/* Retour — contextuel : étape précédente ou page simulateur */}
               <button
                 type="button"
                 onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
-                className="flex items-center gap-1.5 mr-5 px-3 py-1.5 rounded-lg text-sm text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+                className="absolute left-0 flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-gray-400 hover:text-gray-800 rounded-lg hover:bg-gray-50 transition-all group"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                {etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}
+                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform duration-200" />
+                <span>{etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}</span>
               </button>
-              <div className="w-px h-6 bg-aquiz-gray-lighter mr-5" />
-              {ETAPES.map((e, index) => {
-                const isActive = e.id === etape
-                const isPassed = index < etapeActuelleIndex
-                const isClickable = canGoToEtape(e.id)
-                
-                return (
-                  <div key={e.id} className="flex items-center flex-1">
-                    <button
-                      type="button"
-                      onClick={() => goToEtape(e.id)}
-                      disabled={!isClickable}
-                      className={`group flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
-                    >
-                      <div className={`
-                        w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
-                        ${isActive 
-                          ? 'bg-aquiz-green text-white shadow-md shadow-aquiz-green/25' 
-                          : isPassed 
-                            ? 'bg-aquiz-green/15 text-aquiz-green' 
-                            : 'bg-aquiz-gray-lightest text-aquiz-gray-light'
-                        }
-                      `}>
-                        {isPassed ? <CheckCircle className="w-4 h-4" /> : index + 1}
-                      </div>
-                      <span className={`text-sm font-medium transition-colors ${
-                        isActive ? 'text-aquiz-black' : isPassed ? 'text-aquiz-green' : 'text-aquiz-gray-light'
-                      }`}>
-                        {e.label}
-                      </span>
-                    </button>
-                    
-                    {/* Connecteur */}
-                    {index < ETAPES.length - 1 && (
-                      <div className="flex-1 mx-4">
-                        <div className={`h-0.5 rounded-full transition-all duration-300 ${isPassed ? 'bg-aquiz-green/30' : 'bg-aquiz-gray-lighter'}`} />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="absolute right-0 top-1/2 -translate-y-1/2" />
+
+              {/* Stepper centré */}
+              <ol className="flex items-center">
+                {ETAPES.map((e, index) => {
+                  const realIndex = ETAPES.findIndex(s => s.id === e.id)
+                  const isActive = e.id === etape
+                  const isPassed = realIndex < etapeActuelleIndex
+                  const isClickable = canGoToEtape(e.id)
+                  const isLast = index === ETAPES.length - 1
+                  
+                  return (
+                    <Fragment key={e.id}>
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => isClickable && goToEtape(e.id)}
+                          disabled={!isClickable}
+                          className={`flex items-center gap-2 px-1 py-1 transition-all duration-200 ${
+                            isClickable && !isActive ? 'cursor-pointer' : 'cursor-default'
+                          }`}
+                        >
+                          <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-200 ${
+                            isActive
+                              ? 'bg-aquiz-green text-white shadow-sm shadow-aquiz-green/25'
+                              : isPassed
+                                ? 'bg-aquiz-green/10 text-aquiz-green'
+                                : 'bg-gray-100 text-gray-400'
+                          }`}>
+                            {isPassed ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : e.numero}
+                          </div>
+                          <span className={`text-[13px] transition-colors duration-200 ${
+                            isActive
+                              ? 'text-gray-900 font-semibold'
+                              : isPassed
+                                ? 'text-aquiz-green font-medium'
+                                : 'text-gray-400 font-medium'
+                          }`}>
+                            {e.label}
+                          </span>
+                        </button>
+                      </li>
+                      {!isLast && (
+                        <li aria-hidden="true" className="flex items-center mx-3">
+                          <div className={`w-10 h-px transition-colors duration-300 ${
+                            isPassed ? 'bg-aquiz-green/30' : 'bg-gray-200'
+                          }`} />
+                        </li>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </ol>
+
+              {/* Auto-save */}
+              <div className="absolute right-0">
+                <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
+              </div>
             </div>
-            
-            {/* Mobile */}
-            <div className="md:hidden py-3.5 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                {/* Bouton retour mobile — label contextuel */}
+
+            {/* ── Mobile ── */}
+            <div className="md:hidden">
+              <div className="flex items-center h-12 relative">
+                {/* Retour */}
                 <button
                   type="button"
                   onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
-                  className="w-8 h-8 rounded-full bg-aquiz-gray-lightest flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lighter transition-colors"
-                  aria-label={etapeActuelleIndex === 0 ? 'Retour' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
+                  className="w-8 h-8 flex items-center justify-center text-gray-500 active:text-gray-900 active:bg-gray-100 rounded-full transition-colors shrink-0 -ml-1"
+                  aria-label={etapeActuelleIndex === 0 ? 'Retour au simulateur' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
                 >
-                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <ArrowLeft className="w-4.5 h-4.5" />
                 </button>
-                <div>
-                  <p className="text-sm font-semibold text-aquiz-black">{ETAPES[etapeActuelleIndex].label}</p>
-                  <p className="text-[11px] text-aquiz-gray">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
+
+                {/* Progress bar + label — centré */}
+                <div className="flex-1 flex flex-col items-center justify-center gap-1 px-2">
+                  <span className="text-[12px] font-semibold text-gray-800">
+                    {ETAPES[etapeActuelleIndex].label}
+                  </span>
+                  <div className="flex items-center gap-1.5 w-full max-w-[140px]">
+                    {ETAPES.map((e, index) => {
+                      const realIndex = ETAPES.findIndex(s => s.id === e.id)
+                      const isActive = e.id === etape
+                      const isPassed = realIndex < etapeActuelleIndex
+                      return (
+                        <div
+                          key={e.id}
+                          className={`h-1 rounded-full flex-1 transition-all duration-300 ${
+                            isPassed
+                              ? 'bg-aquiz-green'
+                              : isActive
+                                ? 'bg-aquiz-green/60'
+                                : 'bg-gray-200'
+                          }`}
+                        />
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
-                <div className="flex gap-1.5">
-                {ETAPES.map((e, index) => {
-                  const isClickable = canGoToEtape(e.id)
-                  return (
-                    <button
-                      type="button"
-                      key={e.id}
-                      onClick={() => isClickable && goToEtape(e.id)}
-                      disabled={!isClickable}
-                      className={`h-1.5 rounded-full transition-all duration-300 ${
-                        index < etapeActuelleIndex 
-                          ? 'bg-aquiz-green w-5' 
-                          : index === etapeActuelleIndex 
-                            ? 'bg-aquiz-green w-7' 
-                            : 'bg-aquiz-gray-lighter w-5'
-                      } ${isClickable ? 'cursor-pointer hover:opacity-70' : 'cursor-not-allowed'}`}
-                      aria-label={`Étape ${index + 1}: ${e.label}`}
-                    />
-                  )
-                })}
-                </div>
+
+                {/* Étape X/3 */}
+                <span className="text-[11px] text-gray-400 font-medium tabular-nums shrink-0 mr-0.5">
+                  {etapeActuelleIndex + 1}/{ETAPES.length}
+                </span>
               </div>
             </div>
           </div>
-        </div>
+        </nav>
 
         <main className="max-w-5xl mx-auto px-3 sm:px-6 py-6">
           <form onSubmit={handleSubmit(onSubmit)}>
@@ -1140,10 +1197,10 @@ function ModeAPageContent() {
                 </div>
                 
                 {/* Bouton Mobile */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
                   <Button 
                     type="button" 
-                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
+                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
                     onClick={goToNextEtape} 
                     disabled={calculs.revenusMensuelsTotal === 0}
                   >
@@ -1151,33 +1208,33 @@ function ModeAPageContent() {
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </div>
-                <div className="lg:hidden h-20" />
+                <div className="lg:hidden h-16" />
               </div>
             )}
 
             {etape === 'simulation' && (
               <div className="animate-fade-in">
-                <div className="grid lg:grid-cols-[1fr,340px] gap-8">
+                <div className="grid lg:grid-cols-[1fr,340px] gap-4 lg:gap-8">
                   
                   {/* === FORMULAIRE === */}
-                  <div className="space-y-5">
+                  <div className="space-y-3 sm:space-y-5">
                     
-                    {/* Header */}
-                    <div className="mb-2">
+                    {/* Header — masqué sur mobile (le stepper suffit) */}
+                    <div className="hidden sm:block mb-2">
                       <h2 className="text-xl font-bold text-aquiz-black">Votre simulation</h2>
                       <p className="text-aquiz-gray text-sm mt-0.5">Définissez votre budget et les paramètres de votre projet</p>
                     </div>
                     
                     {/* Section 1: Budget mensuel */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                      <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-2.5 sm:gap-3">
                         <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
                           <span className="text-[10px] font-bold text-aquiz-green">1</span>
                         </div>
                         <h2 className="font-semibold text-aquiz-black text-sm">Budget mensuel</h2>
                       </div>
                       
-                      <div className="p-6 space-y-5">
+                      <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                         {/* Mensualité max — automatique basée sur le profil */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -1203,20 +1260,20 @@ function ModeAPageContent() {
                               </Tooltip>
                             </div>
                           </div>
-                          <div className="relative overflow-hidden rounded-xl border border-aquiz-green/20 bg-gradient-to-r from-aquiz-green/5 to-transparent">
-                            <div className="flex items-center gap-4 p-4">
-                              <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                                <CreditCard className="w-5 h-5 text-aquiz-green" />
+                          <div className="relative overflow-hidden rounded-xl border border-aquiz-green/20 bg-linear-to-r from-aquiz-green/5 to-transparent">
+                            <div className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4">
+                              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                                <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-green" />
                               </div>
                               <div className="flex-1">
-                                <p className="text-2xl font-bold text-aquiz-black tracking-tight">
+                                <p className="text-xl sm:text-2xl font-bold text-aquiz-black tracking-tight">
                                   {formatMontant(mensualiteRecommandee)} €
-                                  <span className="text-sm font-normal text-aquiz-gray ml-1">/mois</span>
+                                  <span className="text-xs sm:text-sm font-normal text-aquiz-gray ml-1">/mois</span>
                                 </p>
-                                <p className="text-xs text-aquiz-gray mt-0.5">Assurance incluse dans le calcul HCSF ({dureeAns} ans à {tauxInteret.toFixed(1)}%)</p>
+                                <p className="text-[11px] sm:text-xs text-aquiz-gray mt-0.5">Assurance incluse dans le calcul HCSF ({dureeAns} ans à {tauxInteret.toFixed(1)}%)</p>
                               </div>
                             </div>
-                            <div className="absolute top-0 right-0 w-16 h-full bg-gradient-to-l from-aquiz-green/5 to-transparent" />
+                            <div className="absolute top-0 right-0 w-16 h-full bg-linear-to-l from-aquiz-green/5 to-transparent" />
                           </div>
                         </div>
                         
@@ -1250,14 +1307,14 @@ function ModeAPageContent() {
                     
                     {/* Section 2: Paramètres du prêt */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                      <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-3">
+                      <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-2.5 sm:gap-3">
                         <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
                           <span className="text-[10px] font-bold text-aquiz-green">2</span>
                         </div>
                         <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
                       </div>
                       
-                      <div className="p-6 space-y-6">
+                      <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
                         {/* Durée */}
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
@@ -1303,7 +1360,7 @@ function ModeAPageContent() {
                               </TooltipContent>
                             </Tooltip>
                           </div>
-                          <div className="grid grid-cols-5 gap-2">
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2">
                             {[
                               { value: '3.0', label: '3.0%', sub: 'Excellent' },
                               { value: '3.2', label: '3.2%', sub: 'Très bon' },
@@ -1315,14 +1372,14 @@ function ModeAPageContent() {
                                 key={t.value}
                                 type="button"
                                 onClick={() => setValue('tauxInteret', parseFloat(t.value))}
-                                className={`relative p-3 rounded-xl border-2 text-center transition-all ${
+                                className={`relative p-2 sm:p-3 rounded-xl border-2 text-center transition-all ${
                                   tauxInteret.toFixed(1) === t.value
                                     ? 'border-aquiz-green bg-aquiz-green/5 shadow-sm'
                                     : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light bg-white'
                                 }`}
                               >
-                                <span className="block text-base font-bold text-aquiz-black">{t.label}</span>
-                                <span className="block text-[10px] text-aquiz-gray mt-0.5">{t.sub}</span>
+                                <span className="block text-sm sm:text-base font-bold text-aquiz-black">{t.label}</span>
+                                <span className="block text-[9px] sm:text-[10px] text-aquiz-gray mt-0.5">{t.sub}</span>
                                 {tauxInteret.toFixed(1) === t.value && (
                                   <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-aquiz-green rounded-full flex items-center justify-center">
                                     <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -1537,12 +1594,12 @@ function ModeAPageContent() {
                 </div>
                 
                 {/* Bouton Mobile */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
                   <div className="flex gap-2">
                     <Button 
                       type="button" 
                       variant="outline"
-                      className="h-12 px-3 border-aquiz-gray-lighter rounded-xl" 
+                      className="h-11 px-3 border-aquiz-gray-lighter rounded-xl" 
                       onClick={goToPrevEtape}
                       aria-label="Retour au profil"
                     >
@@ -1550,7 +1607,7 @@ function ModeAPageContent() {
                     </Button>
                     <Button 
                       type="button" 
-                      className="flex-1 bg-aquiz-green hover:bg-aquiz-green/90 h-12 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
+                      className="flex-1 bg-aquiz-green hover:bg-aquiz-green/90 h-11 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
                       onClick={goToNextEtape} 
                       disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
                     >
@@ -1559,7 +1616,7 @@ function ModeAPageContent() {
                     </Button>
                   </div>
                 </div>
-                <div className="lg:hidden h-20" />
+                <div className="lg:hidden h-16" />
               </div>
             )}
 
@@ -1583,12 +1640,12 @@ function ModeAPageContent() {
                           </p>
                         </div>
 
-                        {/* Actions — responsive inline */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        {/* Actions — masquées sur mobile (le bottom bar les remplace) */}
+                        <div className="hidden sm:flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={goToPrevEtape}
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-xs font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200"
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-xs font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200"
                           >
                             <ArrowLeft className="w-3.5 h-3.5" />
                             Modifier
@@ -1602,9 +1659,9 @@ function ModeAPageContent() {
                               el.classList.add('animate-pulse-highlight')
                               setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
                             }}
-                            className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
                           >
-                            <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <FileDown className="w-4 h-4" />
                             Mon rapport PDF
                           </button>
                         </div>
@@ -1693,74 +1750,15 @@ function ModeAPageContent() {
                         </div>
                       )
                     })()}
-                    
-                    {/* Détails par zone sous la carte - Top 3 + teaser */}
-                    <div className="px-3 sm:px-4 py-3 sm:py-4 border-t border-slate-100">
-                      {(() => {
-                        const sortedZones = [...calculs.apercuSurfaces].sort((a, b) => (b.surface || 0) - (a.surface || 0))
-                        const top3 = sortedZones.slice(0, 3)
-                        const remaining = sortedZones.length - 3
-                        return (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                            {top3.map((zone, index) => (
-                              <div key={zone.codeDept} className={`relative flex items-center gap-2.5 p-3 rounded-xl transition-all cursor-pointer ${
-                                (zone.surface || 0) >= 40 ? 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200' :
-                                (zone.surface || 0) >= 25 ? 'bg-amber-50 hover:bg-amber-100 border border-amber-200' : 
-                                'bg-slate-50 hover:bg-slate-100 border border-slate-200'
-                              }`} onClick={saveAndGoToCarte}>
-                                {index === 0 && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-aquiz-green rounded-full flex items-center justify-center text-white text-[9px] font-bold shadow">
-                                    1
-                                  </div>
-                                )}
-                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-bold shadow-sm ${
-                                  (zone.surface || 0) >= 40 ? 'bg-emerald-500' :
-                                  (zone.surface || 0) >= 25 ? 'bg-amber-500' : 'bg-slate-400'
-                                }`}>{zone.codeDept}</div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] text-slate-500 truncate">{zone.nom}</p>
-                                  <p className={`text-sm font-bold ${
-                                    (zone.surface || 0) >= 40 ? 'text-emerald-700' :
-                                    (zone.surface || 0) >= 25 ? 'text-amber-700' : 'text-slate-600'
-                                  }`}>jusqu&apos;à {zone.surface} m²</p>
-                                  {(zone.nbOpportunites || 0) > 0 && (
-                                    <p className="text-[9px] text-emerald-600 font-medium">{zone.nbOpportunites} commune{(zone.nbOpportunites || 0) > 1 ? 's' : ''} accessible{(zone.nbOpportunites || 0) > 1 ? 's' : ''}</p>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                            {/* Teaser 4e carte — floue, cliquable */}
-                            {remaining > 0 && (
-                              <button
-                                type="button"
-                                onClick={saveAndGoToCarte}
-                                className="relative flex items-center gap-2.5 p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 hover:bg-emerald-50 transition-all cursor-pointer group overflow-hidden"
-                              >
-                                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
-                                <div className="w-9 h-9 rounded-lg bg-emerald-200/60 flex items-center justify-center text-emerald-500 text-xs font-bold">
-                                  +{remaining}
-                                </div>
-                                <div className="min-w-0 flex-1 relative">
-                                  <p className="text-[10px] text-emerald-600 font-semibold">Autres departements</p>
-                                  <p className="text-xs font-bold text-emerald-700 group-hover:underline underline-offset-2">Explorer la carte</p>
-                                  <p className="text-[9px] text-emerald-500 mt-0.5">PTZ, prix, communes...</p>
-                                </div>
-                                <ArrowRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })()}
-                    </div>
 
-                    {/* CTA Explorer — pleine largeur, animé */}
-                    <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1">
-                      <button type="button" onClick={saveAndGoToCarte} className="relative w-full flex items-center justify-center gap-2 sm:gap-2.5 py-3 sm:py-3.5 bg-linear-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white rounded-xl shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.01] active:scale-[0.98] transition-all group cursor-pointer overflow-hidden animate-cta-glow">
+                    {/* CTA Explorer — masqué sur mobile (le bottom bar a "Carte") */}
+                    <div className="hidden sm:block px-4 pb-4 pt-1">
+                      <button type="button" onClick={saveAndGoToCarte} className="relative w-full flex items-center justify-center gap-2.5 py-3.5 bg-linear-to-r from-aquiz-green to-emerald-500 hover:from-emerald-600 hover:to-emerald-500 text-white rounded-xl shadow-lg shadow-aquiz-green/25 hover:shadow-aquiz-green/40 hover:scale-[1.01] active:scale-[0.98] transition-all group cursor-pointer overflow-hidden animate-cta-glow">
                         <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/15 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                        <MapPin className="w-4 h-4 sm:w-4.5 sm:h-4.5 group-hover:animate-bounce relative" />
-                        <span className="text-xs sm:text-sm font-bold tracking-tight relative">Explorer la carte interactive</span>
-                        <span className="text-xs text-white/80 font-medium hidden sm:inline relative">— {calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)} communes, PTZ, prix au m²</span>
-                        <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 ml-1 group-hover:translate-x-1 transition-transform relative" />
+                        <MapPin className="w-4.5 h-4.5 group-hover:animate-bounce relative" />
+                        <span className="text-sm font-bold tracking-tight relative">Explorer la carte interactive</span>
+                        <span className="text-xs text-white/80 font-medium relative">— {calculs.apercuSurfaces.reduce((sum, z) => sum + (z.nbOpportunites || 0), 0)} communes, PTZ, prix au m²</span>
+                        <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform relative" />
                       </button>
                     </div>
                     
@@ -1844,7 +1842,7 @@ function ModeAPageContent() {
                           <Shield className="w-4 h-4 text-aquiz-gray" />
                         </div>
                         <div className="text-left">
-                          <h2 className="text-sm font-semibold text-aquiz-black">Analyse détaillée du score</h2>
+                          <h2 className="text-sm font-semibold text-aquiz-black">Scoring détaillé</h2>
                           <p className="text-[10px] text-aquiz-gray mt-0.5">
                             7 critères bancaires — <span className={`font-semibold ${
                               scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'
@@ -2033,11 +2031,11 @@ function ModeAPageContent() {
                           </div>
                           <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
                             <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Score quartier sur 9 axes</span>
+                            <span className="text-[11px] text-aquiz-black/80">Coûts cachés à anticiper</span>
                           </div>
                           <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
                             <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Risques naturels de la zone</span>
+                            <span className="text-[11px] text-aquiz-black/80">Parcours d'achat complet</span>
                           </div>
                         </div>
                       )}
@@ -2045,11 +2043,15 @@ function ModeAPageContent() {
                       {pdfEmailSent ? (
                         <button
                           type="button"
-                          onClick={() => generatePDF(cachedEnrichissement ?? undefined)}
-                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                          onClick={async () => {
+                            setPdfGenerating(true)
+                            try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfGenerating(false) }
+                          }}
+                          disabled={pdfGenerating}
+                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
                         >
-                          <FileDown className="w-4 h-4" />
-                          Re-télécharger mon étude
+                          {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                          {pdfGenerating ? 'Génération…' : 'Re-télécharger mon étude'}
                         </button>
                       ) : (
                         <div className="space-y-2">
@@ -2084,8 +2086,8 @@ function ModeAPageContent() {
                     </div>
                   </div>
 
-                  {/* CTA Accompagnement projet */}
-                  <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+                  {/* CTA Accompagnement projet — masqué sur mobile (le bottom bar a "Conseiller") */}
+                  <div className="hidden sm:block bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                     <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
@@ -2118,10 +2120,10 @@ function ModeAPageContent() {
                   </p>
                 </div>
                 
-                {/* Bouton Mobile fixe */}
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white border-t border-aquiz-gray-lighter z-20">
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" className="h-11 px-3 border-aquiz-gray-lighter rounded-xl" onClick={() => goToEtape('simulation')}>
+                {/* Bouton Mobile fixe — actions principales résultats */}
+                <div className="sm:hidden fixed bottom-0 left-0 right-0 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
+                  <div className="flex gap-1.5">
+                    <Button type="button" variant="outline" className="h-10 px-2.5 border-aquiz-gray-lighter rounded-xl" onClick={goToPrevEtape}>
                       <ArrowLeft className="w-4 h-4" />
                     </Button>
                     <Button
@@ -2130,26 +2132,26 @@ function ModeAPageContent() {
                         const el = document.getElementById('pdf-gate')
                         el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }}
-                      className="flex-1 h-11 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-2 text-sm"
+                      className="flex-1 h-10 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-1.5 text-xs font-semibold"
                     >
-                      <FileDown className="w-4 h-4" />
+                      <FileDown className="w-3.5 h-3.5" />
                       Mon PDF
                     </Button>
-                    <Button type="button" onClick={saveAndGoToCarte} className="flex-1 h-11 bg-white hover:bg-aquiz-gray-lightest text-aquiz-black border border-aquiz-gray-lighter rounded-xl gap-2 text-sm">
-                      <MapPin className="w-4 h-4" />
+                    <Button type="button" onClick={saveAndGoToCarte} className="flex-1 h-10 bg-white hover:bg-aquiz-gray-lightest text-aquiz-black border border-aquiz-gray-lighter rounded-xl gap-1.5 text-xs font-semibold">
+                      <MapPin className="w-3.5 h-3.5" />
                       Carte
                     </Button>
                     <Button 
                       type="button" 
                       onClick={() => setShowContactModal(true)}
-                      className="flex-1 h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-2 text-sm"
+                      className="flex-1 h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-1.5 text-xs font-semibold"
                     >
-                      <Phone className="w-4 h-4" />
+                      <Phone className="w-3.5 h-3.5" />
                       Conseiller
                     </Button>
                   </div>
                 </div>
-                <div className="lg:hidden h-28" />
+                <div className="sm:hidden h-16" />
               </div>
             )}
 

@@ -23,7 +23,7 @@ export function BlogPreviewSection() {
 
   return (
     <section
-      className="py-12 sm:py-16 md:py-20 bg-white scroll-mt-20 md:scroll-mt-24"
+      className="py-12 sm:py-16 md:py-20 bg-white scroll-mt-18 md:scroll-mt-20"
       id="blog"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

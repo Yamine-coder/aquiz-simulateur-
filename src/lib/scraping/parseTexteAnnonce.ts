@@ -33,6 +33,12 @@ export interface DonneesExtraites {
   anneeConstruction?: number
   nbSallesBains?: number
   orientation?: string
+  imageUrl?: string
+  images?: string[]
+  /** Latitude GPS (fournie par certaines plateformes) */
+  latitude?: number
+  /** Longitude GPS (fournie par certaines plateformes) */
+  longitude?: number
 }
 
 // ============================================
@@ -45,6 +51,106 @@ function nettoyerTexte(texte: string): string {
     .replace(/\t/g, ' ')
     .replace(/ {2,}/g, ' ')
     .trim()
+}
+
+/**
+ * Isole le contenu principal d'une page d'annonce en supprimant les sections
+ * "annonces similaires", estimations de marché, navigation, et footer.
+ *
+ * Quand un utilisateur fait Ctrl+A sur une page (ex. LeBonCoin), la sélection
+ * inclut header, sidebar, annonces similaires, footer, etc.
+ * Ces sections contiennent des prix, DPE et caractéristiques d'AUTRES biens
+ * qui polluent le parsing → on les supprime avant d'extraire les données.
+ */
+function isolerContenuPrincipal(texte: string): string {
+  let cleaned = texte
+
+  // ══ COUPER TOUT CE QUI SUIT ces marqueurs ══
+  // Les sections "similaires" contiennent d'autres prix/DPE qui perturbent le parsing
+  const coupures: RegExp[] = [
+    // LeBonCoin / portails
+    /\bannonces?\s+similaires?\b/i,
+    /\bces\s+annonces?\s+peuvent/i,
+    /\bd[\u2019']?autres\s+(?:biens|annonces?)\b/i,
+    /\bbiens?\s+similaires?\b/i,
+    /\bvous\s+(?:aimerez|pourriez)\s+(?:aussi|[ée]galement)\b/i,
+    /\bannonces?\s+proches?\b/i,
+    /\bnos\s+(?:suggestions|recommandations)\b/i,
+    /\bvoir\s+(?:aussi|d[\u2019']?autres|les\s+annonces)\b/i,
+    /\brecherches?\s+similaires?\b/i,
+    // Sections estimation / prix de marché (contiennent d'autres prix)
+    /\bestim(?:er|ez|ation)\s+(?:votre|ce|du|le)\s+(?:prix|bien)\b/i,
+    /\bprix\s+(?:au\s+)?m[²2]\s+(?:dans|du|de\s+(?:ce|la|l[\u2019']))\b/i,
+    /\bhistorique\s+des?\s+prix\b/i,
+    /\bprix\s+(?:de\s+)?l[\u2019']?immobilier\b/i,
+    /\b[ée]volution\s+des?\s+prix\b/i,
+    // Footer
+    /\bmentions?\s+l[ée]gales?\b/i,
+    /\bconditions?\s+g[ée]n[ée]rales?\s+d[\u2019']?utilisation\b/i,
+    /\bpolitique\s+de\s+confidentialit[ée]\b/i,
+    /\bplan\s+du\s+site\b/i,
+    /\b[àa]\s+propos\s+de\s+(?:leboncoin|seloger|pap|bien[\u2019']?ici)\b/i,
+    // LeBonCoin spécifique
+    /\bsignaler\s+l[\u2019']?annonce\b/i,
+    /\bles?\s+annonces?\s+de\s+ce\s+pro\b/i,
+    // NOTE: NE PAS mettre "Sécurisez votre achat" ni "Contacter le vendeur" ici !
+    // Ils apparaissent AVANT les caractéristiques et équipements sur LeBonCoin.
+  ]
+
+  // Trouver le premier marqueur de coupure (le plus tôt dans le texte, mais après 200 chars)
+  let cutIndex = cleaned.length
+  for (const pattern of coupures) {
+    const match = cleaned.match(pattern)
+    // Le marqueur doit être assez loin du début (> 200 chars) pour ne pas couper
+    // une description qui mentionne ces mots naturellement
+    if (match?.index !== undefined && match.index > 200 && match.index < cutIndex) {
+      cutIndex = match.index
+    }
+  }
+
+  if (cutIndex < cleaned.length) {
+    cleaned = cleaned.substring(0, cutIndex)
+  }
+
+  // ══ Supprimer les échelles DPE / GES ══
+  // LeBonCoin et d'autres portails affichent la grille A B C D E F G.
+  // Le parser attrape le premier "A" de la grille au lieu de la vraie classe.
+  // On supprime ces séquences pour ne garder que la valeur réelle.
+  // Pattern : lettres A à G (ou sous-ensembles ordonnés) séparées par espaces/newlines
+  cleaned = cleaned
+    .replace(/\b[A-G](?:\s+[A-G]){4,6}\b/g, '') // "A B C D E F G" sur une ligne
+    .replace(/(?:^|\n)\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G](?:\s*\n\s*[A-G]){0,2}/gm, '') // Chaque lettre sur sa propre ligne
+    // LeBonCoin : "Logement économe" ... "Logement énergivore" ou "Faible émission" ... "Forte émission"
+    .replace(/logement\s+[ée]conome/gi, '')
+    .replace(/logement\s+[ée]nergivore/gi, '')
+    .replace(/faible\s+[ée]mission/gi, '')
+    .replace(/forte\s+[ée]mission/gi, '')
+    .replace(/passoire\s+[ée]nerg[ée]tique/gi, '')
+    .replace(/peu\s+polluant/gi, '')
+    .replace(/tr[èe]s\s+polluant/gi, '')
+
+  return cleaned.trim()
+}
+
+/**
+ * Extrait l'URL du bien depuis le texte collé.
+ * Utile pour détecter la source (LeBonCoin, SeLoger, etc.)
+ * et récupérer l'image via l'API og-image.
+ */
+function extraireUrl(texte: string): string | undefined {
+  const patterns = [
+    /https?:\/\/(?:www\.)?leboncoin\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?seloger\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?pap\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?bienici\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?logic-immo\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?bien-ici\.com\/\S+/i,
+  ]
+  for (const p of patterns) {
+    const m = texte.match(p)
+    if (m) return m[0].replace(/[)\]}>"']+$/, '') // nettoyer ponctuation trailing
+  }
+  return undefined
 }
 
 function extraireNombre(s: string): number | null {
@@ -213,26 +319,70 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
   return result
 }
 
+/**
+ * Extrait la DERNIÈRE lettre A-G associée à une unité (kWh, kg CO₂) dans le texte.
+ * Sur LeBonCoin, l'échelle DPE/GES affiche chaque lettre avec sa plage de valeurs :
+ *   "A ≤ 50 kWh ... F 331 à 450 kWh ... G > 450 kWh"
+ * suivi de la valeur réelle : "D 343 kWh/m²/an"
+ * → La valeur réelle est toujours la DERNIÈRE occurrence.
+ */
+function derniereLettrePourUnite(texte: string, unitePattern: RegExp): ClasseDPE | undefined {
+  const matches = [...texte.matchAll(unitePattern)]
+  if (matches.length === 0) return undefined
+  const last = matches[matches.length - 1]
+  // Groupe 1 = lettre A-G
+  return (last[1]?.toUpperCase() || undefined) as ClasseDPE | undefined
+}
+
 function extraireDPE(texte: string): ClasseDPE | undefined {
+  // 1. Pattern le plus fiable : lettre + nombre + kWh — prendre la DERNIÈRE occurrence
+  //    (l'échelle affiche A...G avec kWh, la valeur réelle est après)
+  const kwhResult = derniereLettrePourUnite(
+    texte,
+    /\b([A-G])\s*(?:≤|<=|⩽)?\s*\d{1,4}\s*kWh/gi
+  )
+  if (kwhResult) return kwhResult
+
+  // 2. Patterns textuels (pas affectés par l'échelle)
   const patterns = [
-    /DPE\s*:?\s*([A-G])\b/i,
     /classe\s*(?:énergie|énergétique)\s*:?\s*([A-G])\b/i,
-    /diagnostic\s*(?:de\s*)?performance\s*énergétique\s*:?\s*([A-G])\b/i,
+    /DPE\s*:?\s*([A-G])(?![ \t]*[A-G])/i,
+    /\(DPE\)\s*([A-G])\b/i,
+    /DPE\)\s*([A-G])\b/i,
+    /diagnostic\s*(?:de\s*)?performance\s*énergétique\s*(?:\(DPE\))?\s*:?\s*([A-G])\b/i,
     /étiquette\s*énergie\s*:?\s*([A-G])\b/i,
+    /[ée]nergie\s*:?\s*([A-G])\b/i,
   ]
 
   for (const p of patterns) {
     const m = texte.match(p)
-    if (m) return m[1].toUpperCase() as ClasseDPE
+    if (m) {
+      for (let i = m.length - 1; i >= 1; i--) {
+        if (m[i] && /^[A-G]$/i.test(m[i])) {
+          return m[i].toUpperCase() as ClasseDPE
+        }
+      }
+    }
   }
   return undefined
 }
 
 function extraireGES(texte: string): ClasseDPE | undefined {
+  // 1. Pattern le plus fiable : lettre + nombre + kg CO₂ — prendre la DERNIÈRE occurrence
+  //    (l'échelle affiche A...G avec kg CO₂, la valeur réelle est après)
+  const kgResult = derniereLettrePourUnite(
+    texte,
+    /\b([A-G])\s*(?:≤|<=|⩽)?\s*\d{1,4}\s*kg\s*(?:CO|eq)/gi
+  )
+  if (kgResult) return kgResult
+
+  // 2. Patterns textuels
   const patterns = [
-    /GES\s*:?\s*([A-G])\b/i,
-    /gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*:?\s*([A-G])\b/i,
     /classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i,
+    /GES\s*:?\s*([A-G])(?![ \t]*[A-G])/i,
+    /\(GES\)\s*([A-G])\b/i,
+    /GES\)\s*([A-G])\b/i,
+    /gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*(?:\(GES\))?\s*:?\s*([A-G])\b/i,
     /étiquette\s*climat\s*:?\s*([A-G])\b/i,
     /émissions?\s*(?:de\s*)?(?:GES|CO2?)\s*:?\s*([A-G])\b/i,
   ]
@@ -254,10 +404,15 @@ function extraireGES(texte: string): ClasseDPE | undefined {
 
 function extraireEtagesTotal(texte: string): number | undefined {
   const patterns = [
+    // "Étage 8/9" ou "8ème étage/9 étages" → 9
+    /étage\s*\d+\s*\/\s*(\d+)/i,
+    /\d+(?:er?|e|ème)?\s*étage\s*\/\s*(\d+)/i,
     /(?:immeuble|bâtiment|résidence)\s*(?:de\s*)?(?:R\+)?(\d+)\s*étages?/i,
     /(\d+)\s*étages?\s*(?:au\s*total|en\s*tout)/i,
     /sur\s*(\d+)\s*étages?/i,
     /(?:nombre\s*d'?étages?|étages?\s*total)\s*:?\s*(\d+)/i,
+    // "8/9 étages" generic
+    /\d+\s*\/\s*(\d+)\s*étages?/i,
   ]
   for (const p of patterns) {
     const m = texte.match(p)
@@ -341,6 +496,8 @@ function extraireOrientation(texte: string): string | undefined {
   const patterns = [
     /(?:orientation|orienté|exposé|exposition)\s*:?\s*((?:plein\s*)?(?:nord|sud|est|ouest)(?:\s*[/\-]\s*(?:nord|sud|est|ouest))?)/i,
     /(?:double\s*exposition)\s*:?\s*((?:nord|sud|est|ouest)\s*[/\-]\s*(?:nord|sud|est|ouest))/i,
+    // "DOUBLE EXPOSITION" sans direction spécifique
+    /(double\s*exposition)/i,
   ]
   for (const p of patterns) {
     const m = texte.match(p)
@@ -391,11 +548,13 @@ function extraireEtage(texte: string): number | undefined {
 
 function extraireCharges(texte: string): number | undefined {
   const patterns = [
-    /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*)\s*€?\s*(?:\/\s*(?:an|mois))?/i,
-    /charges?\s*mensuelles?\s*:?\s*(\d[\d\s]*)\s*€/i,
-    /provisions?\s*sur\s*charges?\s*:?\s*(\d[\d\s]*)\s*€/i,
-    /charges?\s*:\s*(\d[\d\s]*)\s*€\s*\/\s*mois/i,
-    /(\d[\d\s]*)\s*€\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
+    /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)?\s*(?:\/\s*(?:an|mois))?/i,
+    /charges?\s*mensuelles?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
+    /provisions?\s*sur\s*charges?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
+    /charges?\s*:\s*(\d[\d\s]*)\s*(?:€|euros?)\s*\/\s*mois/i,
+    /(\d[\d\s]*)\s*(?:€|euros?)\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
+    // Pattern sans symbole : "charges mensuelles : 235" (SeLoger JSON text)
+    /charges?\s*mensuelles?\s*:?\s*(\d[\d\s.,]+)\b/i,
   ]
 
   for (const p of patterns) {
@@ -412,9 +571,11 @@ function extraireCharges(texte: string): number | undefined {
 
 function extraireTaxeFonciere(texte: string): number | undefined {
   const patterns = [
-    /taxe\s*foncière\s*:?\s*(\d[\d\s]*)\s*€/i,
-    /foncière?\s*:?\s*(\d[\d\s]*)\s*€/i,
-    /(\d[\d\s]*)\s*€\s*(?:de\s+)?taxe\s*foncière/i,
+    /taxe\s*foncière\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)\b/i,
+    /foncière?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)\b/i,
+    /(\d[\d\s]*)\s*(?:€|euros?)\s*(?:de\s+)?taxe\s*foncière/i,
+    // Pattern sans symbole euro (SeLoger : "Taxe Foncière: 1442 Euros")
+    /taxe\s*foncière\s*:?\s*(\d[\d\s.,]+)(?:\s*(?:€|euros?|par\s*an|\/\s*an))?\b/i,
   ]
 
   for (const p of patterns) {
@@ -429,11 +590,24 @@ function extraireTaxeFonciere(texte: string): number | undefined {
 
 function extraireEquipements(texte: string) {
   const lower = texte.toLowerCase()
+
+  /** Vérifie qu'un équipement est mentionné positivement (pas de négation avant) */
+  const presente = (motif: RegExp, exclusions: RegExp[]): boolean => {
+    if (!motif.test(lower)) return false
+    // Vérifier qu'aucune exclusion n'est présente
+    return !exclusions.some(excl => excl.test(lower))
+  }
+
+  const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/]
+  const NEG_BALCON = [/sans\s+(?:balcon|terrasse)/, /pas\s+d['’e]?\s*(?:balcon|terrasse)/, /aucun\s+(?:balcon|terrasse)/]
+  const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/]
+  const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/]
+
   return {
-    ascenseur: /\bascenseur\b/.test(lower) && !/sans\s+ascenseur/.test(lower),
-    balconTerrasse: /\bbalcon\b|\bterrasse\b|\bloggia\b/.test(lower),
-    parking: /\bparking\b|\bgarage\b|\bbox\b|place\s+de\s+stationnement/.test(lower),
-    cave: /\bcave\b/.test(lower),
+    ascenseur: presente(/\bascenseur\b/, NEG_ASCENSEUR),
+    balconTerrasse: presente(/\bbalcon\b|\bterrasse\b|\bloggia\b/, NEG_BALCON),
+    parking: presente(/\bparking\b|\bgarage\b|\bbox\b|place\s+de\s+stationnement/, NEG_PARKING),
+    cave: presente(/\bcave\b/, NEG_CAVE),
   }
 }
 
@@ -470,12 +644,20 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
   if (!texte) return {}
 
   // Protection ReDoS : tronquer les textes trop longs
-  const texteSafe = texte.length > MAX_TEXT_LENGTH ? texte.substring(0, MAX_TEXT_LENGTH) : texte
+  const texteBrut = texte.length > MAX_TEXT_LENGTH ? texte.substring(0, MAX_TEXT_LENGTH) : texte
+
+  // ══ Isoler le contenu principal ══
+  // Supprime "annonces similaires", footer, prix de marché, etc.
+  // pour éviter de parser les données d'AUTRES biens
+  const texteSafe = isolerContenuPrincipal(texteBrut)
+
+  // Extraire l'URL du bien (utile pour la source et les images)
+  const url = extraireUrl(texteBrut) // chercher dans le texte complet
 
   const localisation = extraireLocalisation(texteSafe)
   const equipements = extraireEquipements(texteSafe)
 
-  const resultat: DonneesExtraites = {
+  const resultat: DonneesExtraites & { url?: string } = {
     prix: extrairePrix(texteSafe),
     surface: extraireSurface(texteSafe),
     pieces: extrairePieces(texteSafe),
@@ -495,6 +677,7 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
     nbSallesBains: extraireNbSallesBains(texteSafe),
     orientation: extraireOrientation(texteSafe),
     ...equipements,
+    ...(url ? { url } : {}),
   }
 
   // Déduire chambres si on a les pièces
@@ -513,6 +696,252 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
 /**
  * Compte combien de champs ont été extraits avec succès
  */
+/**
+ * Transforme une URL d'image thumbnail en version haute résolution.
+ * Gère les patterns connus des portails immobiliers français.
+ *
+ * @example
+ * upgradeImageUrl('https://v.seloger.com/s/crop/310x225/visuels/xxx.jpg')
+ * // → 'https://v.seloger.com/s/width/1280/visuels/xxx.jpg'
+ */
+export function upgradeImageUrl(url: string): string {
+  if (!url) return url
+  try {
+    // ── SeLoger / se-loger ──
+    // /s/crop/310x225/ ou /s/width/420/ → /s/width/1280/
+    if (url.includes('seloger.com')) {
+      return url
+        .replace(/\/s\/crop\/\d+x\d+\//, '/s/width/1280/')
+        .replace(/\/s\/width\/\d+\//, '/s/width/1280/')
+        .replace(/\/s\/height\/\d+\//, '/s/width/1280/')
+    }
+
+    // ── LeBonCoin ──
+    // Formats connus :
+    //   /api/v1/lbcpb1/images/<id>/300x300.webp → /api/v1/lbcpb1/images/<id>/ad-large.jpg
+    //   /ad-thumb/<id>.jpg → /ad-image/<id>.jpg
+    //   ?rule=ad-thumb → supprimer ou ?rule=ad-large
+    if (url.includes('leboncoin.fr') || url.includes('img.lbc')) {
+      let upgraded = url
+      // Path-based size: /300x300.webp, /600x400.jpg → /ad-large.jpg
+      upgraded = upgraded.replace(/\/\d+x\d+\.\w+$/, '/ad-large.jpg')
+      // ad-thumb → ad-image (full size)
+      upgraded = upgraded.replace(/\/ad-thumb\//, '/ad-image/')
+      upgraded = upgraded.replace(/\/ad-small\//, '/ad-image/')
+      // Query param: ?rule=ad-thumb ou ?rule=ad-small → supprimer
+      upgraded = upgraded.replace(/[?&]rule=ad-(?:thumb|small)[^&]*/gi, '')
+      // Clean trailing ? or &
+      upgraded = upgraded.replace(/[?&]$/, '')
+      return upgraded
+    }
+
+    // ── Bien'ici ──
+    // /fit-in/360x270/ → /fit-in/1280x960/
+    if (url.includes('bienici.com') || url.includes('bien-ici')) {
+      return url.replace(/\/fit-in\/\d+x\d+\//, '/fit-in/1280x960/')
+    }
+
+    // ── PAP ──
+    // /thumb/ → supprimer
+    if (url.includes('pap.fr')) {
+      return url.replace(/\/thumb\//, '/')
+    }
+
+    // ── Logic-Immo ──
+    // /i/200x200/ → /i/1280x960/
+    if (url.includes('logic-immo')) {
+      return url.replace(/\/i\/\d+x\d+\//, '/i/1280x960/')
+    }
+
+    // ── Explorimmo / Figaro Immo ──
+    if (url.includes('explorimmo') || url.includes('figaro')) {
+      return url.replace(/\/\d+x\d+\//, '/1280x960/')
+    }
+
+    // ── Orpi ──
+    if (url.includes('orpi.com')) {
+      return url
+        .replace(/\/cache\/[^/]+\//, '/cache/1280x960/')
+        .replace(/\/\d+x\d+\//, '/1280x960/')
+    }
+
+    // ── Century21 ──
+    if (url.includes('century21')) {
+      return url.replace(/\/\d+x\d+\//, '/1280x960/')
+    }
+
+    // ── Generic CDN patterns ──
+    const parsed = new URL(url)
+    let changed = false
+
+    // ?w=200&h=150 → ?w=1280&h=960
+    for (const key of ['w', 'width', 'iw']) {
+      if (parsed.searchParams.has(key)) {
+        const val = parseInt(parsed.searchParams.get(key) || '0')
+        if (val > 0 && val < 800) {
+          parsed.searchParams.set(key, '1280')
+          changed = true
+        }
+      }
+    }
+    for (const key of ['h', 'height', 'ih']) {
+      if (parsed.searchParams.has(key)) {
+        const val = parseInt(parsed.searchParams.get(key) || '0')
+        if (val > 0 && val < 600) {
+          parsed.searchParams.set(key, '960')
+          changed = true
+        }
+      }
+    }
+
+    // ?size=small|thumbnail|medium → supprimer
+    if (parsed.searchParams.has('size')) {
+      const s = parsed.searchParams.get('size')?.toLowerCase()
+      if (s === 'small' || s === 'thumbnail' || s === 'thumb' || s === 'medium') {
+        parsed.searchParams.delete('size')
+        changed = true
+      }
+    }
+
+    // ?quality=50 → ?quality=85
+    if (parsed.searchParams.has('quality')) {
+      const q = parseInt(parsed.searchParams.get('quality') || '85')
+      if (q < 70) {
+        parsed.searchParams.set('quality', '85')
+        changed = true
+      }
+    }
+
+    if (changed) return parsed.toString()
+
+    // Path-based generic patterns: /thumbs/ → /, _thumb.jpg → .jpg
+    let upgraded = url
+    upgraded = upgraded.replace(/\/thumbs?\//, '/')
+    upgraded = upgraded.replace(/_thumb(\.\w+)$/, '$1')
+    upgraded = upgraded.replace(/_small(\.\w+)$/, '$1')
+    upgraded = upgraded.replace(/_medium(\.\w+)$/, '_large$1')
+
+    return upgraded
+  } catch {
+    return url
+  }
+}
+
+/**
+ * Extrait les URLs des photos depuis le HTML du clipboard.
+ * Quand l'utilisateur fait Ctrl+A → Ctrl+C, le clipboard contient
+ * à la fois du texte brut ET du HTML. Le HTML a les balises <img>
+ * avec les URLs des photos — on en profite.
+ *
+ * Retourne l'image principale + toutes les images trouvées.
+ * Priorités pour l'image principale : og:image > twitter:image > première grande <img>
+ * Les URLs sont automatiquement transformées en version haute résolution.
+ */
+export function extraireImagesFromHTML(html: string): { imageUrl?: string; images: string[] } {
+  if (!html || html.length < 20) return { images: [] }
+
+  const allImages: string[] = []
+  let mainImage: string | undefined
+
+  // 1. og:image (la plus fiable — utilisée par tous les portails immo)
+  const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+                  html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+  if (ogMatch?.[1]) {
+    const url = ogMatch[1].trim()
+    if (url.startsWith('http')) {
+      mainImage = url
+      allImages.push(url)
+    }
+  }
+
+  // 2. twitter:image
+  const twMatch = html.match(/<meta[^>]+(?:name|property)=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+  if (twMatch?.[1]) {
+    const url = twMatch[1].trim()
+    if (url.startsWith('http') && !allImages.includes(url)) {
+      if (!mainImage) mainImage = url
+      allImages.push(url)
+    }
+  }
+
+  // 3. Toutes les <img> — v\u00e9rifier src, data-src, data-lazy-src, srcset
+  const imgTagRegex = /<img[^>]+>/gi
+  let imgTag: RegExpExecArray | null
+  while ((imgTag = imgTagRegex.exec(html)) !== null) {
+    const tag = imgTag[0]
+    
+    // Extraire les diff\u00e9rentes sources possibles (ordre de qualit\u00e9 d\u00e9croissante)
+    const dataSrcMatch = tag.match(/data-(?:lazy-)?src=["']([^"']+)["']/i)
+    const srcSetMatch = tag.match(/(?:data-)?srcset=["']([^"']+)["']/i)
+    // Utiliser un espace ou début de tag avant "src=" pour ne pas re-matcher data-src
+    const srcMatch = tag.match(/(?:^|[\s"'])src=["']([^"']+)["']/i)
+    
+    // Privil\u00e9gier la plus grande image du srcset
+    let bestUrl: string | undefined
+    if (srcSetMatch?.[1]) {
+      const entries = srcSetMatch[1].split(',').map(s => s.trim())
+      let bestWidth = 0
+      for (const entry of entries) {
+        const parts = entry.split(/\\s+/)
+        const url = parts[0]?.trim()
+        const widthStr = parts[1]?.replace('w', '')
+        const w = widthStr ? parseInt(widthStr) : 0
+        if (url?.startsWith('http') && w > bestWidth) {
+          bestWidth = w
+          bestUrl = url
+        }
+      }
+    }
+    
+    // Puis data-src (image lazy-load\u00e9e = souvent la vraie image haute qualit\u00e9)
+    if (!bestUrl && dataSrcMatch?.[1]?.startsWith('http')) {
+      bestUrl = dataSrcMatch[1].trim()
+    }
+    
+    // Enfin src classique
+    if (!bestUrl && srcMatch?.[1]?.startsWith('http')) {
+      bestUrl = srcMatch[1].trim()
+    }
+    
+    if (!bestUrl) continue
+    if (/\.svg(\?|$)/i.test(bestUrl)) continue
+    if (/logo|icon|avatar|sprite|pixel|tracking|badge|button|loader|spinner/i.test(bestUrl)) continue
+    const widthMatch = tag.match(/width=["']?(\d+)/i)
+    const heightMatch = tag.match(/height=["']?(\d+)/i)
+    if (widthMatch && parseInt(widthMatch[1]) < 100) continue
+    if (heightMatch && parseInt(heightMatch[1]) < 100) continue
+    if (!allImages.includes(bestUrl)) {
+      if (!mainImage) mainImage = bestUrl
+      allImages.push(bestUrl)
+    }
+    if (allImages.length >= 20) break
+  }
+
+  // 4. Fallback : URLs d'image dans le HTML brut
+  if (allImages.length === 0) {
+    const urlRegex = /https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'<>]*)?/gi
+    let urlMatch: RegExpExecArray | null
+    while ((urlMatch = urlRegex.exec(html)) !== null) {
+      const url = urlMatch[0]
+      if (!allImages.includes(url)) {
+        if (!mainImage) mainImage = url
+        allImages.push(url)
+      }
+      if (allImages.length >= 20) break
+    }
+  }
+
+  // Dédupliquer les URLs
+  const uniqueImages = [...new Set(allImages)]
+
+  return { imageUrl: mainImage, images: uniqueImages.length > 1 ? uniqueImages : [] }
+}
+
+/** @deprecated Utiliser extraireImagesFromHTML à la place */
+export function extraireImageFromHTML(html: string): string | undefined {
+  return extraireImagesFromHTML(html).imageUrl
+}
+
 export function compterChampsExtraits(data: DonneesExtraites): number {
   let count = 0
   if (data.prix) count++
@@ -531,5 +960,6 @@ export function compterChampsExtraits(data: DonneesExtraites): number {
   if (data.anneeConstruction) count++
   if (data.nbSallesBains) count++
   if (data.orientation) count++
+  if (data.imageUrl) count++
   return count
 }

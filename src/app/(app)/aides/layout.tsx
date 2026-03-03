@@ -1,4 +1,3 @@
-import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -37,7 +36,6 @@ export default function AidesLayout({ children }: { children: React.ReactNode })
   return (
     <>
       <AidesJsonLd />
-      <Breadcrumbs items={[{ label: 'Aides & PTZ' }]} />
       {children}
     </>
   )

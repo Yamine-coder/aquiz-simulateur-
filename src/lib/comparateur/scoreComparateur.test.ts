@@ -196,10 +196,10 @@ describe('Score global', () => {
   it('le verdict correspond au seuil du score', () => {
     for (const annonce of ANNONCES_LISTE) {
       const r = calculerScorePro(annonce, ANNONCES_LISTE)
-      if (r.scoreGlobal >= 75) expect(r.verdict).toBe('Excellent choix')
-      else if (r.scoreGlobal >= 62) expect(r.verdict).toBe('Bon potentiel')
-      else if (r.scoreGlobal >= 48) expect(r.verdict).toBe('À étudier')
-      else if (r.scoreGlobal >= 35) expect(r.verdict).toBe('Avec réserves')
+      if (r.scoreGlobal >= 80) expect(r.verdict).toBe('Excellent choix')
+      else if (r.scoreGlobal >= 70) expect(r.verdict).toBe('Très bon potentiel')
+      else if (r.scoreGlobal >= 60) expect(r.verdict).toBe('Bon potentiel')
+      else if (r.scoreGlobal >= 45) expect(r.verdict).toBe('À étudier')
       else expect(r.verdict).toBe('Peu recommandé')
     }
   })
@@ -207,9 +207,9 @@ describe('Score global', () => {
   it('la recommandation correspond au verdict', () => {
     const verdictToReco: Record<string, string> = {
       'Excellent choix': 'fortement_recommande',
-      'Bon potentiel': 'recommande',
-      'À étudier': 'a_etudier',
-      'Avec réserves': 'prudence',
+      'Très bon potentiel': 'recommande',
+      'Bon potentiel': 'a_etudier',
+      'À étudier': 'prudence',
       'Peu recommandé': 'deconseille',
     }
     for (const annonce of ANNONCES_LISTE) {
@@ -578,14 +578,25 @@ describe('Données enrichies', () => {
     expect(axeP.score).toBeLessThan(40)
   })
 
-  it('une zone inondable pénalise l\'axe risques', () => {
+  it('un bon score transports booste l\'axe transports', () => {
     const enrichi: DonneesEnrichiesScoring = {
-      risques: { success: true, scoreRisque: 40, verdict: 'risqué', zoneInondable: true },
+      quartier: { success: true, scoreQuartier: 85, transports: 80, commerces: 8, ecoles: 7, sante: 6, espaceVerts: 7 },
     }
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
-    const axeR = result.axes.find(a => a.axe === 'risques')!
-    expect(axeR.score).toBeLessThan(40)
-    expect(result.points.some(p => p.texte.includes('inondable'))).toBe(true)
+    const axeT = result.axes.find(a => a.axe === 'transports')!
+    expect(axeT.disponible).toBe(true)
+    expect(axeT.score).toBeGreaterThanOrEqual(75)
+    expect(result.points.some(p => p.texte.includes('transports'))).toBe(true)
+  })
+
+  it('un faible score transports pénalise l\'axe transports', () => {
+    const enrichi: DonneesEnrichiesScoring = {
+      quartier: { success: true, scoreQuartier: 40, transports: 20, commerces: 5, ecoles: 3, sante: 2, espaceVerts: 4 },
+    }
+    const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
+    const axeT = result.axes.find(a => a.axe === 'transports')!
+    expect(axeT.disponible).toBe(true)
+    expect(axeT.score).toBeLessThan(30)
   })
 
   it('un bon score quartier booste l\'emplacement', () => {
@@ -671,7 +682,7 @@ describe('Radar chart data', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE)
     const radar = scoreToRadarData(result)
     const labels = radar.map(r => r.label)
-    expect(labels).toEqual(['prix', 'quartier', 'risques', 'energie', 'confort', 'budget'])
+    expect(labels).toEqual(['prix', 'quartier', 'transports', 'energie', 'confort', 'budget'])
   })
 })
 

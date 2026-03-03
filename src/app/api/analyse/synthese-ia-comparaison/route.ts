@@ -107,6 +107,7 @@ interface ComparaisonResponse {
   synthese: string
   verdictFinal: string
   conseilNego: string
+  conseilAcquisition: string
   cliffhanger: string
 }
 
@@ -141,7 +142,7 @@ Cliffhanger : "Saviez-vous qu'en achetant le B avec travaux, vous pourriez être
 // SYSTEM PROMPT — COMPARAISON
 // ============================================
 
-const SYSTEM_PROMPT_COMPARAISON = `Tu es analyste immobilier comparatif senior chez AQUIZ. Tu aides des acheteurs français à choisir entre plusieurs biens immobiliers.
+const SYSTEM_PROMPT_COMPARAISON = `Tu es l'IA AQUIZ, l'intelligence artificielle propriétaire d'AQUIZ spécialisée en analyse immobilière. Tu aides des acheteurs français à choisir entre plusieurs biens immobiliers. Tu te présentes TOUJOURS comme "AQUIZ IA" — jamais comme une IA générique.
 
 ${EXPERTISE_IMMOBILIER}
 
@@ -167,14 +168,19 @@ RÈGLES STRICTES :
 - OBLIGATOIRE : au moins 1 calcul chiffré (coût réel, économie, rendement comparé)
 - OBLIGATOIRE : au moins 1 insight que l'acheteur n'a PAS vu
 - Longueur synthèse : 100-180 mots. Dense, pas de remplissage.
+- Tu es AQUIZ IA — JAMAIS mentionner "Mistral", "GPT", "LLM", "intelligence artificielle générative" ou tout autre nom d'IA externe
+- OBLIGATOIRE : le conseilAcquisition mentionne "expert AQUIZ" et décrit des risques CONCRETS sans accompagnement professionnel
 
 ${EXEMPLES_COMPARAISON}
+
+7. PRODUIRE un conseil d'acquisition CONCRET qui souligne les risques de ne pas être accompagné (montage financier, diagnostics, clauses suspensives, négociation) et oriente vers un expert AQUIZ.
 
 RÉPONSE en JSON strict :
 {
   "synthese": "[100-180 mots — analyse comparative, PAS résumé de chaque bien]",
   "verdictFinal": "[1-2 phrases — verdict tranché avec nuance par profil]",
   "conseilNego": "[1-2 phrases — stratégie négociation chiffrée sur UN bien]",
+  "conseilAcquisition": "[2-4 phrases — conseil d'acquisition expert AQUIZ : étapes clés à ne pas rater, risques sans accompagnement, pourquoi un expert AQUIZ fait la différence sur cette comparaison précise]",
   "cliffhanger": "[1 question spécifique à cette comparaison qui donne envie d'appeler]"
 }`
 
@@ -416,6 +422,7 @@ export async function POST(request: Request) {
         synthese: parsed.synthese.slice(0, 900),
         verdictFinal: (parsed.verdictFinal || '').slice(0, 300),
         conseilNego: (parsed.conseilNego || '').slice(0, 300),
+        conseilAcquisition: (parsed.conseilAcquisition || '').slice(0, 500),
         cliffhanger: parsed.cliffhanger.slice(0, 300),
       },
       source,
@@ -449,6 +456,7 @@ function generateFallbackComparaison(data: ComparaisonRequest): ComparaisonRespo
       conseilNego: b.marche?.ecartPrixM2 !== undefined && b.marche.ecartPrixM2 > 5
         ? `Marge de négociation estimée : ${Math.min(b.marche.ecartPrixM2, 10).toFixed(0)}% soit ~${fmt(Math.round(b.prix * Math.min(b.marche.ecartPrixM2, 10) / 100))} €.`
         : 'Demandez l\'historique du bien et les dernières offres pour calibrer votre négociation.',
+      conseilAcquisition: `Un achat immobilier comporte des risques souvent invisibles : clauses suspensives mal rédigées, diagnostics incomplets, montage financier sous-optimal. Un expert AQUIZ vous accompagne de la négociation à la signature pour sécuriser votre acquisition à ${b.ville}.`,
       cliffhanger: 'Un conseiller AQUIZ peut identifier les leviers de négociation spécifiques à ce bien et optimiser votre montage financier.',
     }
   }
@@ -504,6 +512,7 @@ function generateFallbackComparaison(data: ComparaisonRequest): ComparaisonRespo
       ? `Privilégiez le 1er pour la sécurité du choix. Le 2e reste une alternative si le prix baisse.`
       : `Scores proches — visitez les deux et laissez votre ressenti trancher. Le rapport qualité-prix fera la différence.`,
     conseilNego,
+    conseilAcquisition: `Acheter sans accompagnement, c'est risquer de passer à côté de vices cachés, d'un montage financier non optimal ou d'une clause suspensive mal rédigée. Sur ${biens.length} biens dans cette fourchette de prix, un expert AQUIZ peut vous faire économiser entre ${fmt(Math.round(Math.min(...biens.map(b => b.prix)) * 0.03))} et ${fmt(Math.round(Math.max(...biens.map(b => b.prix)) * 0.06))} € en négociation + montage. L'accompagnement couvre l'analyse des diagnostics, la vérification juridique et la stratégie d'offre.`,
     cliffhanger: 'Un conseiller AQUIZ peut négocier le prix de ces biens et optimiser votre montage financier avec accès à 30+ banques.',
   }
 }

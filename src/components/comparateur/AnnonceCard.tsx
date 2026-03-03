@@ -25,7 +25,6 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import { useMemo, useRef, useState } from 'react'
-import { ImageCarousel } from './ImageCarousel'
 
 interface AnnonceCardProps {
   annonce: Annonce
@@ -65,17 +64,26 @@ export function AnnonceCard({
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Construire la liste d'images pour le carousel
-  const allImages = useMemo(() => {
-    const imgs: string[] = []
-    if (annonce.imageUrl) imgs.push(annonce.imageUrl)
-    if (annonce.images?.length) {
-      for (const img of annonce.images) {
-        if (!imgs.includes(img)) imgs.push(img)
-      }
-    }
-    return imgs
+  // LeBonCoin: ?rule=ad-image (~640px) → ?rule=ad-large (~1600px)
+  const toHD = (url: string | null): string | null => {
+    if (!url) return null
+    return url.replace(/[?&]rule=ad-(?:image|thumb|small)/, (m) => m.replace(/=ad-\w+/, '=ad-large'))
+  }
+
+  // Image unique de meilleure qualité : images[0] (HQ) > imageUrl (thumbnail og:image)
+  const bestImage = useMemo(() => {
+    const raw = annonce.images?.[0] || annonce.imageUrl || null
+    return toHD(raw)
   }, [annonce.imageUrl, annonce.images])
+
+  const [imgError, setImgError] = useState(false)
+
+  // Si l'image change, réinitialiser l'erreur
+  const prevImageRef = useRef(bestImage)
+  if (prevImageRef.current !== bestImage) {
+    prevImageRef.current = bestImage
+    if (imgError) setImgError(false)
+  }
 
   // ─── VUE LISTE (compact) ───
   if (compact) {
@@ -94,8 +102,8 @@ export function AnnonceCard({
       >
         {/* Thumbnail ou icône */}
         <div className="relative w-16 h-16 rounded-lg bg-aquiz-gray-lightest shrink-0 overflow-hidden">
-          {annonce.imageUrl ? (
-            <Image src={annonce.imageUrl} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="64px" />
+          {(annonce.images?.[0] || annonce.imageUrl) && !imgError ? (
+            <Image src={toHD(annonce.images?.[0] || annonce.imageUrl!)!} alt={annonce.titre || 'Bien immobilier'} className="w-full h-full object-cover" fill sizes="64px" unoptimized onError={() => setImgError(true)} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <IconType className="h-6 w-6 text-aquiz-gray-light" />
@@ -194,20 +202,15 @@ export function AnnonceCard({
       <div
         className="relative h-24 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100 overflow-hidden"
       >
-        {allImages.length > 1 ? (
-          <ImageCarousel
-            images={allImages}
-            alt={annonce.titre || 'Bien immobilier'}
-            className="h-full w-full"
-          />
-        ) : allImages.length === 1 ? (
+        {bestImage && !imgError ? (
           <Image
-            src={allImages[0]}
+            src={bestImage}
             alt={annonce.titre || 'Bien immobilier'}
             className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
             fill
-            sizes="(max-width: 768px) 100vw, 300px"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
             unoptimized
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center">

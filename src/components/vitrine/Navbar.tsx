@@ -107,7 +107,7 @@ export function Navbar() {
       setIsScrolled(window.scrollY > 20)
 
       // Scroll-spy: determine active section
-      const navOffset = window.innerWidth >= 768 ? 96 : 80
+      const navOffset = window.innerWidth >= 768 ? 80 : 72
       const scrollY = window.scrollY + navOffset
       let current = 'hero'
 
@@ -172,7 +172,7 @@ export function Navbar() {
     } else {
       const el = document.getElementById(sectionId)
       if (el) {
-        const navHeight = window.innerWidth >= 768 ? 88 : 72
+        const navHeight = window.innerWidth >= 768 ? 80 : 64
         // Sections avec grand padding (py-24/py-32) : on saute une partie du padding
         // Sections compactes (contact) : pas de skip
         const compactSections = ['contact']
@@ -257,26 +257,36 @@ export function Navbar() {
       }}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={`flex items-center justify-between h-18 md:h-22`}>
+        <div className="flex items-center justify-between h-16 md:h-18 lg:h-20">
 
           {/* Logo */}
-          <Link href="/" className="flex items-center shrink-0 relative h-16 md:h-20 lg:h-25 w-[120px] md:w-[150px] lg:w-[180px]">
+          <Link 
+            href="/" 
+            className="flex items-center shrink-0 relative h-[56px] w-[150px] md:h-[58px] md:w-[160px] lg:h-[64px] lg:w-[200px] xl:h-[72px] xl:w-[240px] focus:outline-none rounded-sm"
+            aria-label="Retour à l'accueil"
+            onClick={(e) => {
+              if (isHomepage) {
+                e.preventDefault()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }
+            }}
+          >
             <Image
               src="/logo-aquiz-dark.png"
-              alt="AQUIZ — Conseil en acquisition immobilière à Paris"
+              alt="Logo AQUIZ"
               fill
-              className={`object-contain select-none transition-opacity duration-300 ${showSolid ? 'opacity-100' : 'opacity-0'}`}
+              className={`object-contain object-left select-none transition-opacity duration-300 ${showSolid ? 'opacity-100' : 'opacity-0'}`}
               priority
-              sizes="180px"
+              sizes="(max-width: 768px) 150px, (max-width: 1024px) 200px, (max-width: 1280px) 220px, 240px"
               draggable={false}
             />
             <Image
               src="/logo-aquiz-white.png"
-              alt="AQUIZ — Conseil en acquisition immobilière à Paris"
+              alt="Logo AQUIZ clair"
               fill
-              className={`object-contain select-none transition-opacity duration-300 ${showSolid ? 'opacity-0' : 'opacity-100'}`}
+              className={`object-contain object-left select-none transition-opacity duration-300 ${showSolid ? 'opacity-0' : 'opacity-100'}`}
               priority
-              sizes="180px"
+              sizes="(max-width: 768px) 150px, (max-width: 1024px) 200px, (max-width: 1280px) 220px, 240px"
               draggable={false}
             />
           </Link>
@@ -292,7 +302,7 @@ export function Navbar() {
                   <Link
                     href={link.href}
                     onClick={(e) => handleNavClick(e, link)}
-                    className={`group relative px-4 py-2 text-[15px] font-medium transition-colors duration-200 ${
+                    className={`group relative px-2.5 xl:px-4 py-2 text-[13px] xl:text-[15px] font-medium whitespace-nowrap transition-colors duration-200 ${
                       isActive
                         ? showSolid ? 'text-gray-900' : 'text-white'
                         : showSolid ? 'text-gray-400 hover:text-gray-900' : 'text-white/60 hover:text-white'
@@ -316,7 +326,7 @@ export function Navbar() {
             >
               <button
                 onClick={handleToolsClick}
-                className={`group relative flex items-center gap-1 px-4 py-2 text-[15px] font-medium transition-colors duration-200 ${
+                className={`group relative flex items-center gap-1 px-2.5 xl:px-4 py-2 text-[13px] xl:text-[15px] font-medium whitespace-nowrap transition-colors duration-200 ${
                   isToolActive
                     ? showSolid ? 'text-gray-900' : 'text-white'
                     : showSolid ? 'text-gray-400 hover:text-gray-900' : 'text-white/60 hover:text-white'
@@ -412,24 +422,24 @@ export function Navbar() {
             })}
           </div>
 
-          {/* CTA + Téléphone */}
-          <div className="hidden lg:flex items-center gap-3">
+          {/* CTA */}
+          <div className="hidden lg:flex items-center gap-1.5 xl:gap-2.5 shrink-0">
             <a
               href="tel:+33749520106"
-              className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200 ${
+              className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-200 ${
                 showSolid
-                  ? 'text-gray-400 hover:text-gray-900'
-                  : 'text-white/70 hover:text-white'
+                  ? 'text-gray-400 hover:text-aquiz-green hover:bg-aquiz-green/5'
+                  : 'text-white/70 hover:text-white hover:bg-white/10'
               }`}
+              title="07 49 52 01 06"
             >
               <Phone className="w-4 h-4" />
-              <span className="hidden xl:inline">07 49 52 01 06</span>
             </a>
             <Link
               href="https://calendly.com/contact-aquiz/30min"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-5 py-2.5 text-sm font-semibold bg-aquiz-green text-white rounded-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:brightness-110 hover:-translate-y-px active:translate-y-0"
+              className="px-3 xl:px-5 py-2 xl:py-2.5 text-[13px] xl:text-[14px] font-semibold bg-aquiz-green whitespace-nowrap text-white rounded-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:brightness-110 hover:-translate-y-px active:translate-y-0 shrink-0"
             >
               Prendre rendez-vous
             </Link>

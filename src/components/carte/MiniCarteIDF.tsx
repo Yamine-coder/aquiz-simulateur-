@@ -482,6 +482,11 @@ data.gouv.fr • France-GeoJSON
         .leaflet-container {
           font-family: inherit !important;
           z-index: 0 !important;
+          outline: none !important;
+        }
+        .leaflet-container:focus,
+        .leaflet-container *:focus {
+          outline: none !important;
         }
         .leaflet-pane {
           z-index: 0 !important;

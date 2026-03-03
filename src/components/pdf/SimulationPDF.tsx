@@ -1152,7 +1152,6 @@ export function SimulationPDF(props: SimulationPDFProps) {
               <View style={s.quartierRow}>
                 {[
                   { label: 'Score global', score: quartier.scoreGlobal / 10, desc: 'Score composite' },
-                  { label: 'Transports', score: quartier.transports / 10, desc: 'Bus, métro, tram, gare' },
                   { label: 'Commerces', score: quartier.commerces / 10, desc: 'Supermarchés, boulangeries' },
                   { label: 'Écoles', score: quartier.ecoles / 10, desc: 'Écoles, collèges, lycées' },
                   { label: 'Santé', score: quartier.sante / 10, desc: 'Médecins, pharmacies' },
@@ -1169,10 +1168,9 @@ export function SimulationPDF(props: SimulationPDFProps) {
                 ))}
               </View>
               {/* Nouveaux scores enrichis */}
-              {(quartier.risques != null || quartier.niveauVie != null || quartier.qualiteAir != null) && (
+              {(quartier.niveauVie != null || quartier.qualiteAir != null) && (
                 <View style={[s.quartierRow, { marginTop: 4 }]}>
                   {[
-                    quartier.risques != null ? { label: 'Risques', score: quartier.risques, desc: 'Inondation, industriel, radon' } : null,
                     quartier.niveauVie != null ? { label: 'Niveau de vie', score: quartier.niveauVie, desc: 'Revenu médian INSEE' } : null,
                     quartier.qualiteAir != null ? { label: 'Qualité air', score: quartier.qualiteAir, desc: 'Indice ATMO pollution' } : null,
                   ]
@@ -1295,12 +1293,200 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </>
           )}
 
-          {/* CTA */}
+          {/* ═══ COÛTS CACHÉS À ANTICIPER (exclusif PDF) ═══ */}
+          <View style={{ marginTop: 14 }} wrap={false}>
+            <SectionTitle title="COÛTS CACHÉS À ANTICIPER" />
+            <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, marginBottom: 8 }}>
+              Au-delà de la mensualité, voici les dépenses que beaucoup d&apos;acheteurs découvrent trop tard.
+            </Text>
+
+            {/* Grille de coûts */}
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* Colonne gauche — coûts visibles */}
+              <View style={{ flex: 1 }}>
+                <View style={{ backgroundColor: C.grayBg, borderRadius: 4, padding: 8, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>Frais d&apos;acquisition</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Frais de notaire</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(fraisNotaire)} EUR</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Frais de garantie (caution/hypothèque)</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>~{fmt(Math.round(capitalEmpruntable * 0.012))} EUR</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Frais de dossier bancaire</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>500 à 1 500 EUR</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Déménagement</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>1 000 à 3 000 EUR</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Colonne droite — coûts récurrents */}
+              <View style={{ flex: 1 }}>
+                <View style={{ backgroundColor: C.grayBg, borderRadius: 4, padding: 8, marginBottom: 4 }}>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>Charges mensuelles oubliées</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Taxe foncière (estimée)</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(Math.round(prixAchatMax * 0.007 / 12))} EUR/mois</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Charges de copropriété (si appart.)</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>150 à 350 EUR/mois</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Assurance habitation</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>20 à 50 EUR/mois</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 6.5, color: C.gray }}>Provision travaux/entretien</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>50 à 150 EUR/mois</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Teaser AQUIZ */}
+            <View style={{ backgroundColor: C.greenLight, borderRadius: 4, padding: 8, marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 8, color: C.white, fontFamily: 'Helvetica-Bold' }}>!</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.greenDark }}>
+                  Ces estimations varient fortement selon le bien et la localisation.
+                </Text>
+                <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>
+                  Un conseiller AQUIZ chiffre précisément ces coûts cachés pour chaque bien que vous visitez — pour que votre budget réel n&apos;ait aucune mauvaise surprise.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ═══ VOTRE PARCOURS D'ACHAT (exclusif PDF) ═══ */}
+          <View style={{ marginTop: 14 }} wrap={false}>
+            <SectionTitle title="VOTRE PARCOURS D'ACHAT" />
+            <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, marginBottom: 8 }}>
+              Les grandes étapes de votre projet — de la recherche à la remise des clés.
+            </Text>
+
+            {/* Timeline verticale */}
+            {[
+              {
+                etape: '1',
+                titre: 'Définir votre stratégie',
+                description: 'Budget validé, critères de recherche, type de bien, zones à cibler.',
+                duree: '1 à 2 semaines',
+                done: true,
+                aquiz: null,
+              },
+              {
+                etape: '2',
+                titre: 'Rechercher et visiter',
+                description: 'Repérer les biens, visiter, comparer les quartiers, vérifier les annonces.',
+                duree: '2 à 6 mois',
+                done: false,
+                aquiz: 'Identifie les biens à fort potentiel et les pièges à éviter.',
+              },
+              {
+                etape: '3',
+                titre: 'Analyser le bien',
+                description: 'Diagnostics, PV d\'AG, DPE, charges, état de la copropriété, PLU...',
+                duree: '1 à 2 semaines',
+                done: false,
+                aquiz: 'Vérifie tous les documents et détecte les risques invisibles.',
+              },
+              {
+                etape: '4',
+                titre: 'Négocier et faire une offre',
+                description: 'Offre argumentée, stratégie de négociation, contre-propositions.',
+                duree: '1 à 3 semaines',
+                done: false,
+                aquiz: 'Construit une offre chiffrée et argumentée pour maximiser la réduction.',
+              },
+              {
+                etape: '5',
+                titre: 'Compromis de vente',
+                description: 'Signature, délai de rétractation (10 jours), conditions suspensives.',
+                duree: 'J+10 rétractation',
+                done: false,
+                aquiz: null,
+              },
+              {
+                etape: '6',
+                titre: 'Obtenir le financement',
+                description: 'Comparaison des offres bancaires, assurance emprunteur, montage du dossier.',
+                duree: '45 à 60 jours',
+                done: false,
+                aquiz: 'Négocie le meilleur taux et optimise le montage financier.',
+              },
+              {
+                etape: '7',
+                titre: 'Acte authentique',
+                description: 'Signature chez le notaire, remise des clés, déblocage des fonds.',
+                duree: '3 mois après compromis',
+                done: false,
+                aquiz: null,
+              },
+            ].map((step, idx, arr) => (
+              <View key={step.etape} style={{ flexDirection: 'row', marginBottom: idx < arr.length - 1 ? 2 : 0 }}>
+                {/* Indicateur timeline */}
+                <View style={{ width: 24, alignItems: 'center' }}>
+                  <View style={{
+                    width: 16, height: 16, borderRadius: 8,
+                    backgroundColor: step.done ? C.green : C.white,
+                    borderWidth: 1,
+                    borderColor: step.done ? C.green : C.grayBorder,
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: step.done ? C.white : C.gray }}>{step.done ? 'OK' : step.etape}</Text>
+                  </View>
+                  {idx < arr.length - 1 && (
+                    <View style={{ width: 1, flex: 1, backgroundColor: C.grayBorder, marginVertical: 1 }} />
+                  )}
+                </View>
+
+                {/* Contenu */}
+                <View style={{ flex: 1, paddingBottom: 6, paddingLeft: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{step.titre}</Text>
+                    <Text style={{ fontSize: 5.5, color: C.grayLight, fontFamily: 'Helvetica-Bold' }}>{step.duree}</Text>
+                  </View>
+                  <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>{step.description}</Text>
+                  {step.aquiz && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, backgroundColor: C.greenLight, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.green }}>AQUIZ</Text>
+                      <Text style={{ fontSize: 5.5, color: C.greenDark }}>{step.aquiz}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ))}
+
+            {/* CTA final parcours */}
+            <View style={{ backgroundColor: C.greenLight, borderRadius: 4, padding: 8, marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ fontSize: 8, color: C.white, fontFamily: 'Helvetica-Bold' }}>&gt;</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.greenDark }}>
+                  De la recherche à la signature, un conseiller AQUIZ vous accompagne à chaque étape.
+                </Text>
+                <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>
+                  Vous avez le budget — il vous manque le bon accompagnement pour faire le bon achat au meilleur prix.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* CTA final */}
           <View style={s.ctaCard} wrap={false}>
             <View>
-              <Text style={s.ctaTitle}>Besoin d&apos;accompagnement ?</Text>
+              <Text style={s.ctaTitle}>Prêt à passer à l&apos;action ?</Text>
               <Text style={s.ctaSub}>
-                Un conseiller AQUIZ peut négocier votre taux et optimiser votre financement.
+                Un conseiller AQUIZ vous accompagne de la recherche du bien à la signature chez le notaire.
               </Text>
             </View>
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>

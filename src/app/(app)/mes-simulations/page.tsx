@@ -5,7 +5,7 @@
 
 'use client'
 
-import { History, Home, Trash2, Wallet, X } from 'lucide-react'
+import { ChevronLeft, History, Home, Trash2, Wallet, X } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -57,14 +57,29 @@ export default function MesSimulationsPage() {
 
   return (
     <div className="min-h-screen bg-aquiz-gray-lightest">
+      {/* ═══ Mobile back nav ═══ */}
+      <div className="sm:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 h-12">
+          <Link
+            href="/simulateur"
+            className="flex items-center gap-1 text-aquiz-gray hover:text-aquiz-black transition-colors -ml-1"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Retour</span>
+          </Link>
+          <span className="text-sm font-semibold text-aquiz-black absolute left-1/2 -translate-x-1/2">Mes simulations</span>
+          <div className="w-16" />
+        </div>
+      </div>
+
       {/* Contenu */}
-      <main className="max-w-3xl mx-auto px-4 py-8">
+      <main className="max-w-3xl mx-auto px-4 py-6 sm:py-8">
         
         {/* En-tête avec actions */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-5 sm:mb-8">
           <div>
-            <h1 className="text-xl font-bold text-aquiz-black flex items-center gap-2">
-              <History className="w-5 h-5 text-aquiz-gray" />
+            <h1 className="text-lg sm:text-xl font-bold text-aquiz-black flex items-center gap-2">
+              <History className="w-5 h-5 text-aquiz-gray hidden sm:block" />
               Mes simulations
             </h1>
             {simulations.length > 0 && (

@@ -90,6 +90,12 @@ export interface Annonce {
   
   /** Adresse complète (optionnel) */
   adresse?: string
+
+  /** Latitude GPS (fournie par la plateforme) */
+  latitude?: number
+
+  /** Longitude GPS (fournie par la plateforme) */
+  longitude?: number
   
   // --- Performance énergétique ---
   
@@ -181,6 +187,8 @@ export interface NouvelleAnnonce {
   anneeConstruction?: number
   nbSallesBains?: number
   orientation?: string
+  latitude?: number
+  longitude?: number
 }
 
 // ============================================

@@ -116,6 +116,60 @@ function OrganizationJsonLd() {
   )
 }
 
+/** JSON-LD HomePage — LocalBusiness détaillé avec ratings, WebApp, HowTo */
+function HomePageJsonLd() {
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': ['LocalBusiness', 'ProfessionalService'],
+        '@id': 'https://www.aquiz.eu/#business',
+        name: 'AQUIZ',
+        alternateName: 'AQUIZ Conseil Immobilier',
+        description: 'Conseil en acquisition immobilière à Paris & Île-de-France : accompagnement personnalisé des primo-accédants, chasse immobilière, simulateur gratuit et solutions de financement sur mesure.',
+        url: 'https://www.aquiz.eu',
+        telephone: '+33749520106',
+        email: 'contact@aquiz.eu',
+        image: 'https://www.aquiz.eu/image%20AQUIZ.jpeg',
+        address: { '@type': 'PostalAddress', streetAddress: '58 rue de Monceau', addressLocality: 'Paris', postalCode: '75008', addressCountry: 'FR' },
+        geo: { '@type': 'GeoCoordinates', latitude: 48.8789, longitude: 2.3074 },
+        priceRange: '€€',
+        openingHoursSpecification: { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday'], opens: '09:00', closes: '19:00' },
+        sameAs: ['https://www.instagram.com/aquiz.eu/', 'https://www.linkedin.com/company/aquiz/'],
+        aggregateRating: { '@type': 'AggregateRating', ratingValue: '5', bestRating: '5', ratingCount: '3', reviewCount: '3' },
+        review: [
+          { '@type': 'Review', author: { '@type': 'Person', name: 'Marie D.' }, datePublished: '2025-11-15', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, reviewBody: "AQUIZ m'a permis d'y voir clair dans mon budget. En 2 minutes, je savais combien je pouvais emprunter." },
+          { '@type': 'Review', author: { '@type': 'Person', name: 'Thomas & Julie L.' }, datePublished: '2025-12-20', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, reviewBody: "Grâce à la chasse immobilière, nous avons trouvé un appartement off-market à un prix en dessous du marché." },
+          { '@type': 'Review', author: { '@type': 'Person', name: 'Karim B.' }, datePublished: '2026-01-10', reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' }, reviewBody: "Le simulateur est vraiment bien fait, avec les données de prix réelles." },
+        ],
+      },
+      {
+        '@type': 'WebApplication',
+        name: 'AQUIZ Simulateur immobilier',
+        url: 'https://www.aquiz.eu/simulateur',
+        applicationCategory: 'FinanceApplication',
+        operatingSystem: 'Web',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'EUR' },
+        description: "Simulateur de capacité d'emprunt immobilier gratuit conforme HCSF 2026.",
+      },
+      {
+        '@type': 'WebSite',
+        '@id': 'https://www.aquiz.eu/#website',
+        name: 'AQUIZ',
+        url: 'https://www.aquiz.eu',
+        publisher: { '@id': 'https://www.aquiz.eu/#org' },
+        inLanguage: 'fr-FR',
+      },
+    ],
+  }
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  )
+}
+
 /** JSON-LD SiteNavigationElement — aide Google à générer les sitelinks */
 function SiteNavigationJsonLd() {
   const jsonLd = {
@@ -183,6 +237,7 @@ export default function RootLayout({
       <head>
         <OrganizationJsonLd />
         <SiteNavigationJsonLd />
+        <HomePageJsonLd />
         {/* Preconnect — accélère les requêtes DNS pour les API externes */}
         <link rel="preconnect" href="https://api-adresse.data.gouv.fr" />
         <link rel="preconnect" href="https://geo.api.gouv.fr" />

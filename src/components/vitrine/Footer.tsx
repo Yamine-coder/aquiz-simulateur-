@@ -27,7 +27,7 @@ function FooterLink({ href, label }: { href: string; label: string }) {
     <Link
       href={href}
       onClick={handleClick}
-      className="text-[13px] text-white/50 hover:text-white transition-colors"
+      className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors"
     >
       {label}
     </Link>
@@ -80,20 +80,19 @@ export function Footer() {
   const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats') || pathname.startsWith('/comparateur') || pathname.startsWith('/a-propos') || pathname.startsWith('/mentions-legales')
 
   return (
-    <footer className="bg-[#111111] text-white">
+    <footer className="bg-aquiz-black text-white">
 
       {/* ─── Bande CTA (masquée sur les pages outils) ─── */}
       {!isToolPage && (
         <div className="bg-aquiz-green">
-          <div className="max-w-7xl mx-auto px-5 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-white text-center sm:text-left">
-              Un conseiller peut négocier pour vous.
-              <span className="text-white/75 font-normal ml-1.5">Sans engagement.</span>
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs sm:text-sm font-semibold text-white text-center sm:text-left leading-relaxed">
+              Un conseiller est à vos côtés à chaque étape de votre projet immobilier.
             </p>
-            <div className="flex gap-2.5 w-full sm:w-auto">
+            <div className="flex gap-2 w-full sm:w-auto">
               <Link
                 href="/simulateur"
-                className="flex-1 sm:flex-none text-center px-5 py-2.5 bg-white text-aquiz-black font-semibold rounded-lg hover:bg-aquiz-gray-lightest transition-colors text-xs"
+                className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white text-aquiz-black font-semibold rounded-xl hover:bg-aquiz-gray-lightest transition-colors text-[11px] sm:text-xs"
               >
                 Lancer une simulation
               </Link>
@@ -101,7 +100,7 @@ export function Footer() {
                 href="https://calendly.com/contact-aquiz/30min"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 sm:flex-none text-center px-5 py-2.5 bg-white/15 text-white font-semibold rounded-lg hover:bg-white/25 border border-white/25 transition-colors text-xs"
+                className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white/15 text-white font-semibold rounded-xl hover:bg-white/25 border border-white/25 transition-colors text-[11px] sm:text-xs"
               >
                 Prendre rendez-vous
               </Link>
@@ -111,12 +110,12 @@ export function Footer() {
       )}
 
       {/* ─── Contenu principal ─── */}
-      <div className="max-w-7xl mx-auto px-5 sm:px-8 pt-14 pb-10 md:pt-16 md:pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-10 pb-8 sm:pt-14 sm:pb-10 md:pt-16 md:pb-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-8">
 
           {/* ── Col gauche : Logo + desc + contacts + socials ── */}
           <div className="lg:col-span-4">
-            <Link href="/" className="inline-block relative h-14 w-[150px] mb-5">
+            <Link href="/" className="inline-block relative h-12 sm:h-14 w-[130px] sm:w-[150px] mb-4 sm:mb-5">
               <Image
                 src="/logo-aquiz-white.png"
                 alt="AQUIZ — Conseil en acquisition immobilière à Paris"
@@ -126,21 +125,21 @@ export function Footer() {
               />
             </Link>
 
-            <p className="text-[13px] text-white/40 leading-relaxed mb-6 max-w-xs">
+            <p className="text-xs sm:text-[13px] text-white/40 leading-relaxed mb-5 sm:mb-6 max-w-xs">
               Conseil en acquisition immobilière à Paris et en Île-de-France. Nous accompagnons primo-accédants et investisseurs.
             </p>
 
             {/* Contacts */}
-            <div className="space-y-2.5 text-[13px] mb-6">
-              <a href="tel:+33749520106" className="flex items-center gap-2.5 text-white/50 hover:text-white transition-colors">
+            <div className="space-y-2 sm:space-y-2.5 text-xs sm:text-[13px] mb-5 sm:mb-6">
+              <a href="tel:+33749520106" className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Phone className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                 07 49 52 01 06
               </a>
-              <a href="mailto:contact@aquiz.eu" className="flex items-center gap-2.5 text-white/50 hover:text-white transition-colors">
+              <a href="mailto:contact@aquiz.eu" className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Mail className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                 contact@aquiz.eu
               </a>
-              <div className="flex items-start gap-2.5 text-white/50">
+              <div className="flex items-start gap-2 sm:gap-2.5 text-white/50">
                 <MapPin className="w-3.5 h-3.5 text-aquiz-green shrink-0 mt-0.5" />
                 <span>58 rue de Monceau, 75008 Paris</span>
               </div>
@@ -167,14 +166,14 @@ export function Footer() {
           </div>
 
           {/* ── 4 colonnes de liens ── */}
-          <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-8 sm:gap-6">
+          <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-y-8 gap-x-6 sm:gap-6">
 
             {/* Services */}
             <nav aria-label="Services">
-              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+              <h4 className="text-[10px] sm:text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-3 sm:mb-4">
                 Services
               </h4>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5 sm:space-y-3">
                 {FOOTER_SERVICES.map((link) => (
                   <li key={link.label}>
                     <FooterLink href={link.href} label={link.label} />
@@ -185,13 +184,13 @@ export function Footer() {
 
             {/* Outils */}
             <nav aria-label="Outils gratuits">
-              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+              <h4 className="text-[10px] sm:text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-3 sm:mb-4">
                 Outils gratuits
               </h4>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5 sm:space-y-3">
                 {FOOTER_OUTILS.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
+                    <Link href={link.href} className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors">
                       {link.label}
                     </Link>
                   </li>
@@ -201,10 +200,10 @@ export function Footer() {
 
             {/* Navigation */}
             <nav aria-label="Navigation du site">
-              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+              <h4 className="text-[10px] sm:text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-3 sm:mb-4">
                 Navigation
               </h4>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5 sm:space-y-3">
                 {FOOTER_LIENS.map((link) => (
                   <li key={link.label}>
                     <FooterLink href={link.href} label={link.label} />
@@ -215,13 +214,13 @@ export function Footer() {
 
             {/* Légal */}
             <nav aria-label="Informations légales">
-              <h4 className="text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-4">
+              <h4 className="text-[10px] sm:text-[11px] font-semibold text-white/30 uppercase tracking-[0.12em] mb-3 sm:mb-4">
                 Légal
               </h4>
-              <ul className="space-y-3">
+              <ul className="space-y-2.5 sm:space-y-3">
                 {FOOTER_LEGAL.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-[13px] text-white/50 hover:text-white transition-colors">
+                    <Link href={link.href} className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors">
                       {link.label}
                     </Link>
                   </li>
@@ -229,7 +228,7 @@ export function Footer() {
                 <li>
                   <button
                     onClick={reopenCookieBanner}
-                    className="text-[13px] text-white/50 hover:text-white transition-colors cursor-pointer"
+                    className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors cursor-pointer"
                   >
                     Gérer les cookies
                   </button>
@@ -242,9 +241,9 @@ export function Footer() {
 
       {/* ─── Barre copyright ─── */}
       <div className="border-t border-white/[0.06]">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-white/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-white/20">
           <p>© {new Date().getFullYear()} AQUIZ — Tous droits réservés</p>
-          <p>Conception : Yamine Moussaoui · Données data.gouv.fr</p>
+          <p className="text-center">Conception : Yamine Moussaoui · Données data.gouv.fr</p>
         </div>
       </div>
     </footer>

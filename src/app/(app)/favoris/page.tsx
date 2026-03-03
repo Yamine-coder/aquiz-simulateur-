@@ -2,7 +2,7 @@
 
 import { AnnonceCard } from '@/components/comparateur'
 import { useComparateurStore } from '@/stores/useComparateurStore'
-import { ArrowLeft, Heart, Plus, Scale } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, Heart, Plus, Scale } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo } from 'react'
 
@@ -26,16 +26,30 @@ export default function FavorisPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <section className="border-b border-aquiz-gray-lighter bg-linear-to-b from-rose-50/60 to-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      {/* ═══ Mobile back nav ═══ */}
+      <div className="sm:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 h-12">
           <Link
             href="/comparateur"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-aquiz-gray hover:text-aquiz-black transition-colors mb-4"
+            className="flex items-center gap-1 text-aquiz-gray hover:text-aquiz-black transition-colors -ml-1"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Retour</span>
+          </Link>
+          <span className="text-sm font-semibold text-aquiz-black absolute left-1/2 -translate-x-1/2">Mes favoris</span>
+          <div className="w-16" />
+        </div>
+      </div>
+
+      {/* Header */}
+      <section className="border-b border-aquiz-gray-lighter bg-linear-to-b from-rose-50/60 to-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8">
+          <Link
+            href="/comparateur"
+            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-aquiz-gray hover:text-aquiz-black transition-colors mb-4"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Comparateur</span>
-            <span className="sm:hidden">Retour</span>
+            Comparateur
           </Link>
 
           <div className="flex items-center gap-3">

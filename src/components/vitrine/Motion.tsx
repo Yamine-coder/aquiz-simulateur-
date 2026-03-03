@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, useInView, type Variants } from 'framer-motion'
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 // ─── Fade-in on scroll ───────────────────────────────────────
 interface FadeInProps {
@@ -117,6 +117,8 @@ interface CountUpProps {
   suffix?: string
   prefix?: string
   duration?: number
+  /** Delay (in seconds) before counting starts after entering view */
+  delay?: number
   className?: string
 }
 
@@ -125,48 +127,90 @@ export function CountUp({
   suffix = '',
   prefix = '',
   duration = 2,
+  delay = 0,
   className,
 }: CountUpProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  const isInView = useInView(ref, { once: true })
+  const isInView = useInView(ref, { once: true, margin: '-40px' })
 
   return (
-    <motion.span
+    <span
       ref={ref}
-      className={className}
-      initial={{ opacity: 0 }}
-      animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+      className={`inline-block ${className ?? ''}`}
     >
       {isInView ? (
-        <motion.span>
+        <span>
           {prefix}
-          <MotionNumber end={end} duration={duration} />
+          <AnimatedCounter end={end} duration={duration} delay={delay} />
           {suffix}
-        </motion.span>
+        </span>
       ) : (
         `${prefix}0${suffix}`
       )}
-    </motion.span>
+    </span>
   )
 }
 
-function MotionNumber({ end, duration }: { end: number; duration: number }) {
+/**
+ * Animated number counter using requestAnimationFrame with easeOutExpo.
+ * Numbers climb fast at the start and decelerate visibly towards the
+ * final value, giving a satisfying "slot machine" feel.
+ */
+function AnimatedCounter({
+  end,
+  duration,
+  delay = 0,
+}: {
+  end: number
+  duration: number
+  delay?: number
+}) {
   const ref = useRef<HTMLSpanElement>(null)
 
-  return (
-    <motion.span
-      ref={ref}
-      initial={{ '--num': 0 } as Record<string, number>}
-      animate={{ '--num': end } as Record<string, number>}
-      transition={{ duration, ease: 'easeOut' }}
-      onUpdate={(latest) => {
-        if (ref.current) {
-          const v = latest as Record<string, number>
-          ref.current.textContent = Math.round(v['--num']).toString()
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    let rafId: number
+
+    /** easeOutExpo: fast start → smooth deceleration */
+    function easeOutExpo(t: number): number {
+      return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t)
+    }
+
+    const delayMs = delay * 1000
+    const durationMs = duration * 1000
+
+    const timeout = setTimeout(() => {
+      const startTime = performance.now()
+
+      function tick(now: number) {
+        const elapsed = now - startTime
+        const progress = Math.min(elapsed / durationMs, 1)
+        const current = Math.round(easeOutExpo(progress) * end)
+
+        if (el) {
+          el.textContent =
+            current >= 1000
+              ? current.toLocaleString('fr-FR')
+              : current.toString()
         }
-      }}
-    />
-  )
+
+        if (progress < 1) {
+          rafId = requestAnimationFrame(tick)
+        }
+      }
+
+      rafId = requestAnimationFrame(tick)
+    }, delayMs)
+
+    return () => {
+      clearTimeout(timeout)
+      cancelAnimationFrame(rafId)
+    }
+  }, [end, duration, delay])
+
+  return <span ref={ref}>0</span>
 }
 
 // ─── Parallax wrapper ────────────────────────────────────────

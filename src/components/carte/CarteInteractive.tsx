@@ -9,6 +9,7 @@
  */
 
 import { cn } from '@/lib/utils'
+import { formatMontant } from '@/lib/utils/formatters'
 import type { StatutZone, TypeBienCarte, ZoneCalculee } from '@/types/carte'
 import type L from 'leaflet'
 import { Minus, Navigation, Plus } from 'lucide-react'
@@ -145,9 +146,9 @@ export default function CarteInteractive({
           const isSelected = zoneSelectionnee?.id === zoneCalc.id
           const couleur = COULEURS_AQUIZ[zoneCalc.statut]
           
-          // Taille basée sur la surface
-          const baseRadius = Math.min(Math.max(zoneCalc.surfaceMax / 10, 6), 16)
-          const radius = isSelected ? baseRadius + 4 : baseRadius
+          // Taille basée sur la surface — plus grand = meilleur deal
+          const baseRadius = Math.min(Math.max(zoneCalc.surfaceMax / 8, 7), 18)
+          const radius = isSelected ? baseRadius + 5 : baseRadius
           
           return (
             <CircleMarker
@@ -157,23 +158,49 @@ export default function CarteInteractive({
               pathOptions={{
                 fillColor: couleur,
                 color: isSelected ? COULEURS_AQUIZ.noir : '#ffffff',
-                fillOpacity: isSelected ? 0.95 : 0.75,
+                fillOpacity: isSelected ? 0.95 : 0.7,
                 weight: isSelected ? 3 : 1.5,
+                className: isSelected ? 'animate-pulse' : '',
               }}
               eventHandlers={{
                 click: () => onSelectZone?.(zoneCalc),
+                mouseover: (e) => {
+                  const marker = e.target
+                  marker.setStyle({
+                    fillOpacity: 0.95,
+                    weight: 2.5,
+                    radius: radius + 2,
+                  })
+                  marker.bringToFront()
+                },
+                mouseout: (e) => {
+                  if (!isSelected) {
+                    const marker = e.target
+                    marker.setStyle({
+                      fillOpacity: 0.7,
+                      weight: 1.5,
+                      radius: radius,
+                    })
+                  }
+                },
               }}
             >
-              {/* Tooltip léger au hover */}
+              {/* Tooltip riche au hover */}
               <Tooltip 
                 direction="top" 
-                offset={[0, -10]} 
+                offset={[0, -12]} 
                 opacity={1}
                 className="aquiz-tooltip"
               >
-                <div className="text-center px-1">
-                  <p className="font-semibold text-aquiz-black text-sm">{zoneCalc.nom}</p>
-                  <p className="text-aquiz-gray text-xs">{zoneCalc.surfaceMax} m² accessibles</p>
+                <div className="px-1 min-w-[160px]">
+                  <p className="font-bold text-aquiz-black text-sm">{zoneCalc.nom}</p>
+                  <div className="flex items-center justify-between gap-3 mt-1">
+                    <span className="text-aquiz-gray text-xs">{formatMontant(zoneCalc.prixM2)} €/m²</span>
+                    <span className="font-bold text-sm" style={{ color: couleur }}>
+                      {zoneCalc.surfaceMax} m²
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-aquiz-gray-light mt-0.5">Cliquer pour détails</p>
                 </div>
               </Tooltip>
             </CircleMarker>

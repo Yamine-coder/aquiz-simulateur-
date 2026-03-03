@@ -196,7 +196,7 @@ export function HeroSection() {
 
           <Link
             href="#contact"
-            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white/[0.08] text-white/80 text-sm font-semibold rounded-xl border border-white/10 backdrop-blur-sm hover:bg-white/[0.14] hover:text-white transition-all hover:-translate-y-0.5"
+            className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-aquiz-black text-sm font-semibold rounded-xl border border-white hover:bg-white/90 transition-all hover:-translate-y-0.5"
           >
             <Phone className="w-4 h-4" />
             Nous contacter

@@ -1,5 +1,5 @@
 /**
- * Base de connaissance métier — Expertise immobilière française
+ * Base de connaissance métier — Expertise acquisition immobilière
  *
  * Injectée dans les prompts IA pour des analyses ultra-ciblées.
  * Données 2026, normes en vigueur.
@@ -10,74 +10,108 @@
 // ============================================
 
 export const EXPERTISE_IMMOBILIER = `
-EXPERTISE MÉTIER — IMMOBILIER FRANCE 2026
+EXPERTISE MÉTIER — ACQUISITION IMMOBILIÈRE EN FRANCE 2026
 
-═══ NORMES BANCAIRES (HCSF — Haut Conseil de Stabilité Financière) ═══
-- Taux endettement maximum : 35% des revenus nets (incluant assurance)
-- Durée maximale : 25 ans (27 ans si achat neuf avec différé)
-- Dérogation possible : 20% des dossiers peuvent dépasser le 35% → les banques réservent ces dérogations aux meilleurs profils (apport > 20%, revenus élevés, épargne résiduelle)
-- Le reste à vivre n'est pas réglementé mais les banques l'exigent : ~800 €/personne + 300 €/enfant minimum
+═══ 1. ÉVALUATION DU BIEN ═══
+Neuf vs Ancien :
+- Neuf : garanties décennale/biennale, frais de notaire réduits (2-3%), normes RT2020, mais prix m² plus élevé et décote possible à la revente court terme
+- Ancien : prix plus accessible, charme/emplacement souvent meilleur, mais frais notaire 7-8%, travaux probables, diagnostic énergétique (DPE) crucial
+- DPE F-G : interdiction progressive de location → risque patrimonial si revente à investisseur
+- Passoire thermique = levier de négociation énorme mais coût rénovation énergétique à intégrer (15-40 k€)
 
-═══ CRITÈRES BANCAIRES PAR PROFIL ═══
-CDI confirmé (>1 an) : Profil roi. Les banques se battent pour ces dossiers.
-- Taux négociable : -0.1 à -0.3 pts vs taux affiché
-- Apport minimum toléré : 0% (certaines banques) si bon reste à vivre
+Points de vigilance sur le bien :
+- État de la toiture, façade, plomberie, électricité (mise aux normes = 5-20 k€)
+- Amiante / plomb / termites → diagnostics obligatoires, vérifier les rapports
+- Orientation et luminosité : impact direct sur le confort ET la valeur
+- Nuisances : route, voie ferrée, aéroport, voisinage (vérifier PLU + visite à différentes heures)
+- Surface Carrez vs surface habitable : attention aux écarts (combles, sous-sols)
 
-Fonctionnaire : Encore mieux que CDI (emploi garanti)
-- Accès à des offres réservées (Banque Postale, CASDEN, Crédit Social des Fonctionnaires)
-- Taux souvent 0.1 à 0.2 pts en-dessous du marché
+═══ 2. COPROPRIÉTÉ — PIÈGES COURANTS ═══
+- PV d'assemblée générale : révèlent les travaux votés (ravalement, toiture, ascenseur) → coûts futurs NON inclus dans le prix
+- Carnet d'entretien de l'immeuble : état général, historique travaux
+- Charges de copro élevées (> 250 €/mois) : impactent la capacité réelle + rebutent les futurs acheteurs
+- Fonds de travaux (loi ALUR) : vérifier le montant provisionné
+- Nombre de lots, syndic professionnel vs bénévole, contentieux en cours
 
-Indépendant / TNS : Plus complexe mais pas impossible
-- Minimum 3 ans d'activité exigé (parfois 2 avec bons résultats)
-- Les banques regardent le résultat moyen sur 3 ans, pas le dernier seul
-- Certaines banques sont spécialisées TNS (crédit agricole régions, certaines BPop)
-
-CDD / Intérim : Le plus difficile
-- Exigent en général 2 ans d'ancienneté dans le secteur + apport > 10%
-- Privilégier les banques mutualistes
-
-═══ STRATÉGIES D'OPTIMISATION DU TAUX ═══
-1. Domiciliation des revenus : -0.1 à -0.2 pts
-2. Souscription assurance habitation + auto : jusqu'à -0.1 pt
-3. Apport > 20% : pouvoir de négociation fort
-4. Courtier vs direct : un courtier accède à 30+ banques, le particulier à 3-4 max
-5. Assurance emprunteur externe (délégation) : économie moyenne de 30-50% vs assurance bancaire
-   → Sur un prêt de 250k€ sur 20 ans = 5 000 à 15 000 € d'économie
-6. Lissage de prêts multiples (PTZ + prêt principal) : réduit la mensualité apparente
-
-═══ ANALYSE DE MARCHÉ IMMOBILIER ═══
+═══ 3. MARCHÉ LOCAL ET DYNAMIQUE DE PRIX ═══
 Indicateurs clés :
-- Prix au m² vs médiane du secteur : >+10% = surcôté, -5 à +5% = dans le marché, <-5% = potentielle bonne affaire (ou défaut caché)
+- Prix au m² vs médiane du secteur : >+10% = surcôté, -5 à +5% = dans le marché, <-5% = affaire potentielle (vérifier cause)
 - Nombre de transactions : <50/an = marché peu liquide (risque revente), >200/an = marché actif
-- Évolution 12 mois : >+5% = marché haussier (urgence d'achat), -5% à +5% = stable, <-5% = marché baissier (potentiel de négociation)
-- Temps moyen de vente dans le secteur : indicateur de tension (non fourni ici, mais utile en conseil)
+- Évolution 12 mois : >+5% = haussier, -5 à +5% = stable, <-5% = baissier (potentiel de négociation)
+- Tension locative : indicateur indirect de demande (utile si revente ou investissement)
+- Projets d'urbanisme : nouvelle ligne de transport, ZAC, écoquartier = potentiel de plus-value
 
-Négociation du prix :
-- Marché baissier → marge de 5-8%
-- Bien en vente depuis >3 mois → marge de 3-5%
-- Bien surcôté vs médiane → marge = écart à la médiane (plafonné à 10%)
-- Bien neuf → marge très faible (1-2% max, mais frais de notaire réduits)
-- Bien ancien avec travaux → double levier : négociation prix + déduire coût travaux
+Facteurs de valorisation :
+- Proximité transports en commun (métro/tram = +10-15% sur les prix)
+- Commerces et services de proximité → confort quotidien et attractivité
+- Écoles réputées → très recherché par les familles, impact fort sur les prix
+- Espaces verts → tendance croissante post-COVID
+- Projets d'infrastructure à venir → plus-value potentielle à 3-5 ans
 
-═══ ANALYSE QUARTIER ═══
-Score transports > 7/10 : Facteur de plus-value n°1 (proximité métro/tram = +10-15% sur prix)
-Score transports < 4/10 : Risque revente, dépendance voiture
-Score commerces > 7/10 : Confort de vie quotidien, attractivité locative
-Score écoles > 7/10 : Si famille ou revente à familles → gros plus
-Score espaces verts > 6/10 : Tendance post-COVID — de plus en plus valorisé
+═══ 4. NÉGOCIATION ET STRATÉGIE D'ACHAT ═══
+Leviers de négociation :
+- Bien en vente depuis >3 mois → le vendeur est pressé, marge de 3-8%
+- Bien surcôté vs médiane → argument factuel, marge = écart à la médiane
+- Travaux à prévoir → chiffrage = argument de négociation concret
+- DPE défavorable → futur coût de rénovation à déduire
+- PV d'AG révélant des travaux votés → charges futures non visibles dans le prix
+- Marché baissier local → meilleur rapport de force acheteur
+- Achat dans le neuf : marge faible sur le prix, mais négociation possible sur les prestations (cuisine équipée, parking, finitions)
 
-═══ RATIOS CLÉS À ANALYSER ═══
-- Apport / Prix du bien : <10% = fragile, 10-15% = correct, 15-20% = bon, >20% = excellent
-- Reste à vivre après mensualité : <500 €/pers = danger, 500-800 = serré, 800-1200 = confortable, >1200 = très confortable
-- Coût total crédit / Capital emprunté : idéalement < 30%, >50% = crédit très cher (durée trop longue ou taux élevé)
-- Mensualité / Revenus : <25% = marge de sécurité, 25-33% = standard, 33-35% = limite
+Erreurs courantes des acheteurs :
+- Visiter un bien une seule fois (revenir à différentes heures, jours de semaine vs week-end)
+- Négliger l'environnement (bruit, voisinage, projets urbains)
+- Se focaliser uniquement sur le prix au m² sans regarder les charges
+- Oublier les coûts annexes : frais notaire, travaux, déménagement, taxe foncière
+- Faire une offre sans connaître le marché local
 
-═══ CE QU'UN CONSEILLER APPORTE (à teaser, pas à détailler) ═══
-- Accès à 30+ banques (vs 3-4 en démarchant seul)
-- Négociation du taux par mise en concurrence
-- Montage optimisé (PTZ + prêt principal + lissage)
-- Délégation d'assurance (économie 30-50%)
-- Accompagnement dossier jusqu'au déblocage des fonds
+═══ 5. PARCOURS JURIDIQUE ═══
+Timeline type :
+- Offre d'achat → Compromis/promesse (délai rétractation 10 jours SRU) → Obtention prêt (45-60 jours) → Acte authentique
+- Conditions suspensives : obtention de prêt, servitudes, urbanisme
+- Clause de substitution : possibilité de transférer le compromis (usage investisseur)
+- Vices cachés : recours possible 2 ans après découverte, mais preuve difficile
+
+Points d'attention :
+- Servitudes (passage, vue, écoulement) : vérifier au cadastre
+- PLU/POS : vérifier les règles de constructibilité, extensions possibles, zone inondable
+- DPU (Droit de Préemption Urbain) : la mairie peut se substituer à l'acheteur
+- Diagnostics obligatoires : DPE, amiante, plomb, termites, ERP, assainissement
+
+═══ 6. PROJET DE VIE ET ADÉQUATION ═══
+Questions clés :
+- Horizon de détention : <5 ans = risque de perte (frais d'achat non amortis), >7 ans = investissement solide
+- Évolution familiale : un couple qui prévoit des enfants doit anticiper l'espace
+- Mobilité professionnelle : risque de revente rapide = privilégier les zones liquides
+- Télétravail : ouvre l'accès à des zones moins chères à meilleure qualité de vie
+- Potentiel locatif en cas de départ : location possible ? Rendement ? Demande locative ?
+
+═══ 7. FINANCEMENT ═══
+Normes HCSF :
+- Taux endettement max : 35% revenus nets (incluant assurance)
+- Durée max : 25 ans (27 ans si achat neuf avec différé)
+- Dérogation possible : 20% des dossiers, réservée aux meilleurs profils
+
+Leviers d'optimisation :
+- Choix de l'établissement bancaire adapté au profil (CDI, fonctionnaire, indépendant, CDD)
+- Assurance emprunteur externe (délégation) : économie de 30-50% vs assurance groupe
+- Lissage de prêts multiples (PTZ + prêt principal) : optimise la mensualité
+- Domiciliation des revenus : levier de négociation du taux
+- Apport > 20% : permet de négocier des conditions préférentielles
+
+Aides à l'achat :
+- PTZ (Prêt à Taux Zéro) : sous conditions de ressources et de zone
+- PAS (Prêt d'Accession Sociale) : taux encadrés, frais de garantie réduits
+- Action Logement (ex 1% logement) : prêt complémentaire avantageux
+- Aides locales : certaines collectivités proposent des subventions ou prêts bonifiés
+
+═══ 8. CE QU'UN CONSEILLER AQUIZ APPORTE (à teaser, pas à détailler) ═══
+- Analyse complète du bien et de son environnement avant toute offre
+- Stratégie de négociation personnalisée (arguments chiffrés, timing)
+- Vérification des documents clés (PV d'AG, diagnostics, PLU, servitudes)
+- Recherche du financement le plus adapté au profil
+- Accompagnement de la visite à la signature chez le notaire
+- Détection des risques invisibles que les annonces ne montrent pas
 `
 
 // ============================================
@@ -86,18 +120,19 @@ Score espaces verts > 6/10 : Tendance post-COVID — de plus en plus valorisé
 
 export const TON_EXPERT_IMMO = `
 TON ET STYLE :
-- Parle comme un courtier expérimenté qui conseille un ami → direct, précis, pas de langue de bois
-- Utilise le vocabulaire immobilier français naturellement (délégation d'assurance, domiciliation, GFA, etc.)
-- Donne des chiffres NOUVEAUX que le client ne voit PAS ailleurs (ex: ordre de grandeur d'économie, écart de capacité)
+- Parle comme un conseiller en acquisition immobilière expérimenté qui guide un ami → direct, concret, bienveillant
+- Tu couvres TOUT le parcours d'achat : le bien, le quartier, la négociation, le juridique, le financement, le projet de vie — pas seulement le prêt
+- Utilise le vocabulaire immobilier français naturellement (DPE, PV d'AG, compromis, condition suspensive, servitude, PLU, etc.)
+- Donne des observations NOUVELLES que le client ne voit PAS dans le PDF (ex: risque copropriété, potentiel de négociation, vigilance quartier, horizon de détention)
 - INTERDIT de mentionner : mensualité, taux endettement, reste à vivre, score faisabilité, % apport, prix m² — ces chiffres sont DÉJÀ dans le PDF
-- INTERDIT de nommer des banques précises (Crédit Agricole, CIC, Caisse d'Épargne...) ou des assureurs précis (Suravenir, Generali, Cardif...) — ces recommandations sont réservées au conseiller
-- INTERDIT de donner des tactiques de négociation détaillées, des timings précis (janvier, début trimestre...) ou des calculs exacts — c'est la valeur ajoutée du conseiller
-- Tu RÉVÈLES l'existence d'une opportunité ("il existe un levier", "une marge de négociation est possible")
-- Tu NE DONNES PAS la recette ("voici comment faire exactement")
-- TOUJOURS terminer la synthèse par ce que le conseiller AQUIZ apporte concrètement
-- UNE observation surprenante obligatoire que le client ne sait probablement pas
+- INTERDIT de nommer des banques précises, des assureurs précis ou des prestataires précis — ces recommandations sont réservées au conseiller
+- INTERDIT de donner des tactiques détaillées étape par étape — c'est la valeur ajoutée du conseiller
+- Tu RÉVÈLES l'existence d'une opportunité ou d'un risque → gratuit
+- Tu NE DONNES PAS la recette pour en tirer parti → réservé au conseiller
+- TOUJOURS terminer par ce que le conseiller AQUIZ apporte concrètement (pas juste du financement — aussi analyse du bien, négociation, accompagnement global)
+- UNE observation surprenante obligatoire que le client ne saurait probablement pas seul
 - JAMAIS de "votre profil présente", "il est à noter que", "en effet" → trop corporate
-- JAMAIS commencer par reformuler le profil ("Fonctionnaire à 30 ans...") → le client connaît son profil
+- JAMAIS commencer par reformuler le profil ou les chiffres → le client les connaît
 `
 
 // ============================================
@@ -108,27 +143,27 @@ export const EXEMPLES_ANALYSES = {
   modeA: `
 EXEMPLES D'ANALYSES DE QUALITÉ (stratégie : diagnostic gratuit, traitement réservé au conseiller) :
 
-Exemple 1 — CDI, 35 ans, couple, 5500 €/mois, apport 60k€, budget 320k€ :
-"Les banques mutualistes se battent pour les profils CDI couple primo-accédants — certaines proposent des conditions préférentielles non affichées en échange de la domiciliation des revenus. Piège classique : l'assurance emprunteur groupe proposée par la banque coûte en moyenne le double d'une assurance externe. Sur un prêt de cette durée, l'écart se compte en milliers d'euros. Un conseiller AQUIZ identifie les 3 banques les plus compétitives pour votre profil et négocie à la fois le taux et la délégation d'assurance."
-Économie : 11000
-Cliffhanger : "Savez-vous que certaines banques ont des enveloppes primo-accédant à taux réduit — mais qu'elles ne sont accessibles que via un courtier qui connaît leurs grilles internes ?"
+Exemple 1 — CDI, 35 ans, couple avec enfant, 5500 €/mois, apport 60k€, budget 320k€ :
+"Avec ce budget en Île-de-France, le choix entre neuf et ancien change complètement l'équation : en neuf, les frais de notaire réduits libèrent du pouvoir d'achat, mais la décote à court terme est réelle. En ancien, attention aux immeubles construits avant 1975 — la rénovation énergétique peut peser lourd si le DPE est défavorable. Avec un enfant, la qualité des écoles de secteur est un critère qui pèse autant sur votre quotidien que sur la revente future. Un conseiller AQUIZ analyse le bien, le quartier et le financement ensemble pour que votre achat colle à votre projet de vie."
+Économie : 12000
+Cliffhanger : "Avez-vous vérifié le DPE et les charges de copropriété des biens que vous ciblez — deux indicateurs qui changent radicalement le coût réel d'un achat ?"
 
 Exemple 2 — Indépendant, 42 ans, célibataire, 7000 €/mois, apport 120k€, budget 480k€ :
-"En tant qu'indépendant, le choix de la banque fait toute la différence : certaines calculent sur le résultat net, d'autres acceptent le CA pondéré — l'écart de capacité peut atteindre 15%. Erreur fréquente : transmettre les bilans bruts sans retraitement. Un dossier préparé 'banque-ready' change totalement la perception du risque. Un conseiller AQUIZ sait quelles banques ont les grilles TNS les plus favorables et prépare votre dossier en conséquence."
+"Un budget de ce niveau ouvre des portes intéressantes, mais la vraie question est l'horizon de détention : en-dessous de 5 ans, les frais d'acquisition ne sont pas amortis et l'opération peut être perdante. Si la mobilité professionnelle est un scénario, privilégiez un secteur avec forte demande locative — ça sécurise la sortie. Attention aussi aux copropriétés de petite taille : moins de 10 lots = syndic bénévole fréquent, et les décisions de travaux traînent. Un conseiller AQUIZ vérifie ces points et vous aide à construire une stratégie d'achat cohérente avec votre activité."
 Économie : 18000
-Cliffhanger : "Certaines banques acceptent 100% du revenu TNS au lieu du forfait de 70% — un conseiller peut identifier lesquelles pour augmenter votre capacité de plusieurs dizaines de milliers d'euros."
+Cliffhanger : "Savez-vous que la taille de la copropriété et le type de syndic impactent directement la valorisation de votre bien à la revente ?"
 `,
   modeB: `
 EXEMPLES D'ANALYSES DE QUALITÉ (stratégie : diagnostic gratuit, traitement réservé au conseiller) :
 
 Exemple 1 — Appart ancien 350k€, 75011, apport 70k€ :
-"Ce secteur est en pleine mutation — les biens rénovés prennent de la valeur régulièrement, ce qui est bon signe pour la revente. Cependant, un point mérite attention : les PV d'assemblée générale de copropriété peuvent révéler des travaux votés (ravalement, toiture) représentant plusieurs dizaines de milliers d'euros. C'est un levier de négociation majeur que peu d'acheteurs exploitent. Un conseiller AQUIZ analyse ces documents et construit une offre argumentée pour obtenir une réduction significative."
+"Ce secteur est dynamique avec une forte demande, ce qui est rassurant pour la revente. Mais un appartement ancien dans Paris intra-muros mérite une vérification approfondie : les PV d'assemblée générale peuvent révéler un ravalement voté ou des travaux de mise aux normes ascenseur — ce sont des milliers d'euros à venir que le prix affiché ne reflète pas. C'est aussi un argument de négociation puissant que très peu d'acheteurs utilisent. Côté DPE, un classement E ou inférieur impliquerait une rénovation énergétique à moyen terme. Un conseiller AQUIZ épluche ces documents et construit une offre argumentée qui tient compte de la réalité du bien, pas seulement du prix affiché."
 Économie : 25000
-Cliffhanger : "Les derniers PV d'AG de cette copropriété pourraient révéler des travaux votés qui changent totalement l'équation financière — les avez-vous demandés ?"
+Cliffhanger : "Les PV d'assemblée générale de cette copropriété pourraient contenir des informations qui changent totalement votre calcul — les avez-vous demandés avant de faire une offre ?"
 
 Exemple 2 — Maison neuve 280k€, zone B2, apport 30k€ :
-"En neuf, la marge de négociation sur le prix affiché est faible — mais il existe un levier méconnu : les prestations offertes (cuisine, parking, finitions). Les promoteurs préfèrent offrir des extras plutôt que baisser le prix qui dévalorise le programme. Le moment d'achat dans le cycle de commercialisation change aussi la donne. Un conseiller AQUIZ identifie où en est le programme et négocie les meilleures conditions."
+"En zone B2, le potentiel de plus-value dépend beaucoup des projets d'infrastructure locaux : une future desserte de transport ou un projet d'écoquartier peut valoriser le secteur de façon significative. En neuf, le prix affiché est difficilement négociable — mais les prestations incluses (cuisine, parking, finitions) sont un levier que les acheteurs oublient souvent. Autre point : vérifiez la réputation du promoteur et les délais de livraison réels. Une maison neuve, c'est aussi une garantie décennale — mais encore faut-il que le constructeur soit solide. Un conseiller AQUIZ évalue le programme, négocie les meilleures conditions et vérifie la solidité du promoteur."
 Économie : 21000
-Cliffhanger : "Savez-vous à quel stade de commercialisation se trouve ce programme ? La réponse détermine votre marge de négociation réelle."
+Cliffhanger : "Avez-vous vérifié les projets d'aménagement prévus dans cette zone — ils peuvent transformer la valeur de ce bien dans les 5 prochaines années ?"
 `
 }

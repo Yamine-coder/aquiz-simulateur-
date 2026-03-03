@@ -58,7 +58,7 @@ export interface AnnonceScoreData {
   enrichissement?: {
     marche?: { success: boolean; ecartPrixM2?: number; verdict?: string; prixM2MedianMarche?: number }
     risques?: { success: boolean; scoreRisque?: number; verdict?: string }
-    quartier?: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number }
+    quartier?: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }> }
   }
 }
 
@@ -308,7 +308,7 @@ export function EmailComparisonModal({
                   {[
                     'Score global & verdict pour chaque bien',
                     'Notation détaillée par critère (10 axes)',
-                    'Prix vs marché · Risques zone · Score quartier',
+                    'Prix vs marché · Transports · Score quartier',
                     'Points forts & vigilance identifiés',
                     'Estimation loyer & rendement',
                     'Conseil personnalisé par bien',

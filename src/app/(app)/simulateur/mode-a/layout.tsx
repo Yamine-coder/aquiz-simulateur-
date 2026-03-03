@@ -1,4 +1,3 @@
-import { Breadcrumbs } from '@/components/ui/Breadcrumbs'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -38,10 +37,6 @@ export default function ModeALayout({ children }: { children: React.ReactNode })
   return (
     <>
       <ModeAJsonLd />
-      <Breadcrumbs items={[
-        { label: 'Simulateur', href: '/simulateur' },
-        { label: 'Capacit\u00e9 d\u2019achat' },
-      ]} />
       {children}
     </>
   )

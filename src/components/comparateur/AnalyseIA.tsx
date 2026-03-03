@@ -40,6 +40,8 @@ interface AnalyseIAProps {
   statistiques: StatistiquesComparaison
   budgetMax?: number | null
   onRequestHelp?: () => void
+  /** Callback exposant la synthèse IA AQUIZ pour le PDF */
+  onSyntheseIAReady?: (data: { synthese: string; verdictFinal: string; conseilNego: string; conseilAcquisition: string }) => void
 }
 
 /** Résultat enrichi avec rang calculé localement */
@@ -54,6 +56,7 @@ interface SyntheseIAResponse {
   synthese: string
   verdictFinal: string
   conseilNego: string
+  conseilAcquisition: string
   cliffhanger: string
 }
 
@@ -61,7 +64,7 @@ interface SyntheseIAResponse {
 // COMPOSANT PRINCIPAL
 // ============================================
 
-export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps) {
+export function AnalyseIA({ annonces, budgetMax, onRequestHelp, onSyntheseIAReady }: AnalyseIAProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   // Enrichissement via APIs gratuites (DVF, Géorisques, OSM)
@@ -191,6 +194,7 @@ export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps
             ecoles: enrichie.quartier.ecoles,
             sante: enrichie.quartier.sante,
             espaceVerts: enrichie.quartier.espaceVerts,
+            transportsProches: enrichie.quartier.transportsProches,
           } : undefined,
         }
       }).filter(Boolean)
@@ -210,13 +214,19 @@ export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps
       if (json.success && json.data) {
         setSyntheseIA(json.data)
         setSyntheseSource(json.source || 'unknown')
+        onSyntheseIAReady?.({
+          synthese: json.data.synthese || '',
+          verdictFinal: json.data.verdictFinal || '',
+          conseilNego: json.data.conseilNego || '',
+          conseilAcquisition: json.data.conseilAcquisition || '',
+        })
       }
     } catch {
       // On garde la synthèse déterministe
     } finally {
       setIsLoadingSyntheseIA(false)
     }
-  }, [annonces, sortedScores, budgetMax, isLoadingEnrichie, getAnalyseEnrichie, syntheseTexte])
+  }, [annonces, sortedScores, budgetMax, isLoadingEnrichie, getAnalyseEnrichie, syntheseTexte, onSyntheseIAReady])
 
   // Déclencher l'appel IA quand les enrichissements sont chargés
   useEffect(() => {
@@ -250,7 +260,7 @@ export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps
             {isLoadingSyntheseIA && (
               <div className="flex items-center gap-1.5 text-xs text-aquiz-gray animate-pulse">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Analyse IA...</span>
+                <span>AQUIZ IA...</span>
               </div>
             )}
             {meilleur && (
@@ -274,7 +284,7 @@ export function AnalyseIA({ annonces, budgetMax, onRequestHelp }: AnalyseIAProps
               <div className="flex items-center gap-1.5">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-aquiz-green/10 text-aquiz-green text-[10px] font-semibold rounded-full">
                   <Sparkles className="w-3 h-3" />
-                  Analyse IA
+                  AQUIZ IA
                 </span>
               </div>
             )}

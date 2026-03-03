@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { compterChampsExtraits, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
+import { compterChampsExtraits, extraireImagesFromHTML, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import type { ClasseDPE, NouvelleAnnonce, TypeBienAnnonce } from '@/types/annonces'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
@@ -28,6 +28,7 @@ import {
     ClipboardPaste,
     Download,
     Euro,
+    ExternalLink,
     Home,
     Link2,
     Loader2,
@@ -37,7 +38,7 @@ import {
     ScanSearch,
     Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -102,6 +103,15 @@ export function FormulaireAnnonce({
   const [extractError, setExtractError] = useState<string | null>(null)
   const [extractSuccess, setExtractSuccess] = useState(false)
   const [extractCount, setExtractCount] = useState(0)
+  /** Mode assistant : activé quand le scraping échoue, guide l'utilisateur étape par étape */
+  const [assistantMode, setAssistantMode] = useState(false)
+  /** URL sauvegardée pour l'assistant (celle qui a échoué en scraping) */
+  const [assistantUrl, setAssistantUrl] = useState('')
+  /** HTML du clipboard — conservé pour extraire l'image og:image / <img> */
+  const clipboardHtmlRef = useRef<string>('')
+  /** Images supplémentaires extraites (carousel) */
+  const extractedImagesRef = useRef<string[]>([])
+  const extractedCoordsRef = useRef<{ latitude?: number; longitude?: number }>({})
   const [activeTab, setActiveTab] = useState<'url' | 'coller' | 'manuel'>(editMode ? 'manuel' : initialTab)
   
   const {
@@ -161,11 +171,21 @@ export function FormulaireAnnonce({
     if (data.ascenseur !== undefined) setValue('ascenseur', !!data.ascenseur)
     if (data.url) setValue('url', toStr(data.url) as string)
     if (data.imageUrl) setValue('imageUrl', toStr(data.imageUrl) as string)
+    // Stocker les images supplémentaires pour la soumission
+    if (Array.isArray(data.images) && data.images.length > 0) {
+      extractedImagesRef.current = data.images as string[]
+    }
     if (data.ges) setValue('ges', data.ges as ClasseDPE)
     if (data.description) setValue('description', toStr(data.description) as string)
     if (data.anneeConstruction) setValue('anneeConstruction', toNumber(data.anneeConstruction) as number)
     if (data.nbSallesBains) setValue('nbSallesBains', toNumber(data.nbSallesBains) as number)
     if (data.orientation) setValue('orientation', toStr(data.orientation) as string)
+    // Coordonnées GPS (non affichées dans le formulaire, stockées pour l'analyse)
+    const lat = toNumber(data.latitude)
+    const lng = toNumber(data.longitude)
+    if (lat && lng) {
+      extractedCoordsRef.current = { latitude: lat, longitude: lng }
+    }
   }
 
   // ===== EXTRACTION DEPUIS URL (via API + Jina Reader) =====
@@ -192,9 +212,25 @@ export function FormulaireAnnonce({
         remplirFormulaire(result.data)
         setExtractCount(result.fieldsExtracted || 5)
         setExtractSuccess(true)
+        setAssistantMode(false)
         setActiveTab('manuel')
       } else {
-        setExtractError(result.error || 'Impossible d\'extraire les données')
+        // ── Auto-fallback : activer le mode assistant intelligent ──
+        // Au lieu d'un message d'erreur, on guide l'utilisateur
+        if (result.autoFallback || result.protectedSite) {
+          setAssistantUrl(urlInput.trim())
+          setAssistantMode(true)
+          setActiveTab('coller')
+          // Ouvrir l'annonce dans un nouvel onglet pour que l'utilisateur puisse copier
+          window.open(urlInput.trim(), '_blank', 'noopener,noreferrer')
+          setExtractError(null)
+        } else {
+          const errorMsg = result.error || 'Impossible d\'extraire les données'
+          setExtractError(errorMsg)
+          setAssistantUrl(urlInput.trim())
+          setAssistantMode(true)
+          setActiveTab('coller')
+        }
       }
     } catch {
       setExtractError('Erreur de connexion. Vérifiez votre connexion internet.')
@@ -204,7 +240,7 @@ export function FormulaireAnnonce({
   }
 
   // ===== EXTRACTION DEPUIS TEXTE COLLÉ =====
-  const handleExtractFromText = () => {
+  const handleExtractFromText = async () => {
     if (!pastedText.trim()) {
       setExtractError('Collez le contenu de l\'annonce')
       return
@@ -214,6 +250,40 @@ export function FormulaireAnnonce({
     setExtractSuccess(false)
     
     const data = parseTexteAnnonce(pastedText)
+    
+    // Enrichir avec les images extraites du HTML clipboard (og:image, <img>)
+    // Ce sont souvent des thumbnails basse-résolution — on les garde en fallback
+    let clipboardImageUrl: string | undefined
+    let clipboardImages: string[] = []
+    if (clipboardHtmlRef.current) {
+      const extracted = extraireImagesFromHTML(clipboardHtmlRef.current)
+      clipboardImageUrl = extracted.imageUrl
+      clipboardImages = extracted.images
+    }
+    
+    // Privilégier les images depuis l'API (haute résolution) quand on a une URL
+    const targetUrl = assistantUrl || data.url as string | undefined
+    if (targetUrl) {
+      try {
+        const res = await fetch('/api/annonces/og-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: targetUrl }),
+        })
+        const ogData = await res.json()
+        if (ogData.imageUrl) {
+          data.imageUrl = ogData.imageUrl
+          if (ogData.images?.length) data.images = ogData.images
+        }
+      } catch { /* silencieux — on utilisera le clipboard en fallback */ }
+    }
+    
+    // Fallback clipboard si l'API n'a rien renvoyé
+    if (!data.imageUrl && clipboardImageUrl) {
+      data.imageUrl = clipboardImageUrl
+      if (clipboardImages.length > 0) data.images = clipboardImages
+    }
+    
     const count = compterChampsExtraits(data)
     
     if (count === 0) {
@@ -226,6 +296,7 @@ export function FormulaireAnnonce({
     
     setExtractCount(count)
     setExtractSuccess(true)
+    setAssistantMode(false)
     setActiveTab('manuel')
   }
   
@@ -249,31 +320,36 @@ export function FormulaireAnnonce({
       description: data.description || undefined,
       notes: data.notes || undefined,
       imageUrl: data.imageUrl || undefined,
+      images: extractedImagesRef.current.length > 0 ? extractedImagesRef.current : undefined,
       ges: data.ges || undefined,
       orientation: data.orientation || undefined,
+      latitude: extractedCoordsRef.current.latitude,
+      longitude: extractedCoordsRef.current.longitude,
     } as NouvelleAnnonce)
   }
   
   return (
     <div className="space-y-3">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-aquiz-gray-lightest/60 rounded-xl border border-aquiz-gray-lighter">
-          <TabsTrigger value="url" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
-            <Link2 className="h-3.5 w-3.5" />
-            <span className="font-medium">Lien</span>
-          </TabsTrigger>
-          <TabsTrigger value="coller" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
-            <ClipboardPaste className="h-3.5 w-3.5" />
-            <span className="font-medium">Contenu</span>
-          </TabsTrigger>
-          <TabsTrigger value="manuel" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
-            <Plus className="h-3.5 w-3.5" />
-            <span className="font-medium">Manuel</span>
-          </TabsTrigger>
-        </TabsList>
+        {!editMode && (
+          <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-aquiz-gray-lightest/60 rounded-xl border border-aquiz-gray-lighter">
+            <TabsTrigger value="url" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+              <Link2 className="h-3.5 w-3.5" />
+              <span className="font-medium">Lien</span>
+            </TabsTrigger>
+            <TabsTrigger value="coller" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+              <ClipboardPaste className="h-3.5 w-3.5" />
+              <span className="font-medium">Contenu</span>
+            </TabsTrigger>
+            <TabsTrigger value="manuel" className="gap-1.5 py-2.5 rounded-lg text-xs data-[state=active]:bg-white data-[state=active]:text-aquiz-black data-[state=active]:shadow-sm data-[state=active]:border-aquiz-gray-lighter transition-all">
+              <Plus className="h-3.5 w-3.5" />
+              <span className="font-medium">Manuel</span>
+            </TabsTrigger>
+          </TabsList>
+        )}
         
         {/* ===== TAB IMPORT URL ===== */}
-        <TabsContent value="url" className="space-y-3 mt-3">
+        {!editMode && <TabsContent value="url" className="space-y-3 mt-3">
           <div className="space-y-3">
             <div className="flex gap-2.5">
               <Input
@@ -310,7 +386,7 @@ export function FormulaireAnnonce({
           </div>
           
           {/* Messages erreur/succès communs */}
-          {extractError && (
+          {extractError && !assistantMode && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-3.5">
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
@@ -318,10 +394,17 @@ export function FormulaireAnnonce({
                   <p className="text-sm text-red-800">{extractError}</p>
                   <button
                     type="button"
-                    onClick={() => setActiveTab('coller')}
-                    className="text-xs text-red-600 underline underline-offset-2 mt-1.5 hover:text-red-700"
+                    onClick={() => {
+                      setAssistantMode(true)
+                      setAssistantUrl(urlInput.trim())
+                      setActiveTab('coller')
+                      if (urlInput.trim()) {
+                        window.open(urlInput.trim(), '_blank', 'noopener,noreferrer')
+                      }
+                    }}
+                    className="text-xs text-red-600 underline underline-offset-2 mt-1.5 hover:text-red-700 font-medium"
                   >
-                    Essayer en collant le contenu de la page
+                    Récupérer en 10 secondes →
                   </button>
                 </div>
               </div>
@@ -340,26 +423,136 @@ export function FormulaireAnnonce({
               </div>
             </div>
           )}
-        </TabsContent>
+        </TabsContent>}
         
         {/* ===== TAB COLLER LE CONTENU ===== */}
-        <TabsContent value="coller" className="space-y-3 mt-3">
+        {!editMode && <TabsContent value="coller" className="space-y-3 mt-3">
           <div className="space-y-3">
-            {/* Instruction compacte */}
-            <p className="text-xs text-aquiz-gray leading-relaxed">
-              Copiez tout le texte de l&apos;annonce (<kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+A</kbd> puis <kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+C</kbd>) et collez-le ci-dessous.
-            </p>
+            
+            {/* ── Mode Assistant : guidage étape par étape quand le scraping a échoué ── */}
+            {assistantMode && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs font-bold">!</div>
+                  <p className="text-sm font-semibold text-amber-900">Récupération en 10 secondes</p>
+                </div>
+                
+                <div className="space-y-2.5 text-xs text-amber-800">
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+                    <div>
+                      L&apos;annonce s&apos;est ouverte dans un nouvel onglet.{' '}
+                      {assistantUrl && (
+                        <button
+                          type="button"
+                          onClick={() => window.open(assistantUrl, '_blank', 'noopener,noreferrer')}
+                          className="inline-flex items-center gap-0.5 text-amber-700 underline underline-offset-2 hover:text-amber-900 font-medium"
+                        >
+                          Rouvrir <ExternalLink className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+                    <p>
+                      Sur la page de l&apos;annonce, appuyez sur{' '}
+                      <kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+A</kbd>{' '}
+                      puis{' '}
+                      <kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+C</kbd>
+                    </p>
+                  </div>
+                  <div className="flex gap-2.5 items-start">
+                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+                    <p>Revenez ici et collez dans la zone ci-dessous (<kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+V</kbd>)</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Instruction compacte (mode normal) */}
+            {!assistantMode && (
+              <p className="text-xs text-aquiz-gray leading-relaxed">
+                Copiez tout le texte de l&apos;annonce (<kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+A</kbd> puis <kbd className="px-1 py-0.5 bg-aquiz-gray-lightest rounded border border-aquiz-gray-lighter text-[10px] font-mono">Ctrl+C</kbd>) et collez-le ci-dessous.
+              </p>
+            )}
             
             {/* Zone de texte */}
             <Textarea
-              placeholder="Collez ici le contenu de la page d'annonce..."
+              placeholder={assistantMode
+                ? "Collez ici le contenu copié (Ctrl+V)..."
+                : "Collez ici le contenu de la page d'annonce..."
+              }
               value={pastedText}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
                 setPastedText(e.target.value)
                 setExtractError(null)
                 setExtractSuccess(false)
               }}
-              className="min-h-24 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20"
+              // Auto-extract dès qu'on colle du texte en mode assistant
+              onPaste={(e) => {
+                // Capturer le HTML du clipboard pour extraire les images
+                const pastedHtml = e.clipboardData?.getData('text/html') || ''
+                if (pastedHtml) clipboardHtmlRef.current = pastedHtml
+                
+                if (assistantMode) {
+                  const pasted = e.clipboardData?.getData('text') || ''
+                  if (pasted.length > 50) {
+                    // Mettre à jour le state et extraire avec un léger délai
+                    setPastedText(pasted)
+                    setTimeout(async () => {
+                      const data = parseTexteAnnonce(pasted)
+                      
+                      // Images clipboard = thumbnails basse-résolution (fallback)
+                      let clipboardImageUrl: string | undefined
+                      let clipboardImages: string[] = []
+                      if (pastedHtml) {
+                        const extracted = extraireImagesFromHTML(pastedHtml)
+                        clipboardImageUrl = extracted.imageUrl
+                        clipboardImages = extracted.images
+                      }
+                      
+                      // Privilégier les images depuis l'API (haute résolution)
+                      const targetUrl = assistantUrl || (data as Record<string, unknown>).url as string | undefined
+                      if (targetUrl) {
+                        try {
+                          const res = await fetch('/api/annonces/og-image', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: targetUrl }),
+                          })
+                          const ogData = await res.json()
+                          if (ogData.imageUrl) {
+                            data.imageUrl = ogData.imageUrl
+                            if (ogData.images?.length) data.images = ogData.images
+                          }
+                        } catch { /* silencieux */ }
+                      }
+                      
+                      // Fallback clipboard si l'API n'a rien renvoyé
+                      if (!data.imageUrl && clipboardImageUrl) {
+                        data.imageUrl = clipboardImageUrl
+                        if (clipboardImages.length > 0) data.images = clipboardImages
+                      }
+                      
+                      const count = compterChampsExtraits(data)
+                      if (count > 0) {
+                        remplirFormulaire(data as Record<string, unknown>)
+                        setExtractCount(count)
+                        setExtractSuccess(true)
+                        setAssistantMode(false)
+                        setActiveTab('manuel')
+                      }
+                    }, 50)
+                  }
+                } else {
+                  // Mode normal : juste sauvegarder le HTML pour usage ultérieur
+                  const pasted = e.clipboardData?.getData('text') || ''
+                  if (pasted) setPastedText(pasted)
+                }
+              }}
+              autoFocus={assistantMode}
+              className={`min-h-24 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20 ${assistantMode ? 'ring-2 ring-amber-300/50 border-amber-300' : ''}`}
             />
             
             <Button
@@ -379,7 +572,9 @@ export function FormulaireAnnonce({
               <div className="flex items-start gap-2.5">
                 <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm text-red-800">{extractError}</p>
+                  {extractError.split('\n').map((line, i) => (
+                    <p key={i} className={i === 0 ? 'text-sm text-red-800' : 'text-xs text-red-600 mt-1'}>{line}</p>
+                  ))}
                   <button
                     type="button"
                     onClick={() => setActiveTab('manuel')}
@@ -405,10 +600,9 @@ export function FormulaireAnnonce({
               </div>
             </div>
           )}
-        </TabsContent>
+        </TabsContent>}
         
-        {/* ===== TAB SAISIE MANUELLE ===== */}
-        <TabsContent value="manuel" className="mt-3">
+        {/* ===== TAB SAISIE MANUELLE ===== */}        <TabsContent value="manuel" className={editMode ? 'flex-none' : 'mt-3'}>
           <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
             
             {/* ═══════════ SECTION 1 : Informations essentielles ═══════════ */}
@@ -657,33 +851,35 @@ export function FormulaireAnnonce({
                   )}
                 </div>
                 
-                {/* Équipements — toggles */}
+                {/* Équipements — toggles (boutons contrôlés, pas de checkbox sr-only pour éviter le scroll fantôme) */}
                 <div>
                   <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium mb-2 block">Équipements</Label>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { key: 'ascenseur', label: 'Ascenseur', show: type === 'appartement' },
-                      { key: 'balconTerrasse', label: 'Balcon / Terrasse' },
-                      { key: 'parking', label: 'Parking' },
-                      { key: 'cave', label: 'Cave' },
-                    ].filter(item => item.show !== false).map((item) => (
-                      <label 
-                        key={item.key}
-                        className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
-                          watch(item.key as keyof AnnonceFormData)
-                            ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-green font-medium' 
-                            : 'border-aquiz-gray-lighter text-aquiz-gray hover:border-aquiz-gray-light'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          {...register(item.key as keyof AnnonceFormData)}
-                          className="sr-only"
-                        />
-                        {watch(item.key as keyof AnnonceFormData) && <Check className="w-3.5 h-3.5" />}
-                        {item.label}
-                      </label>
-                    ))}
+                      { key: 'ascenseur' as const, label: 'Ascenseur', show: type === 'appartement' },
+                      { key: 'balconTerrasse' as const, label: 'Balcon / Terrasse' },
+                      { key: 'parking' as const, label: 'Parking' },
+                      { key: 'cave' as const, label: 'Cave' },
+                    ].filter(item => item.show !== false).map((item) => {
+                      const checked = !!watch(item.key)
+                      return (
+                        <button
+                          type="button"
+                          key={item.key}
+                          role="switch"
+                          aria-checked={checked}
+                          onClick={() => setValue(item.key, !checked)}
+                          className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border cursor-pointer transition-all text-sm ${
+                            checked
+                              ? 'border-aquiz-green bg-aquiz-green/5 text-aquiz-green font-medium' 
+                              : 'border-aquiz-gray-lighter text-aquiz-gray hover:border-aquiz-gray-light'
+                          }`}
+                        >
+                          {checked && <Check className="w-3.5 h-3.5" />}
+                          {item.label}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>

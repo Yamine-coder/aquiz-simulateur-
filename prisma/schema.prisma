@@ -57,3 +57,17 @@ model Lead {
   @@index([email])
   @@index([source])
 }
+
+/// Abonnés newsletter blog
+model NewsletterSubscriber {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  status       String   @default("active") // active | unsubscribed
+  source       String   @default("blog")   // blog | article | homepage
+  ip           String   @default("")
+  subscribedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([email])
+  @@index([status])
+}

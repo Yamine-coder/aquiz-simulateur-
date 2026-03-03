@@ -19,11 +19,9 @@ import {
 import { AnalyseIA } from '@/components/comparateur/AnalyseIA'
 import { AnnonceSkeletonGrid } from '@/components/comparateur/AnnonceCardSkeleton'
 import { ConfirmDeleteDialog } from '@/components/comparateur/ConfirmDeleteDialog'
-import { EmailComparisonModal, type AnnonceScoreData } from '@/components/comparateur/EmailComparisonModal'
+import type { AnnonceScoreData } from '@/components/comparateur/EmailComparisonModal'
 import { countActiveFilters, FiltresPanel, FiltresToggle } from '@/components/comparateur/FiltresBar'
 
-import { COULEURS_RADAR, RadarChart } from '@/components/comparateur/RadarChart'
-import { StickyCtaBar } from '@/components/comparateur/StickyCtaBar'
 import { ContactModal } from '@/components/contact'
 import { Button } from '@/components/ui/button'
 import {
@@ -41,7 +39,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { calculerFaisabilite } from '@/lib/comparateur/faisabilite'
-import { scoreToRadarData, type ScoreComparateurResult } from '@/lib/comparateur/scoreComparateur'
+import { genererSyntheseComparaison, scoreToRadarData, type ScoreComparateurResult } from '@/lib/comparateur/scoreComparateur'
 import {
     calculerStatistiques,
     getAnnoncesFiltrees,
@@ -56,14 +54,20 @@ import {
     ArrowLeft,
     ArrowRight,
     BarChart3,
+    Brain,
     Check,
     CheckSquare,
+    ChevronLeft,
+    ClipboardCheck,
+    Coins,
+    FileDown,
     Grid3X3,
     Heart,
     Import,
     Info,
     LayoutGrid,
     List,
+    Loader2,
     Mail,
     MapPin,
     Plus,
@@ -73,12 +77,14 @@ import {
     ShieldCheck,
     Sparkles,
     Square,
+    Target,
     Trash2,
     TrendingUp,
+    Trophy,
     X
 } from 'lucide-react'
 import Link from 'next/link'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // ============================================
 // HELPERS
@@ -96,11 +102,19 @@ export default function ComparateurPage() {
   // États locaux
   const [showForm, setShowForm] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
-  const [showEmailModal, setShowEmailModal] = useState(false)
   const [scoresForEmail, setScoresForEmail] = useState<AnnonceScoreData[]>([])
   const handleScoresReady = useCallback((scores: AnnonceScoreData[]) => {
     setScoresForEmail(scores)
   }, [])
+  const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfEmailValue, setPdfEmailValue] = useState('')
+  const [pdfEmailSent, setPdfEmailSent] = useState(false)
+  const [pdfEmailLoading, setPdfEmailLoading] = useState(false)
+  const leadStore = useLeadStore()
+  const hasLead = useLeadStore(hasValidEmail)
+  const [syntheseIA, setSyntheseIA] = useState<{ synthese: string; verdictFinal: string; conseilNego: string; conseilAcquisition: string } | null>(null)
+  const syntheseIARef = useRef(syntheseIA)
+  useEffect(() => { syntheseIARef.current = syntheseIA }, [syntheseIA])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'liste' | 'comparaison'>('liste')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
@@ -114,12 +128,6 @@ export default function ComparateurPage() {
     open: false, ids: []
   })
   const hydrated = useComparateurStore(s => s.annonces !== undefined)
-  const stickyTriggerRef = useRef<HTMLDivElement>(null)
-  // Email pour le rapport comparaison (bonus, pas de gate)
-  const leadEmail = useComparateurStore(s => s.leadEmail ?? '')
-  const storeUnlock = useComparateurStore(s => s.unlock)
-  const leadStore = useLeadStore()
-  const storedEmail = useLeadStore(s => hasValidEmail(s) ? s.email : null)
   
   // Données calculées
   const annoncesFiltrees = getAnnoncesFiltrees(comparateur)
@@ -164,7 +172,260 @@ export default function ComparateurPage() {
       comparateur.setBudgetMax(budgetSimulateur)
     }
   }
-  
+
+  // ─── Export PDF — Rapport Comparaison Professionnel ───
+  const generateComparateurPDF = useCallback(async () => {
+    if (annoncesSelectionnees.length === 0 || scoresForEmail.length === 0) return
+    setPdfLoading(true)
+
+    try {
+      // Attendre la synthèse IA (max 15s) si pas encore prête
+      let iaData = syntheseIARef.current
+      if (!iaData) {
+        for (let i = 0; i < 30; i++) {
+          await new Promise(r => setTimeout(r, 500))
+          iaData = syntheseIARef.current
+          if (iaData) break
+        }
+      }
+
+      // ── Fallback : appel API direct si toujours pas de synthèse IA ──
+      if (!iaData) {
+        console.log('[PDF] Synthèse IA non reçue du composant, appel API direct...')
+        try {
+          const classementTmp = genererSyntheseComparaison(
+            scoresForEmail as unknown as ScoreComparateurResult[]
+          )
+          const classementMapTmp = new Map(classementTmp.classement.map(c => [c.annonceId, c.rang]))
+
+          const biens = annoncesSelectionnees.map(a => {
+            const score = scoresForEmail.find(s => s.annonceId === a.id)
+            const rang = classementMapTmp.get(a.id) ?? 99
+            return {
+              id: a.id,
+              titre: a.titre || `${a.type === 'maison' ? 'Maison' : 'Appt'} ${a.pieces}p - ${a.ville}`,
+              prix: a.prix,
+              surface: a.surface,
+              prixM2: a.prixM2,
+              type: a.type,
+              pieces: a.pieces,
+              chambres: a.chambres,
+              ville: a.ville,
+              codePostal: a.codePostal,
+              dpe: a.dpe,
+              etage: a.etage,
+              anneeConstruction: a.anneeConstruction,
+              parking: a.parking,
+              balconTerrasse: a.balconTerrasse,
+              cave: a.cave,
+              ascenseur: a.ascenseur,
+              chargesMensuelles: a.chargesMensuelles,
+              taxeFonciere: a.taxeFonciere,
+              scoreGlobal: score?.scoreGlobal ?? 0,
+              rang,
+              verdict: score?.verdict ?? '',
+              confiance: score?.confiance ?? 0,
+              axes: (score?.axes ?? []).filter(ax => ax.disponible).map(ax => ({
+                label: ax.label,
+                score: ax.score,
+                detail: ax.detail,
+                impact: ax.impact,
+              })),
+              estimations: score?.estimations ?? {},
+              avantages: (score?.points ?? []).filter(p => p.type === 'avantage').map(p => p.texte),
+              attentions: (score?.points ?? []).filter(p => p.type === 'attention').map(p => p.texte),
+              conseilPerso: score?.conseilPerso ?? '',
+            }
+          })
+
+          const resp = await fetch('/api/analyse/synthese-ia-comparaison', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              biens,
+              budgetMax: comparateur.budgetMax,
+              syntheseDeterministe: classementTmp.syntheseGlobale,
+            }),
+          })
+          const json = await resp.json()
+          if (json.success && json.data) {
+            iaData = {
+              synthese: json.data.synthese || '',
+              verdictFinal: json.data.verdictFinal || '',
+              conseilNego: json.data.conseilNego || '',
+              conseilAcquisition: json.data.conseilAcquisition || '',
+            }
+            // Mettre à jour le state pour les futurs PDFs
+            setSyntheseIA(iaData)
+            console.log(`[PDF] Synthèse IA récupérée en direct (source: ${json.source})`)
+          }
+        } catch (directErr) {
+          console.warn('[PDF] Appel API direct IA échoué, PDF sans IA:', directErr)
+        }
+      }
+
+      const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
+      const { pdf } = await import('@react-pdf/renderer')
+      const { ComparateurPDF } = await import('@/components/pdf/ComparateurPDF')
+
+      // Synthèse déterministe à partir des scores
+      const synthese = genererSyntheseComparaison(
+        scoresForEmail as unknown as ScoreComparateurResult[]
+      )
+
+      // Classer les annonces
+      const classementMap = new Map(synthese.classement.map(c => [c.annonceId, c.rang]))
+
+      // Construire les données PDF enrichies
+      const annoncesPDF = annoncesSelectionnees.map(a => {
+        const score = scoresForEmail.find(s => s.annonceId === a.id)
+        const rang = classementMap.get(a.id) ?? 99
+        const radarData = score 
+          ? scoreToRadarData(score as unknown as ScoreComparateurResult) 
+          : []
+
+        return {
+          id: a.id,
+          titre: a.titre,
+          prix: a.prix,
+          surface: a.surface,
+          prixM2: a.prixM2,
+          type: a.type,
+          pieces: a.pieces,
+          chambres: a.chambres,
+          ville: a.ville,
+          codePostal: a.codePostal,
+          dpe: a.dpe,
+          ges: a.ges,
+          etage: a.etage,
+          etagesTotal: a.etagesTotal,
+          anneeConstruction: a.anneeConstruction,
+          orientation: a.orientation,
+          nbSallesBains: a.nbSallesBains,
+          parking: a.parking,
+          balconTerrasse: a.balconTerrasse,
+          cave: a.cave,
+          ascenseur: a.ascenseur,
+          chargesMensuelles: a.chargesMensuelles,
+          taxeFonciere: a.taxeFonciere,
+          // Scoring
+          scoreGlobal: score?.scoreGlobal ?? 0,
+          verdict: score?.verdict ?? '',
+          recommandation: score?.recommandation ?? 'a_etudier',
+          conseilPerso: score?.conseilPerso ?? '',
+          confiance: score?.confiance ?? 0,
+          axes: (score?.axes ?? []).map(ax => ({
+            axe: ax.axe,
+            label: ax.label,
+            score: ax.score,
+            poids: (ax as unknown as { poids: number }).poids ?? 10,
+            disponible: ax.disponible,
+            detail: ax.detail,
+            impact: ax.impact,
+          })),
+          points: score?.points ?? [],
+          estimations: score?.estimations,
+          enrichissement: score?.enrichissement ? {
+            marche: score.enrichissement.marche ? {
+              ...score.enrichissement.marche,
+              evolution12Mois: (score.enrichissement.marche as Record<string, unknown>).evolution12Mois as number | undefined,
+              nbTransactions: (score.enrichissement.marche as Record<string, unknown>).nbTransactions as number | undefined,
+            } : undefined,
+            risques: score.enrichissement.risques ? {
+              ...score.enrichissement.risques,
+              zoneInondable: (score.enrichissement.risques as Record<string, unknown>).zoneInondable as boolean | undefined,
+              niveauRadon: (score.enrichissement.risques as Record<string, unknown>).niveauRadon as number | undefined,
+            } : undefined,
+            quartier: score.enrichissement.quartier ? {
+              ...score.enrichissement.quartier,
+              sante: (score.enrichissement.quartier as Record<string, unknown>).sante as number | undefined,
+              espaceVerts: (score.enrichissement.quartier as Record<string, unknown>).espaceVerts as number | undefined,
+            } : undefined,
+          } : undefined,
+          radarData,
+          rang,
+        }
+      }).sort((a, b) => a.rang - b.rang)
+
+      const tauxPDF = parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret
+      const dureePDF = parametresModeA?.dureeAns ?? parametresModeB?.dureeAns
+      const apportPDF = parametresModeA?.apport ?? parametresModeB?.apport
+
+      const blob = await pdf(
+        <ComparateurPDF
+          logoUrl={logoUrl}
+          annonces={annoncesPDF}
+          syntheseDeterministe={synthese.syntheseGlobale}
+          conseilGeneral={synthese.conseilGeneral}
+          budgetMax={comparateur.budgetMax}
+          dateGeneration={new Date().toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+          })}
+          syntheseIA={iaData}
+          tauxInteret={tauxPDF}
+          dureeAns={dureePDF}
+          apport={apportPDF}
+        />
+      ).toBlob()
+
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const dateFile = new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')
+      link.download = `AQUIZ-Comparaison-${annoncesSelectionnees.length}biens-${dateFile}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Erreur génération PDF comparateur:', err)
+    } finally {
+      setPdfLoading(false)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [annoncesSelectionnees, scoresForEmail, comparateur.budgetMax, parametresModeA, parametresModeB, syntheseIA])
+
+  /** Capture email + génère le PDF comparateur */
+  const handleSendPdfEmail = useCallback(async () => {
+    if (!pdfEmailValue || pdfEmailLoading) return
+    setPdfEmailLoading(true)
+    try {
+      // 1. Capture lead (non-bloquant)
+      try {
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: pdfEmailValue,
+            source: 'comparateur',
+            contexte: { nbBiens: annoncesSelectionnees.length, budgetMax: comparateur.budgetMax }
+          })
+        })
+        if (res.ok) {
+          leadStore.capture(pdfEmailValue, 'comparateur', undefined, {
+            nbBiens: annoncesSelectionnees.length,
+            budgetMax: comparateur.budgetMax
+          })
+        }
+      } catch { /* lead capture failed — continue anyway */ }
+      // 2. Générer le PDF
+      await generateComparateurPDF()
+      setPdfEmailSent(true)
+    } catch (err) {
+      console.error('Erreur envoi lead comparateur', err)
+    } finally {
+      setPdfEmailLoading(false)
+    }
+  }, [pdfEmailValue, pdfEmailLoading, annoncesSelectionnees.length, comparateur.budgetMax, leadStore, generateComparateurPDF])
+
+  // Auto-fill email depuis le lead store si déjà capturé
+  useEffect(() => {
+    if (hasLead && leadStore.email && !pdfEmailValue) {
+      setPdfEmailValue(leadStore.email)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLead, leadStore.email])
+
   const annonceEnEdition = editingId 
     ? comparateur.annonces.find((a) => a.id === editingId)
     : null
@@ -212,37 +473,48 @@ export default function ComparateurPage() {
     return (
       <div className="min-h-screen bg-white flex flex-col">
 
-        {/* Header compact — tout visible sans scroll */}
-        <section className="pt-6 pb-5 md:pt-8 md:pb-6 border-b border-aquiz-gray-lighter bg-linear-to-b from-aquiz-green/5 to-white">
-          <div className="max-w-2xl mx-auto px-5 text-center">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-medium mb-3">
-              <Scale className="w-3 h-3" />
-              Comparateur AQUIZ — 100% gratuit
-            </div>
-            <h2 className="text-xl md:text-3xl font-extrabold text-aquiz-black tracking-tight leading-tight">
+        {/* Mobile back nav */}
+        <div className="sm:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+          <div className="flex items-center justify-between px-4 h-12">
+            <Link
+              href="/"
+              className="flex items-center gap-1 text-gray-500 hover:text-gray-900 transition-colors -ml-1"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-[13px] font-medium">Retour</span>
+            </Link>
+            <span className="text-[13px] font-bold text-aquiz-black">Comparateur</span>
+            <div className="w-16" /> {/* Spacer for centering */}
+          </div>
+        </div>
+
+        {/* Header compact */}
+        <section className="pt-4 sm:pt-6 pb-4 sm:pb-5 md:pt-8 md:pb-6 border-b border-aquiz-gray-lighter bg-linear-to-b from-aquiz-green/5 to-white">
+          <div className="max-w-2xl mx-auto px-4 sm:px-5 text-center">
+            <h2 className="text-lg sm:text-xl md:text-3xl font-extrabold text-aquiz-black tracking-tight leading-tight">
               Comparez vos annonces
             </h2>
-            <p className="mt-2 text-sm text-aquiz-gray-light max-w-md mx-auto leading-relaxed">
+            <p className="mt-1.5 sm:mt-2 text-[12px] sm:text-sm text-aquiz-gray-light max-w-md mx-auto leading-relaxed">
               Ajoutez 2 à 4 biens et obtenez une analyse complète.
             </p>
 
-            {/* Value props — inline, couleurs charte uniquement */}
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+            {/* Value props */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-2.5 sm:mt-3">
               {[
                 { icon: TrendingUp, label: 'Prix vs Marché' },
                 { icon: ShieldCheck, label: 'Risques zone' },
                 { icon: MapPin, label: 'Score quartier' },
                 { icon: Sparkles, label: 'Score 10 axes' },
               ].map(({ icon: Icon, label }) => (
-                <span key={label} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-aquiz-gray-lightest border border-aquiz-gray-lighter/50 text-[11px] text-aquiz-gray-dark font-medium">
-                  <Icon className="w-3 h-3 text-aquiz-green" />
+                <span key={label} className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg bg-aquiz-gray-lightest border border-aquiz-gray-lighter/50 text-[10px] sm:text-[11px] text-aquiz-gray-dark font-medium">
+                  <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-aquiz-green" />
                   {label}
                 </span>
               ))}
             </div>
 
-            {/* Social proof compact */}
-            <div className="flex items-center justify-center gap-3 mt-3 text-[10px] text-aquiz-gray">
+            {/* Social proof */}
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mt-2.5 sm:mt-3 text-[9px] sm:text-[10px] text-aquiz-gray">
               <span className="flex items-center gap-1"><BarChart3 className="w-2.5 h-2.5" /> +2 000 comparatifs</span>
               <span>•</span>
               <span className="flex items-center gap-1"><ShieldCheck className="w-2.5 h-2.5" /> Données vérifiées</span>
@@ -250,12 +522,12 @@ export default function ComparateurPage() {
           </div>
         </section>
 
-        {/* Formulaire — immédiatement visible */}
-        <div className="flex-1 flex flex-col px-5 pt-5 pb-10">
+        {/* Formulaire */}
+        <div className="flex-1 flex flex-col px-3 sm:px-5 pt-4 sm:pt-5 pb-8 sm:pb-10">
           <div className="w-full max-w-4xl mx-auto">
             <FormulaireAnnonce onSubmit={handleAjouterAnnonce} />
           </div>
-          <p className="text-center text-xs text-aquiz-gray-light mt-8">
+          <p className="text-center text-[11px] sm:text-xs text-aquiz-gray-light mt-6 sm:mt-8">
             Vous n&apos;avez pas encore simulé votre budget ?{' '}
             <Link href="/simulateur/mode-a" className="text-aquiz-green font-medium hover:underline underline-offset-2">
               Faire une simulation
@@ -271,13 +543,109 @@ export default function ComparateurPage() {
     <div className="min-h-screen bg-white flex flex-col">
       <h1 className="sr-only">Comparateur de biens immobiliers</h1>
 
-      {/* ═══ HEADER ═══ */}
-      <div className="sticky top-0 z-30 bg-white border-b border-aquiz-gray-lighter">
+      {/* ═══ MOBILE BACK NAV ═══ */}
+      <div className="sm:hidden sticky top-0 z-30 bg-white border-b border-gray-100">
+        {/* Top row: back + title + add */}
+        <div className="flex items-center justify-between px-3 h-11">
+          <Link
+            href="/"
+            className="flex items-center gap-1 text-aquiz-gray hover:text-aquiz-black transition-colors -ml-1"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-[13px] font-medium">Retour</span>
+          </Link>
+          <span className="text-[13px] font-bold text-aquiz-black">Comparateur</span>
+          <Button
+            onClick={() => setShowForm(true)}
+            size="sm"
+            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white h-7 rounded-lg text-[11px] font-semibold px-2.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Ajouter
+          </Button>
+        </div>
+
+        {/* Bottom row: tabs + filter/sort */}
+        <div className="flex items-center justify-between px-3 pb-2 gap-2">
+          {/* Tabs */}
+          <div className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-lg shrink-0">
+            <button
+              onClick={() => setActiveTab('liste')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                activeTab === 'liste'
+                  ? 'bg-white text-aquiz-black shadow-sm'
+                  : 'text-aquiz-gray'
+              }`}
+            >
+              <LayoutGrid className="h-3 w-3" />
+              Annonces
+              <span className={`text-[9px] min-w-[14px] text-center px-0.5 py-px rounded-full font-bold ${
+                activeTab === 'liste' ? 'bg-aquiz-black text-white' : 'bg-gray-300/60 text-aquiz-gray'
+              }`}>{comparateur.annonces.length}</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('comparaison')}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
+                activeTab === 'comparaison'
+                  ? 'bg-white text-aquiz-green shadow-sm'
+                  : 'text-aquiz-gray'
+              }`}
+            >
+              <Scale className="h-3 w-3" />
+              Comparer
+              {selCount > 0 && (
+                <span className={`text-[9px] min-w-[14px] text-center px-0.5 py-px rounded-full font-bold ${
+                  activeTab === 'comparaison' ? 'bg-aquiz-green text-white' : 'bg-aquiz-green/15 text-aquiz-green'
+                }`}>{selCount}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Controls */}
+          {activeTab === 'liste' && (
+            <div className="flex items-center gap-1 shrink-0">
+              <FiltresToggle
+                isOpen={filtresOpen}
+                onToggle={() => setFiltresOpen(!filtresOpen)}
+                activeCount={filtresActiveCount}
+              />
+              <Select
+                value={comparateur.tri}
+                onValueChange={(v) => comparateur.setTri(v as TriAnnonces)}
+              >
+                <SelectTrigger className="h-7 text-[10px] border-aquiz-gray-lighter rounded-lg font-medium bg-white w-8 px-1.5 justify-center [&>svg:last-child]:hidden">
+                  <ArrowDownUp className="h-3 w-3 text-aquiz-gray shrink-0" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dateAjout-desc">Plus récentes</SelectItem>
+                  <SelectItem value="prix-asc">Prix ↑</SelectItem>
+                  <SelectItem value="prix-desc">Prix ↓</SelectItem>
+                  <SelectItem value="prixM2-asc">€/m² ↑</SelectItem>
+                  <SelectItem value="surface-desc">Surface ↓</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {/* Filtres panel mobile */}
+        {activeTab === 'liste' && filtresOpen && (
+          <FiltresPanel
+            filtres={comparateur.filtres}
+            onFiltresChange={(partial: Partial<FiltresAnnonces>) => comparateur.setFiltres({ ...comparateur.filtres, ...partial })}
+            nbResultats={annoncesFiltrees.length}
+            nbTotal={comparateur.annonces.length}
+          />
+        )}
+      </div>
+
+      {/* ═══ HEADER (desktop card + tabs) ═══ */}
+      <div className="hidden sm:block sticky top-0 z-30 bg-white border-b border-gray-100">
         <div className={`mx-auto px-3 sm:px-5 py-2 sm:py-3 transition-all duration-300 ${activeTab === 'comparaison' ? 'max-w-7xl' : 'max-w-5xl'}`}>
-          <div className="sm:rounded-2xl sm:border sm:border-aquiz-gray-lighter">
+          <div className="sm:rounded-2xl sm:ring-1 sm:ring-gray-200/80 sm:shadow-sm sm:overflow-hidden">
 
             {/* Haut : identité + actions */}
-            <div className="px-3 py-2 md:px-5 md:py-3.5 bg-white sm:border-b sm:border-aquiz-gray-lighter">
+            <div className="px-3 py-2 md:px-5 md:py-3.5 bg-white">
               <div className="flex items-center justify-between gap-2">
                 {/* Gauche — badge + titre */}
                 <div className="flex items-center gap-2 min-w-0">
@@ -288,7 +656,7 @@ export default function ComparateurPage() {
                     <h2 className="text-sm font-bold text-aquiz-black leading-tight truncate">
                       Comparateur immobilier
                     </h2>
-                    <p className="text-[10px] text-aquiz-gray hidden sm:block">
+                    <p className="text-[10px] text-aquiz-gray">
                       {comparateur.annonces.length} bien{comparateur.annonces.length > 1 ? 's' : ''} enregistré{comparateur.annonces.length > 1 ? 's' : ''}
                       {selCount >= 2 && <span className="text-aquiz-green font-medium"> · {selCount} sélectionnés</span>}
                     </p>
@@ -315,19 +683,6 @@ export default function ComparateurPage() {
                     </button>
                   ) : null}
 
-                  {/* CTA Recevoir le rapport — comparaison tab */}
-                  {activeTab === 'comparaison' && selCount >= 2 && (
-                    <Button
-                      onClick={() => setShowEmailModal(true)}
-                      size="sm"
-                      variant="outline"
-                      className="border-aquiz-green text-aquiz-green hover:bg-aquiz-green/5 h-7 rounded-lg text-[11px] font-semibold px-2"
-                    >
-                      <Mail className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline ml-1">Rapport</span>
-                    </Button>
-                  )}
-
                   {/* Compteur favoris */}
                   {nbFavoris > 0 && (
                     <button
@@ -349,13 +704,13 @@ export default function ComparateurPage() {
                     </button>
                   )}
 
-                  {/* Bouton Supprimer — icon-only on mobile */}
+                  {/* Bouton Supprimer */}
                   {activeTab === 'liste' && comparateur.annonces.length > 0 && (
                     <Button
                       onClick={() => manageMode ? handleExitManageMode() : setManageMode(true)}
                       size="sm"
                       variant={manageMode ? 'default' : 'outline'}
-                      className={`h-7 rounded-lg text-[11px] font-semibold px-2 sm:px-3 ${
+                      className={`h-7 rounded-lg text-[11px] font-semibold px-3 ${
                         manageMode
                           ? 'bg-rose-500 hover:bg-rose-600 text-white border-0'
                           : 'border-aquiz-gray-lighter text-rose-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200'
@@ -366,53 +721,53 @@ export default function ComparateurPage() {
                       ) : (
                         <Trash2 className="h-3.5 w-3.5" />
                       )}
-                      <span className="hidden sm:inline ml-1">{manageMode ? 'Terminer' : 'Supprimer'}</span>
+                      <span className="ml-1">{manageMode ? 'Terminer' : 'Supprimer'}</span>
                     </Button>
                   )}
 
                   <Button
                     onClick={() => setShowForm(true)}
                     size="sm"
-                    className="bg-aquiz-green hover:bg-aquiz-green/90 text-white h-7 rounded-lg text-[11px] font-semibold px-2 sm:px-3"
+                    className="bg-aquiz-green hover:bg-aquiz-green/90 text-white h-7 rounded-lg text-[11px] font-semibold px-3"
                   >
                     <Plus className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline ml-1">Ajouter</span>
+                    <span className="ml-1">Ajouter</span>
                   </Button>
                 </div>
               </div>
             </div>
 
             {/* Bas : onglets + filtres */}
-            <div className="px-2 sm:px-3 py-1.5 md:px-4 md:py-2.5 bg-aquiz-gray-lightest/40 border-t border-aquiz-gray-lighter/50">
+            <div className="px-3 py-1.5 md:px-4 md:py-2.5 bg-gray-50/80 border-t border-gray-100">
               <div className="flex items-center justify-between gap-1.5 sm:gap-2">
                 {/* Onglets — pills */}
                 <div className="flex items-center gap-0.5 bg-white p-0.5 rounded-xl border border-aquiz-gray-lighter shrink-0">
                   <button
                     onClick={() => setActiveTab('liste')}
-                    className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-lg transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                       activeTab === 'liste'
                         ? 'bg-aquiz-black text-white shadow-sm'
                         : 'text-aquiz-gray hover:text-aquiz-black'
                     }`}
                   >
-                    <LayoutGrid className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    <span className="hidden sm:inline">Annonces</span>
-                    <span className={`text-[9px] sm:text-[10px] min-w-4 text-center px-1 py-px rounded-full font-bold ${
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Annonces
+                    <span className={`text-[10px] min-w-4 text-center px-1 py-px rounded-full font-bold ${
                       activeTab === 'liste' ? 'bg-white/20 text-white' : 'bg-aquiz-gray-lighter text-aquiz-gray'
                     }`}>{comparateur.annonces.length}</span>
                   </button>
                   <button
                     onClick={() => setActiveTab('comparaison')}
-                    className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-semibold rounded-lg transition-all ${
+                    className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                       activeTab === 'comparaison'
                         ? 'bg-aquiz-green text-white shadow-sm'
                         : 'text-aquiz-gray hover:text-aquiz-black'
                     }`}
                   >
-                    <Scale className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    <span className="hidden sm:inline">Comparaison</span>
+                    <Scale className="h-3.5 w-3.5" />
+                    Comparaison
                     {selCount > 0 && (
-                      <span className={`text-[9px] sm:text-[10px] min-w-4 text-center px-1 py-px rounded-full font-bold ${
+                      <span className={`text-[10px] min-w-4 text-center px-1 py-px rounded-full font-bold ${
                         activeTab === 'comparaison' ? 'bg-white/20 text-white' : 'bg-aquiz-green/15 text-aquiz-green'
                       }`}>{selCount}</span>
                     )}
@@ -578,17 +933,55 @@ export default function ComparateurPage() {
                         <p className="text-[11px] text-aquiz-gray">Analyse comparative détaillée</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => comparateur.deselectionnerTout()}
-                      className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Réinitialiser</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => comparateur.deselectionnerTout()}
+                        className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Réinitialiser</span>
+                      </button>
+                      {scoresForEmail.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById('pdf-gate')
+                            if (!el) return
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            el.classList.add('animate-pulse-highlight')
+                            setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                          }}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
+                        >
+                          <FileDown className="w-3.5 h-3.5" />
+                          Mon rapport PDF
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Trigger pour StickyCtaBar */}
-                  <div ref={stickyTriggerRef} />
+                  {/* Bandeau info PDF */}
+                  {scoresForEmail.length > 0 && !pdfEmailSent && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-gray-lighter">
+                      <FileDown className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                      <p className="text-[11px] text-aquiz-gray flex-1">
+                        <span className="font-semibold text-aquiz-black">Rapport PDF disponible</span> — Scoring radar, synthèse IA, conseil négo, checklist visite
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const el = document.getElementById('pdf-gate')
+                          if (!el) return
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          el.classList.add('animate-pulse-highlight')
+                          setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                        }}
+                        className="text-[11px] font-bold text-aquiz-green hover:underline whitespace-nowrap shrink-0"
+                      >
+                        Voir ↓
+                      </button>
+                    </div>
+                  )}
 
                   {/* Tableau */}
                   <div className="bg-white border border-aquiz-gray-lighter overflow-hidden -mx-3 sm:mx-0 rounded-none sm:rounded-2xl border-x-0 sm:border-x">
@@ -597,58 +990,154 @@ export default function ComparateurPage() {
                       statistiques={statsSelection}
                       budgetMax={comparateur.budgetMax}
                       onRemove={(id) => comparateur.toggleSelection(id)}
-                      onOpenModal={() => setShowEmailModal(true)}
                       onScoresReady={handleScoresReady}
-                      unlocked
-                      emailSent={false}
                       tauxInteret={parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret}
                       dureeAns={parametresModeA?.dureeAns ?? parametresModeB?.dureeAns}
                       apport={parametresModeA?.apport ?? parametresModeB?.apport}
                     />
                   </div>
 
-                  {/* ═══ RADAR + ANALYSE IA — Toujours visible ═══ */}
+                  {/* ═══ ANALYSE IA (invisible — alimente le PDF via callback) + PDF GATE ═══ */}
                   {annoncesSelectionnees.length >= 2 && (
                     <div>
                       <div className="space-y-3 sm:space-y-5">
-                        {/* Radar Chart — Vue comparative visuelle */}
-                        {scoresForEmail.length > 0 && (
-                          <div className="bg-white rounded-2xl border border-aquiz-gray-lighter p-4 sm:p-6">
-                            <div className="flex items-center gap-3 mb-4">
-                              <div className="w-8 h-8 rounded-lg bg-aquiz-green/10 flex items-center justify-center">
-                                <BarChart3 className="w-4 h-4 text-aquiz-green" />
+                        {/* AnalyseIA — masqué, uniquement pour alimenter syntheseIA du PDF */}
+                        <div className="hidden">
+                          <AnalyseIA
+                            annonces={annoncesSelectionnees}
+                            statistiques={statsSelection}
+                            budgetMax={comparateur.budgetMax}
+                            onSyntheseIAReady={setSyntheseIA}
+                          />
+                        </div>
+
+                        {/* ═══ PDF GATE SECTION (email capture) ═══ */}
+                        {scoresForEmail.length > 0 && (() => {
+                          const best = [...scoresForEmail].sort((a, b) => b.scoreGlobal - a.scoreGlobal)[0]
+                          const bestAnnonce = annoncesSelectionnees.find(a => a.id === best?.annonceId)
+                          const alertCount = [
+                            ...annoncesSelectionnees.filter(a => a.dpe === 'F' || a.dpe === 'G'),
+                            ...scoresForEmail.filter(s => s.enrichissement?.marche?.ecartPrixM2 !== undefined && (s.enrichissement?.marche?.ecartPrixM2 ?? 0) > 10),
+                            ...scoresForEmail.filter(s => s.enrichissement?.risques?.scoreRisque !== undefined && (s.enrichissement?.risques?.scoreRisque ?? 100) < 50),
+                          ].length
+                          return (
+                          <div id="pdf-gate" className="mt-4 sm:mt-6">
+                            <div className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
+                              <div className="px-5 py-5">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                                    <FileDown className="w-5 h-5 text-aquiz-green" />
+                                  </div>
+                                  <div>
+                                    <h3 className="font-bold text-sm text-aquiz-black">
+                                      {pdfEmailSent ? 'Rapport comparatif téléchargé !' : 'Rapport comparatif complet en PDF'}
+                                    </h3>
+                                    <p className="text-aquiz-gray text-xs">
+                                      {pdfEmailSent
+                                        ? 'Vous pouvez le re-télécharger à tout moment.'
+                                        : `${annoncesSelectionnees.length} biens analysés — ${annoncesSelectionnees.length + 2} pages d'analyse professionnelle`}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {!pdfEmailSent && (
+                                  <>
+                                    {/* Teaser dynamique compact */}
+                                    {(bestAnnonce || alertCount > 0) && (
+                                      <div className="flex items-center gap-3 mb-3 px-3 py-2 rounded-lg bg-slate-50 border border-aquiz-gray-lighter/60">
+                                        {bestAnnonce && (
+                                          <span className="text-[11px] text-aquiz-gray">
+                                            Meilleur score : <span className="font-bold text-aquiz-green">{best.scoreGlobal}/100</span>
+                                          </span>
+                                        )}
+                                        {bestAnnonce && alertCount > 0 && <span className="text-aquiz-gray-lighter">·</span>}
+                                        {alertCount > 0 && (
+                                          <span className="text-[11px] text-aquiz-gray">
+                                            <span className="font-semibold text-amber-600">{alertCount}</span> alerte{alertCount > 1 ? 's' : ''} détectée{alertCount > 1 ? 's' : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Content grid */}
+                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                      {[
+                                        { Icon: Trophy, label: 'Classement + verdicts', color: 'text-amber-500' },
+                                        { Icon: Target, label: 'Scoring 10 axes / bien', color: 'text-aquiz-green' },
+                                        { Icon: Brain, label: 'Synthèse AQUIZ IA', color: 'text-violet-500' },
+                                        { Icon: Coins, label: 'Conseil négo chiffré', color: 'text-emerald-600' },
+                                        { Icon: ShieldCheck, label: 'Marché & risques', color: 'text-blue-500' },
+                                        { Icon: ClipboardCheck, label: 'Checklist visite', color: 'text-aquiz-green' },
+                                      ].map((item, i) => (
+                                        <div key={i} className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
+                                          <item.Icon className={`w-3.5 h-3.5 shrink-0 ${item.color}`} />
+                                          <span className="text-[11px] text-aquiz-black/80">{item.label}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+
+                                {pdfEmailSent ? (
+                                  <button
+                                    type="button"
+                                    disabled={pdfLoading}
+                                    onClick={async () => {
+                                      setPdfLoading(true)
+                                      try { await generateComparateurPDF() } finally { setPdfLoading(false) }
+                                    }}
+                                    className="w-full h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                  >
+                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                                    {pdfLoading ? 'Génération…' : 'Re-télécharger mon rapport'}
+                                  </button>
+                                ) : (
+                                  <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                      <div className="relative flex-1">
+                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                                        <input
+                                          type="email"
+                                          value={pdfEmailValue}
+                                          onChange={e => setPdfEmailValue(e.target.value)}
+                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                                          placeholder="Votre email"
+                                          className="w-full h-10 sm:h-11 pl-9 sm:pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                                        />
+                                      </div>
+                                      <button
+                                        type="button"
+                                        disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
+                                        onClick={handleSendPdfEmail}
+                                        className="h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-4 sm:px-5 transition-colors shrink-0 flex items-center gap-2"
+                                      >
+                                        {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                                        {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
+                                      <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
+                                      <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                              <div>
-                                <h3 className="text-sm font-semibold text-aquiz-black">Vue radar comparative</h3>
-                                <p className="text-[11px] text-aquiz-gray">6 dimensions d&apos;analyse — Prix, Quartier, Sécurité, Énergie, Confort, Budget</p>
-                              </div>
-                            </div>
-                            <div className="flex justify-center">
-                              <RadarChart
-                                data={scoresForEmail.map((score, i) => {
-                                  const annonce = annoncesSelectionnees.find(a => a.id === score.annonceId)
-                                  return {
-                                    id: score.annonceId,
-                                    nom: annonce?.titre || annonce?.ville || `Bien ${i + 1}`,
-                                    couleur: COULEURS_RADAR[i % COULEURS_RADAR.length],
-                                    valeurs: scoreToRadarData(score as unknown as ScoreComparateurResult)
-                                  }
-                                })}
-                                size={300}
-                                showLabels
-                                showLegend
-                              />
                             </div>
                           </div>
-                        )}
+                          )
+                        })()}
 
-                        {/* Analyse IA — Synthèse professionnelle */}
-                        <AnalyseIA
-                          annonces={annoncesSelectionnees}
-                          statistiques={statsSelection}
-                          budgetMax={comparateur.budgetMax}
-                          onRequestHelp={() => setShowContactModal(true)}
-                        />
+                        {/* Pulse highlight animation */}
+                        <style>{`
+                          @keyframes pulseHighlight {
+                            0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+                            40% { box-shadow: 0 0 0 12px rgba(34,197,94,0.15); }
+                            100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+                          }
+                          .animate-pulse-highlight {
+                            animation: pulseHighlight 0.9s ease-out 2;
+                          }
+                        `}</style>
                       </div>
 
                     </div>
@@ -668,27 +1157,6 @@ export default function ComparateurPage() {
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
       />
-
-      {/* Modal Email — Rapport comparaison */}
-      <EmailComparisonModal
-        isOpen={showEmailModal}
-        onClose={() => setShowEmailModal(false)}
-        annonces={annoncesSelectionnees}
-        scoresData={scoresForEmail}
-        initialEmail={storedEmail || leadEmail}
-        onSuccess={(email: string) => {
-          storeUnlock(email)
-          leadStore.capture(email, 'comparateur')
-        }}
-      />
-
-      {/* Sticky CTA Bar — bonus: recevoir la comparaison par email */}
-      {activeTab === 'comparaison' && selCount >= 2 && (
-        <StickyCtaBar
-          onRequestHelp={() => setShowEmailModal(true)}
-          triggerRef={stickyTriggerRef}
-        />
-      )}
 
       {/* ═══ FLOATING MANAGE BAR ═══ */}
       {manageMode && activeTab === 'liste' && (

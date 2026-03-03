@@ -21,6 +21,7 @@ import {
     type AideAccession,
     type CategorieAide
 } from '@/data/aides-accession'
+import { useAidesFreshness } from '@/hooks/useAidesFreshness'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
     ArrowLeft,
@@ -29,6 +30,7 @@ import {
     Calculator,
     CheckCircle,
     ChevronDown,
+    ChevronLeft,
     ExternalLink,
     FileCheck,
     Gift,
@@ -96,41 +98,56 @@ const formatMontant = (n: number): string => n.toLocaleString('fr-FR')
 function SelecteurDepartement({ onSelect }: { onSelect: (code: string) => void }) {
   return (
     <div className="min-h-screen bg-white">
+      {/* ═══ Mobile back nav ═══ */}
+      <div className="sm:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 h-12">
+          <Link
+            href="/"
+            className="flex items-center gap-1 text-aquiz-gray hover:text-aquiz-black transition-colors -ml-1"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Retour</span>
+          </Link>
+          <span className="text-sm font-semibold text-aquiz-black absolute left-1/2 -translate-x-1/2">Aides & PTZ</span>
+          <div className="w-16" />
+        </div>
+      </div>
+
       {/* Hero — même style que /simulateur */}
-      <section className="pt-10 pb-6 md:pt-12 md:pb-8 border-b border-aquiz-gray-lighter">
-        <div className="max-w-2xl mx-auto px-5 text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/8 text-aquiz-green text-xs font-medium mb-3">
+      <section className="pt-6 pb-4 sm:pt-10 sm:pb-6 md:pt-12 md:pb-8 border-b border-aquiz-gray-lighter">
+        <div className="max-w-2xl mx-auto px-4 sm:px-5 text-center">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-aquiz-green/8 text-aquiz-green text-xs font-medium mb-2 sm:mb-3">
             <MapPin className="w-3.5 h-3.5" />
-            Île-de-France
+            Paris et Île-de-France
           </div>
-          <h1 className="text-2xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
+          <h1 className="text-xl sm:text-2xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
             Les aides pour devenir propriétaire
           </h1>
-          <p className="mt-2 text-sm md:text-base text-aquiz-gray-light max-w-lg mx-auto leading-relaxed">
+          <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm md:text-base text-aquiz-gray-light max-w-lg mx-auto leading-relaxed">
             PTZ, Action Logement, aides locales… découvrez les dispositifs accessibles dans votre département.
           </p>
         </div>
       </section>
 
       {/* Grille de départements */}
-      <section className="max-w-3xl mx-auto px-5 py-8 md:py-10">
-        <div className="flex items-center justify-between mb-5">
-          <p className="text-xs font-medium text-aquiz-gray-light uppercase tracking-widest">Sélectionnez un département</p>
-          <div className="flex items-center gap-3 text-[10px]">
+      <section className="max-w-3xl mx-auto px-4 sm:px-5 py-5 sm:py-8 md:py-10">
+        <div className="flex items-center justify-between mb-4 sm:mb-5">
+          <p className="text-[11px] sm:text-xs font-medium text-aquiz-gray-light uppercase tracking-widest">Sélectionnez un département</p>
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px]">
             <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-aquiz-green" /><span className="text-aquiz-gray">Abis</span></span>
             <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500" /><span className="text-aquiz-gray">A</span></span>
             <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" /><span className="text-aquiz-gray">B1</span></span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
           {DEPARTEMENTS_IDF.map((dept) => (
             <button
               key={dept.code}
               onClick={() => onSelect(dept.code)}
-              className="group flex items-center gap-4 p-4 rounded-xl border border-aquiz-gray-lighter bg-white hover:border-aquiz-gray-light hover:shadow-sm transition-all duration-150 text-left active:scale-[0.99]"
+              className="group flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-aquiz-gray-lighter bg-white hover:border-aquiz-gray-light hover:shadow-sm transition-all duration-150 text-left active:scale-[0.99]"
             >
-              <div className="w-11 h-11 rounded-xl bg-aquiz-gray-lightest group-hover:bg-aquiz-green/8 flex items-center justify-center transition-colors">
+              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-aquiz-gray-lightest group-hover:bg-aquiz-green/8 flex items-center justify-center transition-colors">
                 <span className="text-base font-bold text-aquiz-gray-dark group-hover:text-aquiz-green transition-colors">
                   {dept.code}
                 </span>
@@ -370,6 +387,7 @@ function AidesPageContent() {
   const [activeCategory, setActiveCategory] = useState<CategorieAide | 'all'>('all')
   const [showContactModal, setShowContactModal] = useState(false)
 
+  const freshness = useAidesFreshness()
   const typeBien = parametresModeA?.typeBien || 'neuf'
   const revenusAnnuels = (profil?.revenusMensuelsTotal || 0) * 12
   const capaciteAchat = resultats?.prixAchatMax || ((resultats?.capaciteEmprunt || 0) + (parametresModeA?.apport || 0))
@@ -423,17 +441,34 @@ function AidesPageContent() {
   // ===== MODE 2 : Zone sélectionnée → Aides =====
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <header className="border-b border-aquiz-gray-lighter">
-        <div className="max-w-4xl mx-auto px-4 sm:px-5 pt-5 pb-4 md:pt-10 md:pb-8">
-          {/* Navigation retour */}
+      {/* ═══ Mobile back nav ═══ */}
+      <div className="sm:hidden sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 h-12">
           <button
             onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)}
-            className="inline-flex items-center gap-1.5 text-xs text-aquiz-gray-light hover:text-aquiz-gray transition-colors mb-4"
+            className="flex items-center gap-1 text-aquiz-gray hover:text-aquiz-black transition-colors -ml-1"
           >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            {fromStore ? 'Retour à la carte' : 'Tous les départements'}
+            <ChevronLeft className="w-5 h-5" />
+            <span className="text-sm font-medium">Retour</span>
           </button>
+          <span className="text-sm font-semibold text-aquiz-black absolute left-1/2 -translate-x-1/2 truncate max-w-[50%]">{zoneSelectionnee.nomCommune}</span>
+          <div className="w-16" />
+        </div>
+      </div>
+
+      {/* Header */}
+      <header className="border-b border-aquiz-gray-lighter">
+        <div className="max-w-4xl mx-auto px-4 sm:px-5 pt-4 pb-3 sm:pt-5 sm:pb-4 md:pt-10 md:pb-8">
+          {/* Breadcrumb inline — hidden on mobile (replaced by back nav) */}
+          <nav className="hidden sm:flex items-center gap-1.5 text-[11.5px] text-gray-400 mb-4" aria-label="Fil d'Ariane">
+            <a href="/" className="hover:text-aquiz-green transition-colors">Accueil</a>
+            <span className="text-gray-300">/</span>
+            <button onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)} className="hover:text-aquiz-green transition-colors">
+              {fromStore ? 'Carte' : 'Aides & PTZ'}
+            </button>
+            <span className="text-gray-300">/</span>
+            <span className="text-gray-500 font-medium">{zoneSelectionnee.nomCommune}</span>
+          </nav>
 
           {/* Carte récap — regroupée */}
           <div className="rounded-xl border border-aquiz-gray-lighter bg-white overflow-hidden">
@@ -523,12 +558,15 @@ function AidesPageContent() {
               </div>
             </div>
 
-            {/* Badge données vérifiées */}
+            {/* Badge données vérifiées — dynamique */}
             <div className="px-4 sm:px-5 py-2 border-t border-aquiz-gray-lighter/50 bg-slate-50/30">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${freshness.colorClass}`} />
                 <span className="text-[10px] text-aquiz-gray leading-snug">
-                  Données vérifiées · Sources : <a href="https://www.anil.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">ANIL</a>, <a href="https://www.legifrance.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">Légifrance</a>, <a href="https://www.service-public.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">service-public.fr</a> · Janvier 2026
+                  Données vérifiées · Sources : <a href="https://www.anil.org" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">ANIL</a>, <a href="https://www.legifrance.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">Légifrance</a>, <a href="https://www.service-public.gouv.fr" target="_blank" rel="noopener noreferrer" className="underline hover:text-aquiz-black">service-public.gouv.fr</a> · Mise à jour : <span className={freshness.colorClass}>{freshness.label}</span>
+                  {freshness.staleCount > 0 && (
+                    <span className="text-amber-500"> · {freshness.staleCount} aide{freshness.staleCount > 1 ? 's' : ''} à revérifier</span>
+                  )}
                 </span>
               </div>
             </div>

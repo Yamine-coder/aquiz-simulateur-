@@ -81,6 +81,7 @@ export function ImageCarousel({ images, alt, className = '', onClick }: ImageCar
           className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
           fill
           sizes="(max-width: 768px) 100vw, 300px"
+          unoptimized
         />
       </div>
     )
@@ -109,6 +110,7 @@ export function ImageCarousel({ images, alt, className = '', onClick }: ImageCar
               fill
               sizes="(max-width: 768px) 100vw, 300px"
               priority={i === 0}
+              unoptimized
             />
           </div>
         ))}

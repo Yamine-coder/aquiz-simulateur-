@@ -4,6 +4,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactCompiler: true,
   trailingSlash: false,
+  // Exclure Playwright du bundle serverless (utilisé uniquement en local/VPS)
+  serverExternalPackages: ['playwright', 'playwright-core'],
   images: {
     qualities: [75, 90],
     remotePatterns: [
@@ -61,7 +63,6 @@ export default withSentryConfig(nextConfig, {
   // Requires SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT env vars
   silent: !process.env.CI,
   widenClientFileUpload: true,
-  disableLogger: true,
   // Tunnelling avoids ad-blockers
   tunnelRoute: '/monitoring',
   // Automatically tree-shake Sentry logger in production

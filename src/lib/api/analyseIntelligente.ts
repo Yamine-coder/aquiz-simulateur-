@@ -29,6 +29,10 @@ export interface BienAnalyse {
   hasBalcon?: boolean
   hasParking?: boolean
   hasCave?: boolean
+  /** Latitude GPS (si fournie directement par la plateforme) */
+  latitude?: number
+  /** Longitude GPS (si fournie directement par la plateforme) */
+  longitude?: number
 }
 
 export interface AnalyseMarche {
@@ -58,6 +62,22 @@ export interface AnalyseRisques {
   message?: string
 }
 
+export interface TransportProche {
+  type: string
+  /** Type enrichi: metro | rer | train | tram | bus | velo */
+  typeTransport: string
+  nom: string
+  distance: number
+  /** Temps de marche estimé (minutes, ~4.5 km/h) */
+  walkMin?: number
+  /** Numéros/noms de lignes (ex: ["1", "4", "7"]) */
+  lignes?: string[]
+  /** Opérateur (RATP, SNCF, Keolis…) */
+  operateur?: string
+  /** Couleur hex de la ligne */
+  couleur?: string
+}
+
 export interface AnalyseQuartier {
   success: boolean
   scoreQuartier?: number // 0-100
@@ -66,6 +86,7 @@ export interface AnalyseQuartier {
   ecoles?: number
   sante?: number
   espaceVerts?: number
+  transportsProches?: TransportProche[]
   verdict?: 'excellent' | 'bon' | 'moyen' | 'faible'
   message?: string
 }
@@ -127,18 +148,20 @@ async function geocoderAdresse(
  * Combine toutes les sources de données gratuites
  */
 export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> {
-  // 1. Géocoder l'adresse pour avoir les coordonnées
-  let latitude: number | undefined
-  let longitude: number | undefined
+  // 1. Coordonnées GPS : utiliser celles de la plateforme si dispo, sinon géocoder
+  let latitude: number | undefined = bien.latitude
+  let longitude: number | undefined = bien.longitude
   
-  // Essayer d'abord avec l'adresse complète, sinon avec le code postal seul
-  const geo = await geocoderAdresse(
-    bien.adresse || '', 
-    bien.codePostal
-  )
-  if (geo) {
-    latitude = geo.lat
-    longitude = geo.lon
+  if (!latitude || !longitude) {
+    // Géocoder l'adresse pour avoir les coordonnées
+    const geo = await geocoderAdresse(
+      bien.adresse || '', 
+      bien.codePostal
+    )
+    if (geo) {
+      latitude = geo.lat
+      longitude = geo.lon
+    }
   }
   
   // 2. Lancer les 3 analyses en parallèle
@@ -329,52 +352,68 @@ async function analyserQuartier(
   latitude: number,
   longitude: number
 ): Promise<AnalyseQuartier> {
-  try {
-    const params = new URLSearchParams({
-      lat: latitude.toString(),
-      lon: longitude.toString(),
-      rayon: '800'
-    })
-    
-    const response = await fetch(`/api/analyse/quartier?${params.toString()}`)
-    const result = await response.json()
-    
-    if (!result.success || !result.data) {
-      return { success: false, message: 'Analyse quartier non disponible' }
+  const params = new URLSearchParams({
+    lat: latitude.toString(),
+    lon: longitude.toString(),
+    rayon: '800'
+  })
+  const url = `/api/analyse/quartier?${params.toString()}`
+
+  // Retry avec backoff exponentiel (2 tentatives max)
+  const MAX_RETRIES = 2
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await fetch(url)
+      const result = await response.json()
+
+      if (!result.success || !result.data) {
+        // Si erreur serveur (502/503/504), retenter
+        if (response.status >= 500 && attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+          continue
+        }
+        return { success: false, message: 'Analyse quartier non disponible' }
+      }
+
+      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches } = result.data
+
+      // Verdict
+      let verdict: AnalyseQuartier['verdict']
+      const message: string = synthese
+
+      if (scoreGlobal >= 75) {
+        verdict = 'excellent'
+      } else if (scoreGlobal >= 50) {
+        verdict = 'bon'
+      } else if (scoreGlobal >= 25) {
+        verdict = 'moyen'
+      } else {
+        verdict = 'faible'
+      }
+
+      return {
+        success: true,
+        scoreQuartier: scoreGlobal,
+        transports,
+        commerces,
+        ecoles,
+        sante,
+        espaceVerts,
+        transportsProches: transportsProches ?? [],
+        verdict,
+        message
+      }
+
+    } catch (error) {
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
+        continue
+      }
+      console.error('Erreur analyse quartier:', error)
+      return { success: false, message: 'Erreur lors de l\'analyse du quartier' }
     }
-    
-    const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese } = result.data
-    
-    // Verdict
-    let verdict: AnalyseQuartier['verdict']
-    let message: string = synthese
-    
-    if (scoreGlobal >= 75) {
-      verdict = 'excellent'
-    } else if (scoreGlobal >= 50) {
-      verdict = 'bon'
-    } else if (scoreGlobal >= 25) {
-      verdict = 'moyen'
-    } else {
-      verdict = 'faible'
-    }
-    
-    return {
-      success: true,
-      scoreQuartier: scoreGlobal,
-      transports,
-      commerces,
-      ecoles,
-      sante,
-      espaceVerts,
-      verdict,
-      message
-    }
-    
-  } catch (error) {
-    console.error('Erreur analyse quartier:', error)
-    return { success: false, message: 'Erreur lors de l\'analyse du quartier' }
   }
+  return { success: false, message: 'Analyse quartier non disponible après retries' }
 }
 
 // ============================================

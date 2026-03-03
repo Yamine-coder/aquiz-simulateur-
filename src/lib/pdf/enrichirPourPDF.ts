@@ -346,18 +346,106 @@ async function fetchSyntheseIA(
       }),
       signal: AbortSignal.timeout(15000),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const errText = await res.text().catch(() => 'no body')
+      console.error('[enrichirPourPDF] synthese-ia API error:', res.status, errText)
+      return null
+    }
     const json = await res.json()
-    if (!json.success || !json.data) return null
+    if (!json.success || !json.data) {
+      console.warn('[enrichirPourPDF] synthese-ia API returned:', { success: json.success, source: json.source, hasData: !!json.data })
+      return null
+    }
 
+    console.info('[enrichirPourPDF] Synthèse IA source:', json.source)
     return {
       synthese: json.data.synthese,
       economieEstimee: json.data.economieEstimee,
       cliffhanger: json.data.cliffhanger,
       source: json.source ?? 'unknown',
     }
-  } catch {
+  } catch (err) {
+    console.error('[enrichirPourPDF] fetchSyntheseIA failed:', err)
     return null
+  }
+}
+
+// ============================================
+// FALLBACK CLIENT (quand l'API est injoignable)
+// ============================================
+
+/**
+ * Synthèse déterministe côté client, utilisée si l'API IA est indisponible.
+ * Garantit que la section IA apparaît TOUJOURS dans le PDF.
+ */
+function generateClientFallbackSyntheseIA(
+  params: EnrichissementParams,
+  marche: DonneesMarcheLocal | null,
+  quartier: DonneesQuartier | null
+): SyntheseIA {
+  const fmt = (n: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(n)
+  const pctApport = params.prixAchatMax > 0 ? Math.round((params.apport / params.prixAchatMax) * 100) : 0
+
+  if (params.mode === 'B') {
+    const parts: string[] = []
+
+    if (marche && marche.surfaceEstimee > 0 && marche.prixM2Median > 0) {
+      const prixM2Bien = params.prixAchatMax / marche.surfaceEstimee
+      const ecart = Math.round(((prixM2Bien / marche.prixM2Median) - 1) * 100)
+      if (ecart > 5) {
+        parts.push('Ce bien se situe au-dessus du prix médian du secteur — une analyse approfondie permettra de déterminer si cet écart est justifié ou s\'il existe une marge de négociation.')
+      } else if (ecart < -3) {
+        parts.push('Ce bien est positionné en-dessous du marché local, ce qui peut représenter une opportunité — à condition de vérifier l\'état réel du bien et les éventuels travaux à prévoir.')
+      } else {
+        parts.push('Ce bien est dans la fourchette du marché local. Au-delà du prix, c\'est l\'adéquation avec votre projet de vie et le potentiel de valorisation qui feront la différence.')
+      }
+    } else {
+      parts.push('L\'analyse de ce bien nécessite une mise en perspective avec le marché local et les critères de qualité du quartier pour évaluer sa juste valeur.')
+    }
+
+    if (params.typeBien === 'ancien') {
+      parts.push('En ancien, les documents de copropriété et les diagnostics techniques révèlent souvent des coûts cachés que le prix affiché ne reflète pas.')
+    } else {
+      parts.push('En neuf, au-delà du prix, la réputation du promoteur et les prestations incluses déterminent la vraie valeur de l\'investissement.')
+    }
+
+    if (quartier && quartier.risques != null && quartier.risques < 5) {
+      parts.push('Attention : la zone présente des risques identifiés qui méritent une analyse approfondie avant toute offre.')
+    }
+
+    parts.push('Un conseiller AQUIZ analyse le bien dans sa globalité — état, copropriété, quartier, négociation et financement — pour sécuriser votre achat.')
+
+    const negoEconomie = marche ? Math.round(params.prixAchatMax * 0.04) : 0
+    const financeEconomie = Math.round(params.capitalEmpruntable * 0.002 * params.dureeAns)
+
+    return {
+      synthese: parts.join(' '),
+      economieEstimee: negoEconomie + financeEconomie,
+      cliffhanger: 'Avez-vous vérifié les diagnostics et les PV de copropriété avant de faire une offre ? Un conseiller AQUIZ peut les analyser pour vous.',
+      source: 'deterministe-client',
+    }
+  }
+
+  // Mode A
+  const parts: string[] = []
+
+  if (pctApport >= 20) {
+    parts.push('Votre niveau d\'apport vous donne une vraie liberté de choix — non seulement pour le financement, mais aussi pour cibler des biens nécessitant des travaux où la négociation est plus forte.')
+  } else if (pctApport < 10) {
+    parts.push('Avec un apport modeste, la stratégie d\'achat doit être ciblée : privilégiez les biens au juste prix dans des secteurs porteurs pour sécuriser votre investissement.')
+  } else {
+    parts.push(`Votre apport de ${fmt(params.apport)} EUR (${pctApport}%) vous place dans une position correcte — l'enjeu est maintenant de choisir le bon bien au bon prix.`)
+  }
+
+  parts.push('Quel que soit le budget, la vraie différence se fait sur le choix du bien : un DPE défavorable, des travaux de copropriété imprévus ou un quartier mal desservi peuvent transformer une opportunité en mauvais investissement.')
+
+  parts.push('Un conseiller AQUIZ vous accompagne sur tout le parcours — analyse des biens, vérification des documents, négociation et montage financier.')
+
+  return {
+    synthese: parts.join(' '),
+    economieEstimee: Math.round(params.capitalEmpruntable * 0.002 * params.dureeAns) + Math.round(params.mensualite * 0.15 * params.dureeAns * 12),
+    cliffhanger: 'Savez-vous quels critères vérifier en priorité avant de faire une offre ? Un conseiller AQUIZ peut vous guider.',
+    source: 'deterministe-client',
   }
 }
 
@@ -390,7 +478,14 @@ export async function enrichirPourPDF(params: EnrichissementParams): Promise<Enr
   }
 
   // Étape 2 : Synthèse IA (avec les données marché/quartier si disponibles)
-  result.syntheseIA = await fetchSyntheseIA(params, result.marche, result.quartier)
+  const syntheseIA = await fetchSyntheseIA(params, result.marche, result.quartier)
+  
+  // Fallback client : si l'API échoue (timeout, réseau), générer une synthèse déterministe
+  if (syntheseIA) {
+    result.syntheseIA = syntheseIA
+  } else {
+    result.syntheseIA = generateClientFallbackSyntheseIA(params, result.marche, result.quartier)
+  }
 
   return result
 }

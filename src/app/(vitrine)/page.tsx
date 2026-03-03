@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   },
 }
 
-/** Données structurées JSON-LD pour le SEO */
+/** @deprecated — moved to app/layout.tsx <head> to avoid SSR hydration mismatch */
 function JsonLd() {
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -236,15 +236,15 @@ function FaqSection() {
   const faqs = [
     {
       question: 'Le simulateur est-il vraiment gratuit ?',
-      answer: 'Oui, tous nos outils en ligne (simulateur, comparateur, carte des prix) sont 100% gratuits, sans inscription et sans engagement. Vous pouvez les utiliser autant de fois que vous le souhaitez.',
+      answer: 'Oui, tous nos outils en ligne (simulateur, comparateur, carte des prix) sont gratuits et sans engagement. Vous pouvez les utiliser autant de fois que vous le souhaitez.',
     },
     {
-      question: "Comment fonctionne le calcul de capacité d'emprunt ?",
-      answer: "Notre simulateur applique les normes bancaires en vigueur : taux d'endettement maximum de 35% (norme HCSF 2026), durée max 25 ans. Il intègre les frais de notaire, l'assurance emprunteur et les données de prix officielles.",
+      question: "Comment fonctionne notre simulateur ?",
+      answer: "Notre simulateur applique les normes bancaires théoriques, intègre les frais annexes et le rapprochement des données des prix officiels.",
     },
     {
       question: "Qu'est-ce que la chasse immobilière ?",
-      answer: "La chasse immobilière consiste à mandater un expert pour rechercher à votre place le bien idéal. Nous accédons à des biens off-market (non publiés sur les portails) et effectuons une présélection selon vos critères.",
+      answer: "La chasse immobilière est un service d'accompagnement personnalisé qui consiste à rechercher, sélectionner et négocier un bien immobilier pour le compte d'un acheteur. Le chasseur immobilier analyse d'abord les besoins, le budget et les critères du client, puis il effectue les recherches, identifie les opportunités sur le marché (y compris parfois des biens off-market), organise les visites et accompagne l'acheteur jusqu'à la négociation et la finalisation de l'acquisition. L'objectif est de faire gagner du temps, sécuriser l'achat et optimiser le choix du bien grâce à une expertise du marché immobilier.",
     },
     {
       question: 'Intervenez-vous en dehors de Paris ?',
@@ -253,10 +253,6 @@ function FaqSection() {
     {
       question: 'Suis-je éligible au PTZ (Prêt à Taux Zéro) en 2026 ?',
       answer: "Le PTZ 2026 est réservé aux primo-accédants sous conditions de revenus. Notre simulateur calcule automatiquement votre éligibilité et le montant potentiel du PTZ selon la zone géographique et le type de bien (neuf ou ancien avec travaux).",
-    },
-    {
-      question: 'Combien coûte un accompagnement AQUIZ ?',
-      answer: "Nos tarifs démarrent à 5 900 € TTC pour un projet jusqu'à 500 000 €. Le rendez-vous stratégique initial de 30 minutes est gratuit et sans engagement. Tous nos outils en ligne (simulateur, comparateur, carte des prix) sont 100% gratuits.",
     },
     {
       question: 'Quel est le taux d\'endettement maximum pour acheter en 2026 ?',
@@ -282,7 +278,7 @@ function FaqSection() {
   }
 
   return (
-    <section className="py-12 sm:py-16 md:py-20 bg-white scroll-mt-20 md:scroll-mt-24" id="faq">
+    <section className="py-12 sm:py-16 md:py-20 bg-white scroll-mt-18 md:scroll-mt-20" id="faq">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
@@ -352,7 +348,6 @@ function FaqSection() {
 export default function HomePage() {
   return (
     <>
-      <JsonLd />
       <HeroSection />
       <StatsBar />
       <ServicesSection />

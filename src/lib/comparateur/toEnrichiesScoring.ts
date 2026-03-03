@@ -8,7 +8,7 @@ import type { DonneesEnrichiesScoring } from '@/lib/comparateur/scoreComparateur
 interface AnalyseMinimale {
   marche: { success: boolean; ecartPrixM2?: number; verdict?: string; evolution12Mois?: number; prixM2MedianMarche?: number; nbTransactions?: number }
   risques: { success: boolean; scoreRisque?: number; verdict?: string; zoneInondable?: boolean; niveauRadon?: number }
-  quartier: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number }
+  quartier: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }> }
 }
 
 export function toEnrichiesScoring(analyse: AnalyseMinimale | null): DonneesEnrichiesScoring | undefined {

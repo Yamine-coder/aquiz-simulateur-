@@ -7,13 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/ui/MoneyInput'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import {
     Tooltip,
@@ -49,10 +42,10 @@ import {
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
-const SimulationPDFModeB = dynamic(() => import('@/components/pdf/SimulationPDFModeB').then(m => ({ default: m.SimulationPDFModeB })), { ssr: false })
+// SimulationPDFModeB is imported dynamically inside generatePDF
 
 /**
  * Mode B - "Ce qu'il faut pour acheter"
@@ -363,8 +356,9 @@ export default function ModeBPage() {
     const logoUrl = `${window.location.origin}/logo-aquiz-white.png`
 
     const { pdf } = await import('@react-pdf/renderer')
+    const { SimulationPDFModeB: SimulationPDFModeBComponent } = await import('@/components/pdf/SimulationPDFModeB')
     const blob = await pdf(
-      <SimulationPDFModeB
+      <SimulationPDFModeBComponent
         logoUrl={logoUrl}
         prixBien={prixBien}
         typeBien={typeBien}
@@ -421,19 +415,22 @@ export default function ModeBPage() {
     if (!pdfEmailValue || pdfEmailLoading) return
     setPdfEmailLoading(true)
     try {
-      // 1. Enregistrer le lead via API
-      await fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: pdfEmailValue,
-          source: 'simulateur-b',
-          contexte: { prixBien, typeBien, dureeAns, apport }
+      // 1. Capture lead (non-bloquant — on génère le PDF même si ça échoue)
+      try {
+        const res = await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: pdfEmailValue,
+            source: 'simulateur-b',
+            contexte: { prixBien, typeBien, dureeAns, apport }
+          })
         })
-      })
-      // 2. Sync lead store
-      leadStore.capture(pdfEmailValue, 'simulateur-b', undefined, { prixBien, typeBien, dureeAns, apport })
-      // 3. Enrichir le PDF avec IA + données quartier (Mode B = a codePostal)
+        if (res.ok) {
+          leadStore.capture(pdfEmailValue, 'simulateur-b', undefined, { prixBien, typeBien, dureeAns, apport })
+        }
+      } catch { /* lead capture failed — continue anyway */ }
+      // 2. Enrichir le PDF avec IA + données quartier (Mode B = a codePostal)
       const enrichissement = await enrichirPourPDF({
         mode: 'B',
         codePostal: codePostal || undefined,
@@ -456,7 +453,7 @@ export default function ModeBPage() {
         tauxEndettement: 33,
         resteAVivre: calculs.revenusMinimums33 - calculs.mensualiteTotal,
       })
-      // 4. Cacher l'enrichissement pour re-téléchargement + générer PDF
+      // 3. Cacher l'enrichissement pour re-téléchargement + générer PDF
       setCachedEnrichissement(enrichissement)
       await generatePDF(enrichissement)
       setPdfEmailSent(true)
@@ -594,110 +591,144 @@ export default function ModeBPage() {
         />
       )}
 
-      {/* === STEPPER + ACTIONS === */}
-      <div className="border-b border-aquiz-gray-lighter/60 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Desktop */}
-          <div className="hidden md:flex items-center py-4 relative">
-            {/* Bouton retour desktop — label contextuel */}
+      {/* === STEPPER NAVIGATION (style Pretto/Stripe — stepper centré, pas de breadcrumb) === */}
+      {/* Schema.org BreadcrumbList caché pour le SEO */}
+      <ol className="sr-only" itemScope itemType="https://schema.org/BreadcrumbList">
+        <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+          <a href="/" itemProp="item"><span itemProp="name">Accueil</span></a>
+          <meta itemProp="position" content="1" />
+        </li>
+        <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+          <a href="/simulateur" itemProp="item"><span itemProp="name">Simulateur</span></a>
+          <meta itemProp="position" content="2" />
+        </li>
+        <li itemProp="itemListElement" itemScope itemType="https://schema.org/ListItem">
+          <span itemProp="name">Faisabilité</span>
+          <meta itemProp="position" content="3" />
+        </li>
+      </ol>
+
+      <nav aria-label="Progression de la simulation" className="bg-white border-b border-gray-100 sticky top-0 z-30 md:static md:z-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+
+          {/* ── Desktop ── */}
+          <div className="hidden md:flex items-center justify-center h-14 relative">
+            {/* Retour — contextuel : étape précédente ou page simulateur */}
             <button
               type="button"
               onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
-              className="flex items-center gap-1.5 mr-5 px-3 py-1.5 rounded-lg text-sm text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest transition-colors"
+              className="absolute left-0 flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium text-gray-400 hover:text-gray-800 rounded-lg hover:bg-gray-50 transition-all group"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              {etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}
+              <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform duration-200" />
+              <span>{etapeActuelleIndex === 0 ? 'Retour' : ETAPES[etapeActuelleIndex - 1].label}</span>
             </button>
-            <div className="w-px h-6 bg-aquiz-gray-lighter mr-5" />
-            {ETAPES.map((e, index) => {
-              const isActive = e.id === etape
-              const isPassed = index < etapeActuelleIndex
-              const isClickable = canGoToEtape(e.id)
-              
-              return (
-                <div key={e.id} className="flex items-center flex-1">
-                  <button
-                    type="button"
-                    onClick={() => goToEtape(e.id)}
-                    disabled={!isClickable}
-                    className={`group flex items-center gap-3 transition-all ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
-                  >
-                    <div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
-                      ${isActive 
-                        ? 'bg-aquiz-green text-white shadow-md shadow-aquiz-green/20' 
-                        : isPassed 
-                          ? 'bg-aquiz-green/15 text-aquiz-green' 
-                          : 'bg-gray-100 text-gray-400'
-                      }
-                    `}>
-                      {isPassed ? <CheckCircle className="w-4 h-4" /> : index + 1}
-                    </div>
-                    <span className={`text-sm font-semibold transition-colors ${
-                      isActive ? 'text-aquiz-green' : isPassed ? 'text-aquiz-green' : 'text-gray-400'
-                    }`}>
-                      {e.label}
-                    </span>
-                  </button>
-                  
-                  {index < ETAPES.length - 1 && (
-                    <div className="flex-1 mx-4">
-                      <div className={`h-0.5 rounded-full transition-all duration-300 ${isPassed ? 'bg-aquiz-green' : 'bg-gray-200'}`} />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} className="absolute right-0 top-1/2 -translate-y-1/2" />
+
+            {/* Stepper centré */}
+            <ol className="flex items-center">
+              {ETAPES.map((e, index) => {
+                const isActive = e.id === etape
+                const isPassed = e.id < etape
+                const isClickable = canGoToEtape(e.id)
+                const isLast = index === ETAPES.length - 1
+                
+                return (
+                  <Fragment key={e.id}>
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => isClickable && goToEtape(e.id)}
+                        disabled={!isClickable}
+                        className={`flex items-center gap-2 px-1 py-1 transition-all duration-200 ${
+                          isClickable && !isActive ? 'cursor-pointer' : 'cursor-default'
+                        }`}
+                      >
+                        <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all duration-200 ${
+                          isActive
+                            ? 'bg-aquiz-green text-white shadow-sm shadow-aquiz-green/25'
+                            : isPassed
+                              ? 'bg-aquiz-green/10 text-aquiz-green'
+                              : 'bg-gray-100 text-gray-400'
+                        }`}>
+                          {isPassed ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : e.id}
+                        </div>
+                        <span className={`text-[13px] transition-colors duration-200 ${
+                          isActive
+                            ? 'text-gray-900 font-semibold'
+                            : isPassed
+                              ? 'text-aquiz-green font-medium'
+                              : 'text-gray-400 font-medium'
+                        }`}>
+                          {e.label}
+                        </span>
+                      </button>
+                    </li>
+                    {!isLast && (
+                      <li aria-hidden="true" className="flex items-center mx-3">
+                        <div className={`w-10 h-px transition-colors duration-300 ${
+                          isPassed ? 'bg-aquiz-green/30' : 'bg-gray-200'
+                        }`} />
+                      </li>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </ol>
+
+            {/* Auto-save */}
+            <div className="absolute right-0">
+              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
+            </div>
           </div>
-          
-          {/* Mobile */}
-          <div className="md:hidden py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              {/* Bouton retour mobile — label contextuel */}
+
+          {/* ── Mobile ── */}
+          <div className="md:hidden">
+            <div className="flex items-center h-12 relative">
+              {/* Retour */}
               <button
                 type="button"
                 onClick={etapeActuelleIndex > 0 ? goToPrevEtape : () => router.push('/simulateur')}
-                className="w-8 h-8 rounded-full bg-aquiz-gray-lightest flex items-center justify-center text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lighter transition-colors"
-                aria-label={etapeActuelleIndex === 0 ? 'Retour' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 active:text-gray-900 active:bg-gray-100 rounded-full transition-colors shrink-0 -ml-1"
+                aria-label={etapeActuelleIndex === 0 ? 'Retour au simulateur' : `Retour à ${ETAPES[etapeActuelleIndex - 1].label}`}
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ArrowLeft className="w-4.5 h-4.5" />
               </button>
-              <div>
-                <p className="text-sm font-semibold text-aquiz-black">{ETAPES[etapeActuelleIndex].label}</p>
-                <p className="text-[11px] text-aquiz-gray">Étape {etapeActuelleIndex + 1} sur {ETAPES.length}</p>
+
+              {/* Progress bar + label — centré */}
+              <div className="flex-1 flex flex-col items-center justify-center gap-1 px-2">
+                <span className="text-[12px] font-semibold text-gray-800">
+                  {ETAPES[etapeActuelleIndex].label}
+                </span>
+                <div className="flex items-center gap-1.5 w-full max-w-[140px]">
+                  {ETAPES.map((e) => {
+                    const isActive = e.id === etape
+                    const isPassed = e.id < etape
+                    return (
+                      <div
+                        key={e.id}
+                        className={`h-1 rounded-full flex-1 transition-all duration-300 ${
+                          isPassed
+                            ? 'bg-aquiz-green'
+                            : isActive
+                              ? 'bg-aquiz-green/60'
+                              : 'bg-gray-200'
+                        }`}
+                      />
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <AutoSaveIndicator lastSavedAt={autoSave.lastSavedAt} />
-              <div className="flex gap-1.5">
-              {ETAPES.map((e, index) => {
-                const isClickable = canGoToEtape(e.id)
-                return (
-                  <button
-                    type="button"
-                    key={e.id}
-                    onClick={() => isClickable && goToEtape(e.id)}
-                    disabled={!isClickable}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
-                      index < etapeActuelleIndex 
-                        ? 'bg-aquiz-green w-5' 
-                        : index === etapeActuelleIndex 
-                          ? 'bg-aquiz-green w-7' 
-                          : 'bg-aquiz-gray-lighter w-5'
-                    } ${isClickable ? 'cursor-pointer hover:opacity-70' : 'cursor-not-allowed'}`}
-                    aria-label={`Étape ${index + 1}: ${e.label}`}
-                  />
-                )
-              })}
-              </div>
+
+              {/* Étape X/3 */}
+              <span className="text-[11px] text-gray-400 font-medium tabular-nums shrink-0 mr-0.5">
+                {etapeActuelleIndex + 1}/{ETAPES.length}
+              </span>
             </div>
           </div>
         </div>
-      </div>
+      </nav>
 
       {/* Contenu principal */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-3 sm:px-6 py-5 sm:py-8">
         {/* ÉTAPE 1 : Le bien ciblé */}
         {etape === 1 && (
           <div className="animate-fade-in">
@@ -1134,32 +1165,45 @@ export default function ModeBPage() {
                       value={[dureeAns]}
                       onValueChange={(v) => setDureeAns(v[0])}
                       min={10}
-                      max={30}
+                      max={25}
                       step={1}
                       className="w-full"
                     />
                     <div className="flex justify-between text-xs text-aquiz-gray">
                       <span>10 ans</span>
-                      <span>30 ans</span>
+                      <span>25 ans</span>
                     </div>
                   </div>
 
                   {/* Taux d'intérêt */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt</Label>
-                    <Select
-                      value={tauxInteret.toFixed(1)}
-                      onValueChange={(v) => setTauxInteret(parseFloat(v))}
-                    >
-                      <SelectTrigger className="h-11 bg-white border border-aquiz-gray-lighter rounded-lg">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="3.2">3.2% (Optimiste)</SelectItem>
-                        <SelectItem value="3.5">3.5% (Moyen)</SelectItem>
-                        <SelectItem value="3.8">3.8% (Conservateur)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt</Label>
+                      <span className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-md ${
+                        tauxInteret <= 3.2 ? 'bg-emerald-50 text-emerald-700' :
+                        tauxInteret <= 3.5 ? 'bg-aquiz-green/10 text-aquiz-green' :
+                        tauxInteret <= 3.7 ? 'bg-amber-50 text-amber-700' :
+                        'bg-red-50 text-red-600'
+                      }`}>{tauxInteret.toFixed(1)}%</span>
+                    </div>
+                    <div className="relative">
+                      <div
+                        className="absolute inset-0 h-1.5 top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                        style={{ background: 'linear-gradient(to right, #059669, #34d399, #fbbf24, #f87171)' }}
+                      />
+                      <Slider
+                        value={[tauxInteret * 10]}
+                        onValueChange={(v) => setTauxInteret(v[0] / 10)}
+                        min={30}
+                        max={40}
+                        step={1}
+                        className="w-full [&_[data-slot=slider-track]]:bg-transparent [&_[data-slot=slider-range]]:bg-transparent"
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-aquiz-gray">
+                      <span className="text-emerald-600">3.0%</span>
+                      <span className="text-red-500">4.0%</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1278,31 +1322,7 @@ export default function ModeBPage() {
                   </div>
                 </div>
 
-                {/* Actions mobile */}
-                <div className="sm:hidden flex gap-2 mt-4">
-                  <button
-                    type="button"
-                    onClick={goToPrevEtape}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-sm font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.98] transition-all duration-200"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    Modifier
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const el = document.getElementById('pdf-gate')
-                      if (!el) return
-                      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                      el.classList.add('animate-pulse-highlight')
-                      setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                    }}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-aquiz-black text-white text-sm font-semibold hover:bg-aquiz-black/85 active:scale-[0.98] transition-all duration-200"
-                  >
-                    <FileDown className="w-4 h-4" />
-                    Mon étude PDF
-                  </button>
-                </div>
+                {/* Actions mobile — hidden, bottom bar handles this */}
               </div>
 
               {/* Keyframe for pulse highlight */}
@@ -1321,17 +1341,17 @@ export default function ModeBPage() {
             <div className="space-y-5">
 
               {/* Chiffre clé : Revenus minimums (flouté) */}
-              <div className="bg-aquiz-green rounded-xl p-6 text-center">
-                <p className="text-xs uppercase tracking-wider text-white/60 mb-2">
+              <div className="bg-aquiz-green rounded-xl p-4 sm:p-6 text-center">
+                <p className="text-[10px] sm:text-xs uppercase tracking-wider text-white/60 mb-1 sm:mb-2">
                   Revenus mensuels requis
                 </p>
-                <p className="text-4xl font-bold text-white">
+                <p className="text-3xl sm:text-4xl font-bold text-white">
                   {formatMontant(calculs.revenusMinimums33)} €
                 </p>
-                <p className="text-xs text-white/50 mt-1">
+                <p className="text-[10px] sm:text-xs text-white/50 mt-1">
                   nets / mois (foyer) pour 33% d&apos;endettement
                 </p>
-                <div className="mt-4 pt-4 border-t border-white/10 flex justify-center gap-8 text-sm">
+                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/10 flex justify-center gap-4 sm:gap-8 text-xs sm:text-sm">
                   <div>
                     <span className="text-white/50">À 35%</span>
                     <span className="text-white font-medium ml-2">{formatMontant(calculs.revenusMinimums35)} €</span>
@@ -1346,7 +1366,7 @@ export default function ModeBPage() {
 
               {/* Détails financiers */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-3">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-2 sm:gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">1</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Détail du financement</h3>
                 </div>
@@ -1388,7 +1408,7 @@ export default function ModeBPage() {
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h3>
                 </div>
-              <div className="p-5">
+              <div className="p-4 sm:p-5">
                 {/* Barre de répartition horizontale minimaliste */}
                 <div className="h-3 rounded-full overflow-hidden flex bg-aquiz-gray-lighter">
                   {calculs.repartitionCout.map((item, i) => (
@@ -1403,7 +1423,7 @@ export default function ModeBPage() {
                   ))}
                 </div>
                 {/* Légende simple */}
-                <div className="grid grid-cols-2 gap-4 mt-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-5">
                   {calculs.repartitionCout.map((item, i) => (
                     <div key={i} className="flex items-center gap-3">
                       <div 
@@ -1425,9 +1445,9 @@ export default function ModeBPage() {
                   ))}
                 </div>
                 {/* Total */}
-                <div className="mt-5 pt-4 border-t border-aquiz-gray-lighter flex justify-between items-center">
-                  <span className="text-sm text-aquiz-gray">Total sur {dureeAns} ans</span>
-                  <span className="text-lg font-bold text-aquiz-black">{formatMontant(Math.round(calculs.totalProjet))} €</span>
+                <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-aquiz-gray-lighter flex justify-between items-center">
+                  <span className="text-xs sm:text-sm text-aquiz-gray">Total sur {dureeAns} ans</span>
+                  <span className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(Math.round(calculs.totalProjet))} €</span>
                 </div>
               </div>
             </div>
@@ -1438,9 +1458,9 @@ export default function ModeBPage() {
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Mensualité selon la durée</h3>
                 </div>
-              <div className="p-5">
+              <div className="p-4 sm:p-5">
                 {/* Graphique barres minimaliste */}
-                <div className="flex items-end justify-between gap-4" style={{ height: '120px' }}>
+                <div className="flex items-end justify-between gap-2 sm:gap-4" style={{ height: '120px' }}>
                   {calculs.simulationsDuree.map((sim) => {
                     const maxMens = Math.max(...calculs.simulationsDuree.map(s => s.mensualite))
                     const minMens = Math.min(...calculs.simulationsDuree.map(s => s.mensualite))
@@ -1470,8 +1490,8 @@ export default function ModeBPage() {
                   })}
                 </div>
                 {/* Info simple avec icônes */}
-                <div className="mt-5 pt-4 border-t border-aquiz-gray-lighter">
-                  <div className="flex justify-between text-xs">
+                <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-aquiz-gray-lighter">
+                  <div className="flex flex-col sm:flex-row justify-between gap-1 sm:gap-0 text-xs">
                     <div className="flex items-center gap-2 text-aquiz-gray">
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>Durée longue = mensualité réduite</span>
@@ -1487,17 +1507,17 @@ export default function ModeBPage() {
 
               {/* Mensualité détaillée */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-2 sm:gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">4</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Mensualité</h3>
                 </div>
-              <div className="p-5">
-                <div className="flex items-end justify-between mb-4">
+              <div className="p-4 sm:p-5">
+                <div className="flex items-end justify-between mb-3 sm:mb-4">
                   <div>
-                    <p className="text-3xl font-bold text-aquiz-black">{formatMontant(Math.round(calculs.mensualiteTotal))} €</p>
-                    <p className="text-xs text-aquiz-gray">par mois pendant {dureeAns} ans</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-aquiz-black">{formatMontant(Math.round(calculs.mensualiteTotal))} €</p>
+                    <p className="text-[10px] sm:text-xs text-aquiz-gray">par mois pendant {dureeAns} ans</p>
                   </div>
-                  <div className="text-right text-sm">
+                  <div className="text-right text-xs sm:text-sm">
                     <p className="text-aquiz-gray">Crédit : <span className="text-aquiz-black font-medium">{formatMontant(Math.round(calculs.mensualiteCredit))} €</span></p>
                     <p className="text-aquiz-gray">Assurance : <span className="text-aquiz-black font-medium">{formatMontant(Math.round(calculs.mensualiteAssurance))} €</span></p>
                   </div>
@@ -1518,7 +1538,7 @@ export default function ModeBPage() {
 
               {/* Apport - indicateur simple */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <PiggyBank className="w-4 h-4 text-aquiz-green" />
                     <h3 className="font-semibold text-aquiz-black text-sm">Apport recommandé</h3>
@@ -1533,15 +1553,15 @@ export default function ModeBPage() {
                     </span>
                   )}
                 </div>
-                <div className="p-5">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-3 bg-aquiz-gray-lightest rounded-lg">
-                      <p className="text-xs text-aquiz-gray mb-1">Minimum (10%)</p>
-                      <p className="text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportMinimum10)} €</p>
+                <div className="p-4 sm:p-5">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="text-center p-2.5 sm:p-3 bg-aquiz-gray-lightest rounded-lg">
+                      <p className="text-[10px] sm:text-xs text-aquiz-gray mb-1">Minimum (10%)</p>
+                      <p className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportMinimum10)} €</p>
                     </div>
-                    <div className="text-center p-3 bg-aquiz-gray-lightest rounded-lg">
-                      <p className="text-xs text-aquiz-gray mb-1">Idéal (20%)</p>
-                      <p className="text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportIdeal20)} €</p>
+                    <div className="text-center p-2.5 sm:p-3 bg-aquiz-gray-lightest rounded-lg">
+                      <p className="text-[10px] sm:text-xs text-aquiz-gray mb-1">Idéal (20%)</p>
+                      <p className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportIdeal20)} €</p>
                     </div>
                   </div>
                   {apport > 0 && (
@@ -1554,7 +1574,7 @@ export default function ModeBPage() {
 
               {/* Comparatif durées - compact */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter">
                   <h3 className="font-semibold text-aquiz-black text-sm">Autres durées possibles</h3>
                 </div>
               <div className="divide-y divide-aquiz-gray-lighter">
@@ -1575,11 +1595,11 @@ export default function ModeBPage() {
                         {sim.duree} ans
                       </span>
                     </div>
-                    <div className="flex gap-6 text-sm">
+                    <div className="flex gap-3 sm:gap-6 text-xs sm:text-sm">
                       <span className={sim.duree === dureeAns ? 'font-medium text-aquiz-black' : 'text-aquiz-gray'}>
                         {formatMontant(sim.mensualite)} €/mois
                       </span>
-                      <span className={`w-24 text-right ${sim.duree === dureeAns ? 'font-medium text-aquiz-black' : 'text-aquiz-gray'}`}>
+                      <span className={`w-20 sm:w-24 text-right ${sim.duree === dureeAns ? 'font-medium text-aquiz-black' : 'text-aquiz-gray'}`}>
                         {formatMontant(sim.revenusMinimums)} € requis
                       </span>
                     </div>
@@ -1600,32 +1620,32 @@ export default function ModeBPage() {
                   </div>
                 <div className="divide-y divide-aquiz-gray-lighter">
                   {(nomCommune || infoLocalisation.nomCommune) && (
-                    <div className="flex justify-between px-5 py-2.5">
-                      <span className="text-sm text-aquiz-gray">Commune</span>
-                      <span className="text-sm font-medium text-aquiz-black">{nomCommune || infoLocalisation.nomCommune}</span>
+                    <div className="flex justify-between px-3 sm:px-5 py-2">
+                      <span className="text-xs sm:text-sm text-aquiz-gray shrink-0">Commune</span>
+                      <span className="text-xs sm:text-sm font-medium text-aquiz-black text-right">{nomCommune || infoLocalisation.nomCommune}</span>
                     </div>
                   )}
-                  <div className="flex justify-between px-5 py-2.5">
-                    <span className="text-sm text-aquiz-gray">Zone PTZ</span>
-                    <span className="text-sm font-medium text-aquiz-black">{infoLocalisation.zonePTZ}</span>
+                  <div className="flex justify-between px-3 sm:px-5 py-2">
+                    <span className="text-xs sm:text-sm text-aquiz-gray">Zone PTZ</span>
+                    <span className="text-xs sm:text-sm font-medium text-aquiz-black">{infoLocalisation.zonePTZ}</span>
                   </div>
                   {infoLocalisation.prixLocalM2 && (
-                    <div className="flex justify-between px-5 py-2.5">
-                      <span className="text-sm text-aquiz-gray">Prix médian {typeLogement}</span>
-                      <span className="text-sm font-medium text-aquiz-black">{formatMontant(infoLocalisation.prixLocalM2)} €/m²</span>
+                    <div className="flex justify-between px-3 sm:px-5 py-2">
+                      <span className="text-xs sm:text-sm text-aquiz-gray shrink-0">Prix médian {typeLogement}</span>
+                      <span className="text-xs sm:text-sm font-medium text-aquiz-black ml-2">{formatMontant(infoLocalisation.prixLocalM2)} €/m²</span>
                     </div>
                   )}
                   {infoLocalisation.surfaceEstimee && (
-                    <div className="flex justify-between px-5 py-2.5 bg-aquiz-green/5">
-                      <span className="text-sm text-aquiz-gray">Surface estimée pour {formatMontant(prixBien)} €</span>
-                      <span className="text-sm font-semibold text-aquiz-green">~{infoLocalisation.surfaceEstimee} m²</span>
+                    <div className="flex justify-between px-3 sm:px-5 py-2 bg-aquiz-green/5">
+                      <span className="text-xs sm:text-sm text-aquiz-gray shrink-0">Surface estimée pour {formatMontant(prixBien)} €</span>
+                      <span className="text-xs sm:text-sm font-semibold text-aquiz-green ml-2">~{infoLocalisation.surfaceEstimee} m²</span>
                     </div>
                   )}
-                  <div className="flex justify-between px-5 py-2.5">
+                  <div className="flex justify-between items-start px-3 sm:px-5 py-2">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="text-sm text-aquiz-gray flex items-center gap-1 cursor-help">
+                          <span className="text-xs sm:text-sm text-aquiz-gray flex items-center gap-1 cursor-help shrink-0">
                             PTZ ({typeBien})
                             <Info className="w-3 h-3" />
                           </span>
@@ -1642,7 +1662,7 @@ export default function ModeBPage() {
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                    <span className={`text-sm font-medium ${infoLocalisation.ptzEligible ? 'text-aquiz-green' : 'text-aquiz-gray'}`}>
+                    <span className={`text-xs sm:text-sm font-medium text-right ml-2 ${infoLocalisation.ptzEligible ? 'text-aquiz-green' : 'text-aquiz-gray'}`}>
                       {infoLocalisation.ptzEligible 
                         ? `Éligible (~${formatMontant(infoLocalisation.ptzMontant)} €)` 
                         : infoLocalisation.ptzRaison || 'Non éligible'
@@ -1650,7 +1670,7 @@ export default function ModeBPage() {
                     </span>
                   </div>
                   {infoLocalisation.source && (
-                    <div className="px-5 py-2 text-[10px] text-aquiz-gray text-right border-t border-aquiz-gray-lighter">
+                    <div className="px-3 sm:px-5 py-1.5 text-[10px] text-aquiz-gray text-right border-t border-aquiz-gray-lighter">
                       Source : {infoLocalisation.source} {infoLocalisation.nbVentes ? `• ${infoLocalisation.nbVentes} ventes` : ''}
                     </div>
                   )}
@@ -1686,46 +1706,80 @@ export default function ModeBPage() {
               )}
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-2 sm:gap-3 pt-3 sm:pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => { setEtape(1); scrollToTop() }}
-                  className="flex-1 h-12 border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-green hover:border-aquiz-green"
+                  className="flex-1 h-10 sm:h-12 text-sm border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-green hover:border-aquiz-green"
                 >
-                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  <ArrowLeft className="w-4 h-4 mr-1.5 sm:mr-2" />
                   Modifier le bien
                 </Button>
                 <Button
                   type="button"
                   onClick={() => router.push('/simulateur/mode-a?new=true')}
-                  className="flex-1 h-12 bg-aquiz-green hover:bg-aquiz-green/90"
+                  className="flex-1 h-10 sm:h-12 text-sm bg-aquiz-green hover:bg-aquiz-green/90"
                 >
                   Tester mon profil
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                  <ArrowRight className="w-4 h-4 ml-1.5 sm:ml-2" />
                 </Button>
               </div>
 
               {/* CTA Bonus — Recevez votre étude personnalisée PDF (email capture) */}
-              <div id="pdf-gate" className="mt-6">
+              <div id="pdf-gate" className="mt-4 sm:mt-6">
                 <div className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                  <div className="px-5 py-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                        <FileDown className="w-5 h-5 text-aquiz-green" />
+                  <div className="px-4 py-4 sm:px-5 sm:py-5">
+                    <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                        <FileDown className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-green" />
                       </div>
                       <div>
-                        <h3 className="font-bold text-sm text-aquiz-black">
-                          Votre étude personnalisée est prête
+                        <h3 className="font-bold text-[13px] sm:text-sm text-aquiz-black leading-tight">
+                          {pdfEmailSent ? 'Étude personnalisée téléchargée !' : 'Votre étude de faisabilité en PDF'}
                         </h3>
-                        <p className="text-aquiz-gray text-xs">
-                          Analyse IA, données de quartier, financement et conseils sur mesure
+                        <p className="text-aquiz-gray text-[11px] sm:text-xs leading-tight mt-0.5">
+                          {pdfEmailSent ? 'Vous pouvez la re-télécharger à tout moment.' : 'Tout pour savoir si ce bien est à votre portée — en un document.'}
                         </p>
                       </div>
                     </div>
 
-                    {!pdfEmailSent ? (
-                      <>
+                    {!pdfEmailSent && (
+                      <div className="grid grid-cols-2 gap-2 mb-4">
+                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
+                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                          <span className="text-[11px] text-aquiz-black/80">Revenus requis détaillés</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
+                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                          <span className="text-[11px] text-aquiz-black/80">Scores quartier (9 critères)</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
+                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                          <span className="text-[11px] text-aquiz-black/80">Analyse IA + économie estimée</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
+                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                          <span className="text-[11px] text-aquiz-black/80">Surface estimée + marché local</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {pdfEmailSent ? (
+                      <Button
+                        type="button"
+                        disabled={pdfLoading}
+                        onClick={async () => {
+                          setPdfLoading(true)
+                          try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
+                        }}
+                        className="w-full h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                      >
+                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                        {pdfLoading ? 'Génération…' : 'Re-télécharger mon étude'}
+                      </Button>
+                    ) : (
+                      <div className="space-y-2">
                         <div className="flex gap-2">
                           <div className="relative flex-1">
                             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
@@ -1733,52 +1787,33 @@ export default function ModeBPage() {
                               type="email"
                               value={pdfEmailValue}
                               onChange={e => setPdfEmailValue(e.target.value)}
-                              onKeyDown={e => e.key === 'Enter' && handleSendPdfEmail()}
-                              placeholder="votre@email.fr"
-                              className="w-full h-11 pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                              placeholder="Votre email"
+                              className="w-full h-10 sm:h-11 pl-9 sm:pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
                             />
                           </div>
                           <Button
                             type="button"
-                            disabled={pdfEmailLoading || !pdfEmailValue}
+                            disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
                             onClick={handleSendPdfEmail}
-                            className="h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl px-5 transition-colors"
+                            className="h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl px-4 sm:px-5 transition-colors shrink-0 flex items-center gap-2"
                           >
-                            {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Recevoir'}
+                            {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                            {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
                           </Button>
                         </div>
-                        <div className="flex items-center gap-3 mt-2.5 text-[10px] text-aquiz-gray">
-                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Analyse IA</span>
-                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Gratuit</span>
-                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" /> Sans spam</span>
+                        <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
+                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
+                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
                         </div>
-                      </>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-aquiz-green text-sm">
-                          <CheckCircle className="w-5 h-5 text-aquiz-green" />
-                          <span className="font-medium">Étude téléchargée !</span>
-                        </div>
-                        <Button
-                          type="button"
-                          disabled={pdfLoading}
-                          onClick={async () => {
-                            setPdfLoading(true)
-                            try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
-                          }}
-                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                        >
-                          {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                          Re-télécharger mon étude
-                        </Button>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* CTA Accompagnement projet */}
-              <div className="mt-6 bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+              {/* CTA Accompagnement projet — hidden on mobile, bottom bar has Conseiller */}
+              <div className="hidden sm:block mt-6 bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
@@ -1805,35 +1840,42 @@ export default function ModeBPage() {
                 </div>
               </div>
 
-              {/* Note discrète */}
-              <p className="text-xs text-center text-aquiz-gray pt-2 flex items-center justify-center gap-1">
-                <Info className="w-3 h-3" />
+              {/* Note discrète — hidden on mobile (bottom bar has navigation) */}
+              <p className="hidden sm:flex text-xs text-center text-aquiz-gray pt-2 items-center justify-center gap-1">
+                <Info className="w-3 h-3 shrink-0" />
                 Vous avez les revenus ? Testez le <Link href="/simulateur/mode-a" className="underline hover:text-aquiz-black">Mode A</Link> pour connaître votre capacité réelle.
               </p>
             </div>
 
               {/* Mobile sticky bar */}
-              <div className="lg:hidden fixed bottom-0 left-0 right-0 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter z-20">
-                <div className="flex gap-3">
+              <div className="sm:hidden fixed bottom-0 left-0 right-0 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter z-20">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    onClick={goToPrevEtape}
+                    className="h-10 px-3 bg-white border border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-green hover:border-aquiz-green rounded-xl text-xs"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </Button>
                   <Button
                     type="button"
                     onClick={() => document.getElementById('pdf-gate')?.scrollIntoView({ behavior: 'smooth' })}
-                    className="flex-1 h-11 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-2 text-sm"
+                    className="flex-1 h-10 bg-aquiz-black hover:bg-aquiz-black/90 text-white rounded-xl gap-1.5 text-xs"
                   >
-                    <FileDown className="w-4 h-4 shrink-0" />
+                    <FileDown className="w-3.5 h-3.5 shrink-0" />
                     Mon PDF
                   </Button>
                   <Button
                     type="button"
                     onClick={() => setShowContactModal(true)}
-                    className="flex-1 h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-2 text-sm"
+                    className="flex-1 h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-1.5 text-xs"
                   >
-                    <Phone className="w-4 h-4 shrink-0" />
+                    <Phone className="w-3.5 h-3.5 shrink-0" />
                     Conseiller
                   </Button>
                 </div>
               </div>
-              <div className="lg:hidden h-20" />
+              <div className="sm:hidden h-16" />
           </div>
         )}
       </main>

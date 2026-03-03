@@ -3,6 +3,7 @@
  * Extrait les infos principales des sites immobiliers
  */
 
+import { parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import type { ClasseDPE, NouvelleAnnonce, TypeBienAnnonce } from '@/types/annonces'
 
 // ============================================
@@ -23,14 +24,27 @@ export interface ExtractionResult {
 export function detecterSource(url: string): string | null {
   const urlLower = url.toLowerCase()
   
+  // ── Top 3 (API interne dédiée — bypass anti-bot, JSON complet) ──
   if (urlLower.includes('seloger.com')) return 'seloger'
   if (urlLower.includes('leboncoin.fr')) return 'leboncoin'
-  if (urlLower.includes('pap.fr')) return 'pap'
-  if (urlLower.includes('bienici.com')) return 'bienici'
+  if (urlLower.includes('bienici.com') || urlLower.includes('bien-ici.com')) return 'bienici'
+  
+  // ── Réseaux d'agences (API ou HTML accessible sans anti-bot) ──
+  if (urlLower.includes('laforet.com')) return 'laforet'
+  if (urlLower.includes('orpi.com')) return 'orpi'
+  if (urlLower.includes('century21.fr')) return 'century21'
+  if (urlLower.includes('guy-hoquet.com')) return 'guyhoquet'
+  if (urlLower.includes('stephaneplaza')) return 'stephaneplaza'
+  
+  // ── Portails immobiliers (HTML / JSON-LD accessibles) ──
+  if (urlLower.includes('paruvendu.fr')) return 'paruvendu'
+  if (urlLower.includes('superimmo.com')) return 'superimmo'
+  
+  // ── Sites protégés (DataDome/Cloudflare — fallback cascade uniquement) ──
   if (urlLower.includes('logic-immo.com')) return 'logic-immo'
+  if (urlLower.includes('pap.fr')) return 'pap'
   if (urlLower.includes('ouestfrance-immo.com')) return 'ouestfrance'
-  if (urlLower.includes('bien-ici.com')) return 'bienici'
-  if (urlLower.includes('immo.lefigaro.fr')) return 'figaro'
+  if (urlLower.includes('immo.lefigaro.fr') || urlLower.includes('immobilier.lefigaro.fr')) return 'figaro'
   
   return null
 }
@@ -178,9 +192,11 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   
   // ===== TYPE =====
+  // Ne PAS mettre de default 'appartement' ici — completerDonnees() le fera
+  // Sinon on écrase un type 'maison' trouvé par un parser de priorité inférieure
   if (/maison|villa|pavillon/i.test(html)) {
     data.type = 'maison'
-  } else {
+  } else if (/appartement|studio|duplex|triplex|loft/i.test(html)) {
     data.type = 'appartement'
   }
   
@@ -428,11 +444,16 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     // 4. Texte visible : "classe énergie : D", "Classe énergétique : D"
     html.match(/classe\s*(?:énergie|énergétique)\s*:?\s*([A-G])\b/i) ||
     // 5. Texte visible avec séparateur explicite : "DPE : D" (le : est OBLIGATOIRE pour éviter l'échelle)
-    html.match(/\bDPE\s*:\s*([A-G])\b/i)
+    html.match(/\bDPE\s*:\s*([A-G])\b/i) ||
+    // 6. SeLoger format : "(DPE) D" — la parenthèse fermante avant la lettre
+    html.match(/\(DPE\)\s*([A-G])\b/i) ||
+    html.match(/DPE\)\s*([A-G])\b/i) ||
+    // 7. Texte long : "diagnostic de performance énergétique (DPE) D"
+    html.match(/performance\s*[eé]nerg[eé]tique\s*(?:\(DPE\))?\s*:?\s*([A-G])\b/i)
+  // Ne PAS mettre dpe = 'NC' ici — completerDonnees() le fera en dernier recours
+  // Sinon on écrase un DPE valide trouvé par un parser de priorité inférieure (meta tags)
   if (dpeMatch) {
     data.dpe = dpeMatch[1].toUpperCase() as ClasseDPE
-  } else {
-    data.dpe = 'NC'
   }
   
   // ===== GES =====
@@ -444,10 +465,15 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     // 3. Attribut HTML valeur active
     html.match(/data-(?:current-?ges|ges-?value|ges-?class|emission-?class)[=:]\s*"?([A-G])"?/i) ||
     // 4. Texte visible avec label explicite
-    html.match(/gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*:?\s*([A-G])\b/i) ||
+    html.match(/gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*(?:\(GES\))?\s*:?\s*([A-G])\b/i) ||
     html.match(/classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i) ||
     // 5. Texte "GES : D" (: obligatoire)
-    html.match(/\bGES\s*:\s*([A-G])\b/i)
+    html.match(/\bGES\s*:\s*([A-G])\b/i) ||
+    // 6. SeLoger format : "(GES) D" — la parenthèse fermante avant la lettre
+    html.match(/\(GES\)\s*([A-G])\b/i) ||
+    html.match(/GES\)\s*([A-G])\b/i) ||
+    // 7. Texte long : "émission de gaz à effet de serre (GES) D"
+    html.match(/gaz\s*[àa]\s*effet\s*de\s*serre\s*\(GES\)\s*([A-G])\b/i)
   if (gesMatch) {
     data.ges = gesMatch[1].toUpperCase() as ClasseDPE
   }
@@ -516,6 +542,9 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     /"nbFloors"\s*:\s*"?(\d+)"?/i,
     /"numberOfFloors"\s*:\s*"?(\d+)"?/i,
     /"totalFloors"\s*:\s*"?(\d+)"?/i,
+    // Format "8ème étage/9 étages" ou "8e étage / 9" → capture le total
+    /\d+(?:er?|[eè]me?)?\s*étage\s*\/\s*(\d+)/i,
+    /\d+\s*\/\s*(\d+)\s*étages?/i,
     /(?:immeuble|bâtiment)\s*(?:de\s*)?(?:R\+)?(\d+)\s*étages?/i,
   ]
   for (const pattern of etagesTotalPatterns) {
@@ -535,18 +564,20 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     // Format explicite "Charges annuelles : 1768.00 euros" (prioritaire)
     /charges?\s*annuelles?\s*:?\s*(\d[\d\s]*(?:[.,]\d+)?)\s*(?:€|euros?)/i,
     // SeLoger format: "Charges de copropriété3 168 €/an" ou similaire
-    /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*(?:[.,]\d+)?)\s*€?\s*(?:\/\s*an)?/i,
+    /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*(?:[.,]\d+)?)\s*(?:€|euros?)?\s*(?:\/\s*an)?/i,
     // SeLoger specific JSON patterns
     /"charges?":\s*(\d+)/i,
     /"monthlyCharges?":\s*"?(\d+)"?/i,
     /"provisionCharges":\s*"?(\d+)"?/i,
     /"condominiumFees":\s*"?(\d+)"?/i,
     // Patterns textuels mensuels
-    /charges?\s*mensuelles?\s*:?\s*(\d+(?:\s?\d+)*)\s*€/i,
-    /provisions?\s*sur\s*charges?\s*:?\s*(\d+(?:\s?\d+)*)\s*€/i,
-    /charges?\s*:\s*(\d+(?:\s?\d+)*)\s*€\s*\/\s*mois/i,
+    /charges?\s*mensuelles?\s*:?\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)/i,
+    /provisions?\s*sur\s*charges?\s*:?\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)/i,
+    /charges?\s*:\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)\s*\/\s*mois/i,
     // Pattern avec "par mois"
-    /(\d+(?:\s?\d+)*)\s*€\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
+    /(\d+(?:\s?\d+)*)\s*(?:€|euros?)\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
+    // Pattern sans symbole : "charges mensuelles : 235"
+    /charges?\s*mensuelles?\s*:?\s*(\d+(?:\s?\d+)*)\b(?!\s*(?:lots?|copropriétaire))/i,
   ]
   
   for (const pattern of chargesPatterns) {
@@ -571,11 +602,11 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     /"taxeFonciere":\s*"?(\d+)"?/i,
     /"propertyTax":\s*"?(\d+)"?/i,
     /"landTax":\s*"?(\d+)"?/i,
-    // Patterns textuels
-    /taxe\s*foncière\s*:?\s*(\d+(?:\s?\d+)*)\s*€/i,
-    /foncier(?:e|ère)?\s*:?\s*(\d+(?:\s?\d+)*)\s*€(?:\s*\/\s*an)?/i,
-    /taxe\s*foncière\s*annuelle?\s*:?\s*(\d+(?:\s?\d+)*)/i,
-    /(\d+(?:\s?\d+)*)\s*€\s*(?:de\s+)?taxe\s*foncière/i,
+    // Patterns textuels (€ ou "euros")
+    /taxe\s*foncière\s*:?\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)\b/i,
+    /foncier(?:e|ère)?\s*:?\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)(?:\s*\/\s*an)?/i,
+    /taxe\s*foncière\s*annuelle?\s*:?\s*(\d+(?:\s?\d+)*)\s*(?:€|euros?)\b/i,
+    /(\d+(?:\s?\d+)*)\s*(?:€|euros?)\s*(?:de\s+)?taxe\s*foncière/i,
   ]
   
   for (const pattern of taxePatterns) {
@@ -614,11 +645,16 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   
   // ===== ÉQUIPEMENTS =====
+  // Pour les checks basés sur le texte (non-JSON), on utilise uniquement la description
+  // et le titre pour éviter les faux positifs depuis le footer/nav/pubs.
+  // Les patterns JSON restent sur le HTML complet (données structurées fiables).
+  const contentText = ((data.description || '') + ' ' + (data.titre || '')).toLowerCase()
+  
   // Ascenseur
   if (/"ascenseur"\s*:\s*true/i.test(html) ||
       /"elevator"\s*:\s*true/i.test(html) ||
       /"hasElevator"\s*:\s*true/i.test(html) ||
-      /ascenseur/i.test(html) && !/sans\s+ascenseur/i.test(html)) {
+      /ascenseur/.test(contentText) && !/sans\s+ascenseur/.test(contentText)) {
     data.ascenseur = true
   }
   
@@ -629,9 +665,9 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
       /"terrace"\s*:\s*true/i.test(html) ||
       /"hasBalcony"\s*:\s*true/i.test(html) ||
       /"hasTerrace"\s*:\s*true/i.test(html) ||
-      /\bbalcon\b/i.test(html) ||
-      /\bterrasse\b/i.test(html) ||
-      /\bloggia\b/i.test(html)) {
+      /\bbalcon\b/.test(contentText) ||
+      /\bterrasse\b/.test(contentText) ||
+      /\bloggia\b/.test(contentText)) {
     data.balconTerrasse = true
   }
   
@@ -641,10 +677,10 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
       /"hasParking"\s*:\s*true/i.test(html) ||
       /"hasGarage"\s*:\s*true/i.test(html) ||
       /"parkingSpace"\s*:\s*[1-9]/i.test(html) ||
-      /\bparking\b/i.test(html) ||
-      /\bgarage\b/i.test(html) ||
-      /\bbox\b/i.test(html) ||
-      /place\s+de\s+stationnement/i.test(html)) {
+      /\bparking\b/.test(contentText) ||
+      /\bgarage\b/.test(contentText) ||
+      /\bbox\b/.test(contentText) ||
+      /place\s+de\s+stationnement/.test(contentText)) {
     data.parking = true
   }
   
@@ -652,8 +688,43 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   if (/"cave"\s*:\s*true/i.test(html) ||
       /"cellar"\s*:\s*true/i.test(html) ||
       /"hasCellar"\s*:\s*true/i.test(html) ||
-      /\bcave\b/i.test(html) && !/\bcave à vin\b/i.test(html)) {
+      /\bcave\b/.test(contentText) && !/cave à vin/.test(contentText)) {
     data.cave = true
+  }
+  
+  // ===== SALLES DE BAINS =====
+  const sdbPatterns = [
+    /"(?:nb_?bathrooms?|nb_?shower_?rooms?|bathrooms?)"\s*:\s*"?(\d+)"?/i,
+    /"(?:nbSallesBains|numberOfBathrooms|sallesDeBain)"\s*:\s*"?(\d+)"?/i,
+    /(\d+)\s*(?:salles?\s*(?:de\s*)?bains?|salles?\s*d['']eau|sdb)/i,
+    /salles?\s*(?:de\s*)?bains?\s*:?\s*(\d+)/i,
+  ]
+  for (const pattern of sdbPatterns) {
+    const match = html.match(pattern)
+    if (match) {
+      const n = parseInt(match[1])
+      if (n >= 1 && n <= 10) {
+        data.nbSallesBains = n
+        break
+      }
+    }
+  }
+  
+  // ===== ORIENTATION =====
+  const orientationPatterns = [
+    /"(?:exposure|orientation)"\s*:\s*"([^"]+)"/i,
+    /"(?:exposure|orientation)"[^}]*"value_?label"\s*:\s*"([^"]+)"/i,
+    /(?:orientation|exposé|exposition)\s*:?\s*((?:plein\s*)?(?:nord|sud|est|ouest)(?:\s*[/\-]\s*(?:nord|sud|est|ouest))?)/i,
+    /(?:double\s*exposition)\s*:?\s*((?:nord|sud|est|ouest)\s*[/\-]\s*(?:nord|sud|est|ouest))/i,
+    // "DOUBLE EXPOSITION" sans direction spécifique
+    /(double\s*exposition)/i,
+  ]
+  for (const pattern of orientationPatterns) {
+    const match = html.match(pattern)
+    if (match && match[1].length <= 30) {
+      data.orientation = match[1].trim()
+      break
+    }
   }
   
   // ===== TITRE =====
@@ -894,6 +965,24 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
       if (n > 0 && n < 5000) data.chargesMensuelles = n
     }
   }
+  
+  // ===== SALLES DE BAINS =====
+  if (!data.nbSallesBains) {
+    const sdb = item.numberOfBathroomsTotal ?? item.numberOfBathrooms ?? item.bathrooms ??
+                item.nbSallesBains ?? item.nb_bathrooms
+    if (sdb !== undefined) {
+      const n = parseInt(String(sdb))
+      if (n >= 1 && n <= 10) data.nbSallesBains = n
+    }
+  }
+  
+  // ===== ORIENTATION =====
+  if (!data.orientation) {
+    const orient = item.exposure ?? item.orientation ?? item.facing
+    if (typeof orient === 'string' && orient.length <= 30) {
+      data.orientation = orient.trim()
+    }
+  }
 }
 
 // ============================================
@@ -924,6 +1013,182 @@ export function parseNextData(html: string): Partial<NouvelleAnnonce> {
 }
 
 /**
+ * Parse le format d'attributs LeBonCoin : [{key, value, value_label, values}, ...]
+ * LeBonCoin stocke la plupart des caractéristiques du bien dans ce format.
+ * Ex: {"key":"ges","value":"10","value_label":"B"}, {"key":"energy_rate","value":"210","value_label":"D"}
+ */
+function parseLeBonCoinAttributes(attributes: unknown[], data: Partial<NouvelleAnnonce>): void {
+  for (const attr of attributes) {
+    if (!attr || typeof attr !== 'object') continue
+    const a = attr as Record<string, unknown>
+    const key = String(a.key ?? '').toLowerCase()
+    if (!key) continue
+    const value = String(a.value ?? '')
+    const valueLabel = String(a.value_label ?? a.value ?? '')
+
+    switch (key) {
+      // --- DPE ---
+      case 'energy_rate':
+      case 'energy_value':
+      case 'dpe': {
+        if (!data.dpe) {
+          // value_label contient la lettre (A-G), value contient la valeur numérique
+          const letter = /^[A-G]$/i.test(valueLabel) ? valueLabel : /^[A-G]$/i.test(value) ? value : null
+          if (letter) data.dpe = letter.toUpperCase() as ClasseDPE
+        }
+        break
+      }
+      // --- GES ---
+      case 'ges':
+      case 'greenhouse':
+      case 'ges_value': {
+        if (!data.ges) {
+          const letter = /^[A-G]$/i.test(valueLabel) ? valueLabel : /^[A-G]$/i.test(value) ? value : null
+          if (letter) data.ges = letter.toUpperCase() as ClasseDPE
+        }
+        break
+      }
+      // --- Pièces ---
+      case 'rooms':
+      case 'nb_rooms': {
+        if (!data.pieces) {
+          const n = parseInt(value)
+          if (n >= 1 && n <= 20) data.pieces = n
+        }
+        break
+      }
+      // --- Surface ---
+      case 'square':
+      case 'surface': {
+        if (!data.surface) {
+          const n = parseFloat(value)
+          if (n >= 9 && n <= 2000) data.surface = n
+        }
+        break
+      }
+      // --- Chambres ---
+      case 'nb_bedrooms':
+      case 'bedrooms': {
+        if (!data.chambres) {
+          const n = parseInt(value)
+          if (n >= 0 && n <= 20) data.chambres = n
+        }
+        break
+      }
+      // --- Salles de bains ---
+      case 'nb_bathrooms':
+      case 'nb_shower_rooms':
+      case 'bathrooms': {
+        if (!data.nbSallesBains) {
+          const n = parseInt(value)
+          if (n >= 1 && n <= 10) data.nbSallesBains = n
+        }
+        break
+      }
+      // --- Étage ---
+      case 'floor_number':
+      case 'floor': {
+        if (data.etage === undefined) {
+          const n = parseInt(value)
+          if (n >= 0 && n <= 50) data.etage = n
+        }
+        break
+      }
+      // --- Étages total ---
+      case 'nb_floors_building':
+      case 'floors_building': {
+        if (!data.etagesTotal) {
+          const n = parseInt(value)
+          if (n >= 1 && n <= 60) data.etagesTotal = n
+        }
+        break
+      }
+      // --- Ascenseur ---
+      case 'elevator':
+      case 'lift': {
+        if (value === '1' || /oui|yes|true/i.test(valueLabel)) {
+          data.ascenseur = true
+        }
+        break
+      }
+      // --- Balcon / Terrasse ---
+      case 'outside_access': {
+        if (/balcon|terrasse|loggia|jardin/i.test(valueLabel) || /balcon|terrasse|loggia|jardin/i.test(value)) {
+          data.balconTerrasse = true
+        }
+        break
+      }
+      // --- Parking ---
+      case 'nb_parking':
+      case 'parking': {
+        const n = parseInt(value)
+        if (n >= 1) data.parking = true
+        break
+      }
+      // --- Cave ---
+      case 'cellar':
+      case 'cave': {
+        if (value === '1' || /oui|yes|true/i.test(valueLabel)) {
+          data.cave = true
+        }
+        break
+      }
+      // --- Année de construction ---
+      case 'construction_year':
+      case 'year_of_construction': {
+        if (!data.anneeConstruction) {
+          const n = parseInt(value)
+          if (n >= 1800 && n <= 2030) data.anneeConstruction = n
+        }
+        break
+      }
+      // --- Orientation / Exposition ---
+      case 'exposure':
+      case 'orientation': {
+        if (!data.orientation) {
+          const label = valueLabel || value
+          if (label && label !== 'undefined') data.orientation = label.substring(0, 30)
+        }
+        break
+      }
+      // --- Charges mensuelles ---
+      case 'charges':
+      case 'monthly_charges':
+      case 'charges_amount': {
+        if (!data.chargesMensuelles) {
+          const n = parseFloat(value)
+          if (n > 0 && n < 50000) {
+            data.chargesMensuelles = n > 500 ? Math.round(n / 12) : Math.round(n)
+          }
+        }
+        break
+      }
+      // --- Taxe foncière ---
+      case 'property_tax':
+      case 'foncier':
+      case 'taxe_fonciere': {
+        if (!data.taxeFonciere) {
+          const n = parseFloat(value)
+          if (n > 0 && n < 20000) data.taxeFonciere = Math.round(n)
+        }
+        break
+      }
+      // --- Type de bien ---
+      case 'real_estate_type':
+      case 'property_type': {
+        if (!data.type) {
+          if (/maison|villa|pavillon|house/i.test(valueLabel)) data.type = 'maison'
+          else if (/appartement|studio|duplex|triplex|apartment/i.test(valueLabel)) data.type = 'appartement'
+        }
+        break
+      }
+      default:
+        break
+    }
+  }
+}
+
+/**
  * Recherche récursive dans un objet JSON pour trouver les données immobilières.
  * Parcourt l'arbre en profondeur et extrait DPE, GES, année, prix, surface, etc.
  * Priorité au PREMIER objet trouvé avec ces propriétés (généralement le listing principal).
@@ -936,6 +1201,51 @@ function extractFromNestedJson(
   if (depth > 20 || !obj || typeof obj !== 'object') return
   
   const record = obj as Record<string, unknown>
+  
+  // ── LeBonCoin attributes array: [{key, value, value_label}, ...] ──
+  // LeBonCoin stores most property details in this format within __NEXT_DATA__
+  if (Array.isArray(record.attributes)) {
+    const attrs = record.attributes as unknown[]
+    if (attrs.length > 0 && typeof attrs[0] === 'object' && attrs[0] !== null && 'key' in (attrs[0] as Record<string, unknown>)) {
+      parseLeBonCoinAttributes(attrs, data)
+    }
+  }
+  
+  // ── LeBonCoin price as array: price: [350000] ──
+  if (!data.prix && Array.isArray(record.price)) {
+    const first = (record.price as unknown[])[0]
+    if (typeof first === 'number' && first > 10000 && first < 50000000) {
+      data.prix = first
+    }
+  }
+  
+  // ── LeBonCoin title: "subject" ──
+  if (!data.titre && typeof record.subject === 'string' && record.subject.length > 5) {
+    data.titre = record.subject.substring(0, 200)
+  }
+  
+  // ── LeBonCoin description: "body" ──
+  if (!data.description && typeof record.body === 'string' && (record.body as string).length >= 30) {
+    data.description = (record.body as string)
+      .replace(/\\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 1000)
+  }
+  
+  // ── LeBonCoin images: images.urls or images.urls_large ──
+  if (!data.imageUrl) {
+    const imgContainer = record.images as Record<string, unknown> | undefined
+    if (imgContainer && typeof imgContainer === 'object') {
+      const urls = (imgContainer.urls_large ?? imgContainer.urls ?? imgContainer.thumb_url) as string[] | undefined
+      if (Array.isArray(urls) && urls.length > 0 && typeof urls[0] === 'string') {
+        data.imageUrl = urls[0]
+        if (!data.images) {
+          data.images = urls.filter((u: unknown) => typeof u === 'string').slice(0, 20)
+        }
+      }
+    }
+  }
   
   // --- DPE ---
   if (!data.dpe) {
@@ -1029,6 +1339,33 @@ function extractFromNestedJson(
     }
   }
   
+  // --- Chambres ---
+  if (!data.chambres) {
+    const bedVal = record.numberOfBedrooms ?? record.bedrooms ?? record.nbBedrooms ?? record.chambres ?? record.nb_bedrooms
+    if (bedVal !== undefined) {
+      const n = parseInt(String(bedVal))
+      if (n >= 0 && n <= 20) data.chambres = n
+    }
+  }
+  
+  // --- Salles de bains ---
+  if (!data.nbSallesBains) {
+    const sdbVal = record.numberOfBathroomsTotal ?? record.numberOfBathrooms ?? record.bathrooms ??
+                   record.nbSallesBains ?? record.nb_bathrooms ?? record.nb_shower_rooms
+    if (sdbVal !== undefined) {
+      const n = parseInt(String(sdbVal))
+      if (n >= 1 && n <= 10) data.nbSallesBains = n
+    }
+  }
+  
+  // --- Orientation ---
+  if (!data.orientation) {
+    const orientVal = record.exposure ?? record.orientation ?? record.facing
+    if (typeof orientVal === 'string' && orientVal.length > 0 && orientVal.length <= 30) {
+      data.orientation = orientVal.trim()
+    }
+  }
+  
   // --- Récursion dans les valeurs ---
   for (const value of Object.values(record)) {
     if (Array.isArray(value)) {
@@ -1112,5 +1449,130 @@ export function parseMetaTags(html: string): Partial<NouvelleAnnonce> {
     }
   }
   
+  return data
+}
+
+// ============================================
+// SMART MERGE — fusion intelligente sans écraser de données valides
+// ============================================
+
+/**
+ * Fusionne plusieurs résultats d'extraction en priorisant les sources
+ * dans l'ordre donné (dernier argument = priorité la plus haute).
+ * 
+ * Contrairement à Object spread, smartMerge :
+ * - Ne copie JAMAIS une valeur `undefined` ou `null`
+ * - Ne remplace PAS un DPE/GES valide par 'NC'
+ * - Ne remplace PAS un type valide par un fallback
+ */
+export function smartMerge(
+  ...sources: Array<Partial<NouvelleAnnonce> | Record<string, unknown>>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {}
+
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      // Skip undefined / null
+      if (value === undefined || value === null) continue
+
+      // Ne pas écraser un DPE/GES valide avec 'NC'
+      if ((key === 'dpe' || key === 'ges') && value === 'NC') {
+        if (result[key] && result[key] !== 'NC') continue
+      }
+
+      result[key] = value
+    }
+  }
+
+  return result
+}
+
+/**
+ * Extrait le texte brut du HTML et utilise parseTexteAnnonce pour
+ * compléter les champs manquants dans `data`.
+ * 
+ * Contrairement au fallback original, cette version :
+ * - Tourne TOUJOURS (pas seulement quand prix+surface manquent)
+ * - Remplit les trous sans écraser les données existantes
+ */
+export function supplementWithTextParsing(
+  html: string,
+  data: Record<string, unknown>
+): void {
+  const texte = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+
+  if (texte.length < 50) return
+
+  const textData = parseTexteAnnonce(texte)
+  const textRecord = textData as unknown as Record<string, unknown>
+
+  for (const [key, value] of Object.entries(textRecord)) {
+    if (value === undefined || value === null) continue
+    // Ne remplir que les champs absents ou vides
+    if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+      // Ne pas remplacer 'NC' par 'NC'
+      if (value === 'NC') continue
+      data[key] = value
+    }
+  }
+}
+
+// ============================================
+// PIPELINE CENTRALISÉ D'EXTRACTION
+// ============================================
+
+/**
+ * Pipeline centralisé d'extraction depuis du HTML brut.
+ * C'est LE POINT D'ENTRÉE UNIQUE pour toute extraction.
+ * 
+ * Enchaîne 5 couches d'extraction par ordre de fiabilité :
+ * 1. __NEXT_DATA__ (données React/Next.js pré-rendues)
+ * 2. JSON-LD (Schema.org — le standard du web sémantique)
+ * 3. HTML patterns (regex sur le HTML — DPE, prix, surface, équipements...)
+ * 4. Meta tags (og:*, meta name, twitter:*)
+ * 5. Texte brut (regex sur le texte visible — filet de sécurité final)
+ * 
+ * + Accepte des `seedData` optionnelles (ex: d'une API JSON) qui sont
+ *   fusionnées en priorité HAUTE (elles ne seront pas écrasées).
+ * 
+ * @param html    Le HTML brut de la page
+ * @param url     L'URL de l'annonce
+ * @param seedData Données pré-extraites (API JSON, DOM eval, etc.) — priorité haute
+ * @returns       Les données fusionnées de toutes les couches
+ */
+export function extractFromHTML(
+  html: string,
+  url: string,
+  seedData?: Record<string, unknown>
+): Record<string, unknown> {
+  // Couches structurées (du moins fiable au plus fiable)
+  const dataFromMeta = parseMetaTags(html)
+  const dataFromHTML = parseAnnonceHTML(html, url)
+  const dataFromJsonLd = parseJsonLd(html)
+  const dataFromNextData = parseNextData(html)
+
+  // Fusion : Meta < HTML < JSON-LD < __NEXT_DATA__ < seedData (API)
+  const sources: Array<Partial<NouvelleAnnonce> | Record<string, unknown>> = [
+    { url },
+    dataFromMeta,
+    dataFromHTML,
+    dataFromJsonLd,
+    dataFromNextData,
+  ]
+
+  // Les seedData sont les plus fiables (API JSON directe)
+  if (seedData) {
+    sources.push(seedData)
+  }
+
+  const data = smartMerge(...sources)
+
+  // Couche finale : texte brut (filet de sécurité pour les champs manquants)
+  supplementWithTextParsing(html, data)
+
   return data
 }

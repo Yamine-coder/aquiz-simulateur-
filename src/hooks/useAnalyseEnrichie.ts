@@ -49,7 +49,9 @@ function annonceToBienAnalyse(annonce: Annonce): BienAnalyse {
     hasAscenseur: annonce.ascenseur,
     hasBalcon: annonce.balconTerrasse,
     hasParking: annonce.parking,
-    hasCave: annonce.cave
+    hasCave: annonce.cave,
+    latitude: annonce.latitude,
+    longitude: annonce.longitude,
   }
 }
 

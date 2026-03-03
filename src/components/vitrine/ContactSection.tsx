@@ -7,8 +7,7 @@ import {
     ExternalLink,
     Mail,
     MapPin,
-    Phone,
-    Sparkles,
+    Phone
 } from 'lucide-react'
 import Link from 'next/link'
 import { ContactForm } from './ContactForm'
@@ -26,7 +25,7 @@ const GOOGLE_MAPS_URL =
  */
 export function ContactSection() {
   return (
-    <section id="contact" className="scroll-mt-20 md:scroll-mt-24">
+    <section id="contact" className="scroll-mt-18 md:scroll-mt-20">
       <div className="grid lg:grid-cols-2">
         {/* ─── Colonne gauche — Dark ─── */}
         <div className="relative bg-aquiz-black text-white overflow-hidden">
@@ -36,12 +35,6 @@ export function ContactSection() {
 
           <div className="relative h-full flex flex-col justify-center px-5 sm:px-8 md:px-12 lg:px-14 py-8 sm:py-10 lg:py-12">
             <FadeIn>
-              {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-medium text-aquiz-green mb-3">
-                <Sparkles className="w-3 h-3" />
-                Conseil gratuit
-              </div>
-
               {/* Headline */}
               <h2 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
                 Parlons de votre{' '}
@@ -58,7 +51,7 @@ export function ContactSection() {
                   href="tel:+33749520106"
                   className="group flex items-center gap-4"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
+                  <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
                     <Phone className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" />
                   </div>
                   <div>
@@ -75,7 +68,7 @@ export function ContactSection() {
                   href="mailto:contact@aquiz.eu"
                   className="group flex items-center gap-4"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
+                  <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
                     <Mail className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" />
                   </div>
                   <div>
@@ -94,7 +87,7 @@ export function ContactSection() {
                   rel="noopener noreferrer"
                   className="group flex items-center gap-4"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
+                  <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
                     <MapPin className="w-4 h-4 text-white/70 group-hover:text-white transition-colors" />
                   </div>
                   <div>

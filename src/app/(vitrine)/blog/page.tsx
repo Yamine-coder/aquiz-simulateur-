@@ -1,12 +1,14 @@
 'use client'
 
+import NewsletterForm from '@/components/blog/NewsletterForm'
 import { BLOG_ARTICLES } from '@/data/blog-articles'
 import type { BlogArticle, BlogCategory } from '@/types/blog'
 import { CATEGORY_LABELS } from '@/types/blog'
-import { motion } from 'framer-motion'
-import { ArrowRight, ArrowUpRight, Banknote, BookOpen, Calculator, ChevronDown, Clock, Hash, Mail, Search, Star, TrendingUp, X } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowRight, ArrowUpRight, Banknote, BookOpen, Calculator, Check, ChevronDown, Clock, Hash, Mail, Search, Star, TrendingUp, X } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ─── Design tokens ───
@@ -33,12 +35,12 @@ const PILL_STYLES: Record<BlogCategory, string> = {
 
 function SectionDivider({ label, accent }: { label: string; accent?: boolean }) {
   return (
-    <div className="flex items-center gap-4 mb-5">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-5">
+      <div className="flex items-center gap-2 sm:gap-3">
         {accent && (
-          <span className="w-2 h-2 rounded-full bg-aquiz-green" />
+          <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-aquiz-green" />
         )}
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-gray-900">
+        <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-gray-900">
           {label}
         </h2>
       </div>
@@ -57,7 +59,7 @@ function FeaturedCard({ article }: { article: BlogArticle }) {
         <div className="grid md:grid-cols-[1.1fr_1fr] gap-0">
 
           {/* ── Image ── */}
-          <div className="relative aspect-16/10 md:aspect-auto md:min-h-56 overflow-hidden">
+          <div className="relative aspect-[16/10] md:aspect-auto md:min-h-56 overflow-hidden">
             <Image
               src={article.coverImage}
               alt={article.coverAlt ?? article.title}
@@ -68,58 +70,58 @@ function FeaturedCard({ article }: { article: BlogArticle }) {
             />
 
             {/* Reading time chip */}
-            <div className="absolute bottom-3 left-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/90 backdrop-blur-lg text-[11px] font-semibold text-gray-800 shadow-lg shadow-black/5">
-                <Clock className="w-3 h-3 text-gray-500" />
+            <div className="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3">
+              <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-white/90 backdrop-blur-lg text-[10px] sm:text-[11px] font-semibold text-gray-800 shadow-lg shadow-black/5">
+                <Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-gray-500" />
                 {article.readingTime} min de lecture
               </span>
             </div>
           </div>
 
           {/* ── Content ── */}
-          <div className="relative flex flex-col justify-between p-4 sm:p-5 lg:p-6">
+          <div className="relative flex flex-col justify-between p-3.5 sm:p-5 lg:p-6">
 
             {/* Top section */}
             <div>
               {/* Badge + Meta row */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide ${PILL_STYLES[article.category]}`}>
+              <div className="flex items-start justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className={`inline-block px-2 sm:px-2.5 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-bold uppercase tracking-wide ${PILL_STYLES[article.category]}`}>
                     {CATEGORY_LABELS[article.category]}
                   </span>
-                  <span className="text-[11px] text-gray-400">
+                  <span className="text-[10px] sm:text-[11px] text-gray-400">
                     {formatDate(article.publishedAt)}
                   </span>
                 </div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gray-950 text-white text-[9px] font-bold uppercase tracking-widest shrink-0 ml-3">
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-gray-950 text-white text-[9px] font-bold uppercase tracking-widest shrink-0 ml-3">
                   <Star className="w-2.5 h-2.5 fill-current" />
                   A la une
                 </span>
               </div>
 
               {/* Title */}
-              <h2 className="text-lg sm:text-xl lg:text-[1.35rem] font-extrabold text-gray-950 leading-snug tracking-tight mb-2.5 group-hover:text-aquiz-green transition-colors duration-300">
+              <h2 className="text-base sm:text-xl lg:text-[1.35rem] font-extrabold text-gray-950 leading-snug tracking-tight mb-2 sm:mb-2.5 group-hover:text-aquiz-green transition-colors duration-300">
                 {article.title}
               </h2>
 
               {/* Excerpt */}
-              <p className="text-gray-500 text-[13px] leading-relaxed line-clamp-2 mb-0">
+              <p className="text-gray-500 text-[12px] sm:text-[13px] leading-relaxed line-clamp-2 mb-0">
                 {article.excerpt}
               </p>
             </div>
 
             {/* Bottom section — Author + CTA */}
-            <div className="flex items-center justify-between mt-4 pt-3.5 border-t border-gray-100/80">
-              <div className="flex items-center gap-2.5">
-                <div className="relative w-8 h-8 rounded-full bg-gray-950 flex items-center justify-center shrink-0">
-                  <span className="text-[10px] font-bold text-white">A</span>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-aquiz-green ring-2 ring-white flex items-center justify-center">
+            <div className="flex items-center justify-between mt-3 sm:mt-4 pt-3 sm:pt-3.5 border-t border-gray-100/80">
+              <div className="flex items-center gap-2">
+                <div className="relative w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gray-950 flex items-center justify-center shrink-0">
+                  <span className="text-[9px] sm:text-[10px] font-bold text-white">A</span>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-aquiz-green ring-2 ring-white flex items-center justify-center">
                     <svg className="w-1.5 h-1.5 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                   </div>
                 </div>
                 <div>
-                  <p className="text-[12px] font-bold text-gray-900">{article.author.name}</p>
-                  <p className="text-[10px] text-gray-400 leading-tight">{article.author.role}</p>
+                  <p className="text-[11px] sm:text-[12px] font-bold text-gray-900">{article.author.name}</p>
+                  <p className="text-[9px] sm:text-[10px] text-gray-400 leading-tight">{article.author.role}</p>
                 </div>
               </div>
 
@@ -143,7 +145,7 @@ function GridCard({ article }: { article: BlogArticle }) {
       <article className="h-full flex flex-col rounded-xl bg-white ring-1 ring-gray-100 overflow-hidden hover:ring-gray-200 hover:shadow-lg hover:shadow-gray-100/60 hover:-translate-y-0.5 transition-all duration-500 ease-out">
 
         {/* ── Image ── */}
-        <div className="relative aspect-3/2 overflow-hidden">
+        <div className="relative aspect-[16/10] sm:aspect-3/2 overflow-hidden">
           <Image
             src={article.coverImage}
             alt={article.coverAlt ?? article.title}
@@ -152,8 +154,8 @@ function GridCard({ article }: { article: BlogArticle }) {
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 360px"
           />
           {/* Glass reading time badge */}
-          <div className="absolute top-2.5 right-2.5">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-md text-[10px] font-medium text-gray-600 shadow-sm">
+          <div className="absolute top-2 right-2 sm:top-2.5 sm:right-2.5">
+            <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full bg-white/90 backdrop-blur-md text-[9px] sm:text-[10px] font-medium text-gray-600 shadow-sm">
               <Clock className="w-2.5 h-2.5" />
               {article.readingTime} min
             </span>
@@ -163,33 +165,33 @@ function GridCard({ article }: { article: BlogArticle }) {
         </div>
 
         {/* ── Body ── */}
-        <div className="flex flex-col flex-1 p-3">
+        <div className="flex flex-col flex-1 p-2.5 sm:p-3">
 
           {/* Category + date */}
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className={`inline-block px-2 py-px rounded-full text-[10px] font-bold uppercase tracking-wide ${PILL_STYLES[article.category]}`}>
+          <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-1.5">
+            <span className={`inline-block px-1.5 sm:px-2 py-px rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-wide ${PILL_STYLES[article.category]}`}>
               {CATEGORY_LABELS[article.category]}
             </span>
-            <span className="text-[10px] text-gray-400">{formatDate(article.publishedAt)}</span>
+            <span className="text-[9px] sm:text-[10px] text-gray-400">{formatDate(article.publishedAt)}</span>
           </div>
 
           {/* Title */}
-          <h3 className="text-[13px] font-bold text-gray-950 leading-snug tracking-tight group-hover:text-aquiz-green transition-colors duration-300 line-clamp-2 mb-1">
+          <h3 className="text-[12px] sm:text-[13px] font-bold text-gray-950 leading-snug tracking-tight group-hover:text-aquiz-green transition-colors duration-300 line-clamp-2 mb-0.5 sm:mb-1">
             {article.title}
           </h3>
 
           {/* Excerpt */}
-          <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-1 flex-1">
+          <p className="hidden sm:block text-[11px] text-gray-500 leading-relaxed line-clamp-1 flex-1">
             {article.excerpt}
           </p>
 
           {/* Footer */}
-          <div className="flex items-center justify-between pt-2.5 mt-2 border-t border-gray-50">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gray-950 flex items-center justify-center ring-1 ring-gray-100 shrink-0">
-                <span className="text-[9px] font-bold text-white">A</span>
+          <div className="flex items-center justify-between pt-2 sm:pt-2.5 mt-1.5 sm:mt-2 border-t border-gray-50">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gray-950 flex items-center justify-center ring-1 ring-gray-100 shrink-0">
+                <span className="text-[8px] sm:text-[9px] font-bold text-white">A</span>
               </div>
-              <span className="text-[11px] font-medium text-gray-600">{article.author.name}</span>
+              <span className="text-[10px] sm:text-[11px] font-medium text-gray-600">{article.author.name}</span>
             </div>
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-aquiz-green opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               Lire
@@ -206,17 +208,17 @@ function GridCard({ article }: { article: BlogArticle }) {
 
 function SimulateurCTA() {
   return (
-    <div className="rounded-2xl bg-aquiz-green/5 border border-aquiz-green/10 p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
-      <div className="w-11 h-11 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-        <Calculator className="w-5 h-5 text-aquiz-green" />
+    <div className="rounded-xl sm:rounded-2xl bg-aquiz-green/5 border border-aquiz-green/10 p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
+      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+        <Calculator className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-green" />
       </div>
       <div className="flex-1 text-center sm:text-left">
-        <p className="text-sm font-bold text-gray-900">Estimez votre budget</p>
-        <p className="text-[12px] text-gray-400 mt-0.5">Calculez gratuitement votre capacite d&apos;achat immobilier.</p>
+        <p className="text-[13px] sm:text-sm font-bold text-gray-900">Estimez votre budget</p>
+        <p className="text-[11px] sm:text-[12px] text-gray-400 mt-0.5">Calculez gratuitement votre capacite d&apos;achat immobilier.</p>
       </div>
       <Link
         href="/simulateur/mode-a"
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-aquiz-green text-white text-[13px] font-bold hover:bg-aquiz-green/90 active:scale-[0.98] transition-all duration-300 shadow-lg shadow-aquiz-green/20 shrink-0"
+        className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl bg-aquiz-green text-white text-[12px] sm:text-[13px] font-bold hover:bg-aquiz-green/90 active:scale-[0.98] transition-all duration-300 shadow-lg shadow-aquiz-green/20 shrink-0 w-full sm:w-auto justify-center"
       >
         Simuler
         <ArrowRight className="w-3.5 h-3.5" />
@@ -237,23 +239,19 @@ const SORT_LABELS: Record<SortOption, string> = {
   'reading-time': 'Temps de lecture',
 }
 
-/** Safely read a URL search param (returns fallback during SSR) */
-function readParam(key: string): string | null {
-  if (typeof window === 'undefined') return null
-  return new URLSearchParams(window.location.search).get(key)
-}
-
 export default function BlogPage() {
+  const searchParams = useSearchParams()
+
   const [activeCategory, setActiveCategory] = useState<BlogCategory | null>(() => {
-    const cat = readParam('category') as BlogCategory | null
+    const cat = searchParams.get('category') as BlogCategory | null
     return (cat && Object.keys(CATEGORY_LABELS).includes(cat)) ? cat : null
   })
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_LOAD)
   const [searchQuery, setSearchQuery] = useState(() => {
-    return readParam('q') || readParam('tag') || ''
+    return searchParams.get('q') || searchParams.get('tag') || ''
   })
   const [sortBy, setSortBy] = useState<SortOption>(() => {
-    const sort = readParam('sort') as SortOption | null
+    const sort = searchParams.get('sort') as SortOption | null
     return (sort && ['recent', 'oldest', 'reading-time'].includes(sort)) ? sort : 'recent'
   })
   const [isSortOpen, setIsSortOpen] = useState(false)
@@ -317,152 +315,193 @@ export default function BlogPage() {
   return (
     <div className="relative min-h-screen bg-white overflow-hidden">
 
-      {/* ── Decorative green shapes ── */}
+      {/* ── AMBIANCE BACKGROUND: Global layout ── */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden block">
+        {/* === HEADER AREA DECORATION === */}
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] bg-aquiz-green/[0.04] rounded-full blur-[80px]" />
+        
+        <div className="absolute top-24 left-[8%] w-4 h-4 hidden xl:block opacity-30">
+          <div className="absolute top-1/2 left-0 w-full h-[1px] bg-gray-600 -translate-y-1/2" />
+          <div className="absolute left-1/2 top-0 w-[1px] h-full bg-gray-600 -translate-x-1/2" />
+        </div>
 
-      {/* Corner orb — top right (frames the header) */}
-      <div className="absolute -top-32 -right-32 w-96 h-96 bg-aquiz-green/6 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-32 right-12 w-24 h-24 hidden xl:grid grid-cols-4 grid-rows-4 gap-2 opacity-[0.03]">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <div key={`grid1-${i}`} className="w-1.5 h-1.5 rounded-full bg-gray-900" />
+          ))}
+        </div>
 
-      {/* Corner orb — bottom left (frames the newsletter) */}
-      <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-aquiz-green/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-44 left-[20%] w-3 h-3 rounded-full bg-aquiz-green/40 shadow-[0_0_15px_rgba(20,184,129,0.5)] hidden md:block animate-pulse" />
 
-      {/* Edge orb — mid right (between trending & explorer) */}
-      <div className="absolute top-1/2 -right-16 w-48 h-48 bg-aquiz-green/4 rounded-full blur-2xl pointer-events-none" />
 
-      {/* Small crisp circle — near header, left */}
-      <div className="absolute top-44 left-8 w-3 h-3 bg-aquiz-green/20 rounded-full pointer-events-none hidden lg:block" />
 
-      {/* Small crisp circle — between sections, right */}
-      <div className="absolute top-2/3 right-10 w-2.5 h-2.5 bg-aquiz-green/25 rounded-full pointer-events-none hidden lg:block" />
+        {/* === FEATURED CARD & TRENDING AREA DECORATION (Middle Page) === */}
+        <div className="absolute top-[35%] -right-48 w-[800px] h-[800px] bg-aquiz-green/[0.025] rounded-full blur-[120px]" />
+        <div className="absolute top-[40%] -left-20 w-[500px] h-[500px] bg-aquiz-green/[0.02] rounded-full blur-[100px]" />
 
-      <div className="relative z-10 mx-auto max-w-285 px-5 sm:px-6 pt-20 md:pt-24 pb-16">
+        <svg className="absolute top-[38%] -left-8 w-48 h-48 text-gray-200 opacity-60 hidden md:block" viewBox="0 0 100 100" fill="none">
+          <path d="M 0 50 Q 25 20 50 50 T 100 50" stroke="currentColor" strokeWidth="0.5" />
+        </svg>
+
+        <div className="absolute top-[45%] right-[5%] w-2 h-2 rounded-full bg-aquiz-green/30 shadow-[0_0_10px_rgba(20,184,129,0.4)] hidden lg:block" />
+
+        <div className="absolute top-[50%] left-[8%] w-5 h-5 hidden xl:block opacity-20 rotate-45">
+          <div className="absolute top-1/2 left-0 w-full h-[1px] bg-gray-600 -translate-y-1/2" />
+          <div className="absolute left-1/2 top-0 w-[1px] h-full bg-gray-600 -translate-x-1/2" />
+        </div>
+
+
+        {/* === BOTTOM AREA DECORATION (Explorer & Newsletter) === */}
+        <div className="absolute bottom-[10%] left-[20%] w-[900px] h-[600px] bg-aquiz-green/[0.03] rounded-[100%] blur-[120px] -translate-x-1/2" />
+
+
+
+        <div className="absolute bottom-[15%] left-[5%] w-20 h-20 hidden lg:grid grid-cols-3 grid-rows-3 gap-3 opacity-[0.04]">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={`grid2-${i}`} className="w-1.5 h-1.5 rounded-full bg-gray-900" />
+          ))}
+        </div>
+
+        <div className="absolute bottom-[5%] right-[25%] w-2.5 h-2.5 rounded-full bg-aquiz-green/50 shadow-[0_0_12px_rgba(20,184,129,0.6)] hidden md:block" />
+        
+
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-285 px-4 sm:px-6 pt-20 sm:pt-22 md:pt-24 pb-8 sm:pb-16">
 
         {/* ── Blog header bloc ── */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8 lg:mb-10 max-w-4xl mx-auto">
 
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-4" aria-label="Fil d'Ariane">
-            <Link href="/" className="hover:text-aquiz-green transition-colors">Accueil</Link>
-            <span className="text-gray-300">/</span>
-            <span className="text-gray-500">Blog</span>
-          </nav>
+          {/* Top: Title */}
+          <div className="mb-4 sm:mb-6 text-center">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-gray-950 tracking-tight leading-none mb-2 sm:mb-3 relative inline-block">
+              Le blog<span className="text-aquiz-green">.</span>
+            </h1>
+            <p className="text-[13px] sm:text-[15px] text-gray-500 font-medium mx-auto max-w-lg">
+              Immobilier, finances &amp; conseils pratiques
+            </p>
+          </div>
 
-          {/* Row 1 — Title left, Search + Sort right */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
-            {/* Left: title bloc */}
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-950 tracking-tight leading-none">
-                Le blog<span className="text-aquiz-green">.</span>
-              </h1>
-              <p className="mt-1.5 text-[13px] text-gray-400">
-                Immobilier, finances &amp; conseils pratiques
-              </p>
-            </div>
-
-            {/* Right: Search + Sort */}
-            <div className="flex items-center gap-2">
-              {/* Search bar */}
-              <div className="relative w-44 sm:w-48">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+          {/* Bottom: Unified Control Bar */}
+          <div className="bg-white/80 backdrop-blur-md rounded-xl sm:rounded-2xl border border-gray-200/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)] p-1.5 sm:p-2.5 transition-all relative z-50">
+            {/* Search and Sort Row */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-1.5 sm:mb-2">
+              {/* Search */}
+              <div className="relative w-full sm:max-w-[280px] group">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-aquiz-green transition-colors duration-300" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setVisibleCount(ITEMS_PER_LOAD) }}
-                  placeholder="Rechercher..."
-                  className="w-full pl-9 pr-8 py-2 rounded-lg border border-gray-200 bg-gray-50/60 text-gray-900 text-[12px] placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-aquiz-green/30 focus:border-aquiz-green/30 focus:bg-white transition-all duration-300"
+                  placeholder="Rechercher un article..."
+                  className="w-full pl-10 pr-9 py-1.5 sm:py-2 rounded-lg sm:rounded-xl border border-gray-100 bg-gray-50/50 text-[12px] sm:text-[13px] font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-aquiz-green/10 focus:border-aquiz-green/30 focus:bg-white transition-all duration-300"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => { setSearchQuery(''); setVisibleCount(ITEMS_PER_LOAD) }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Sort — custom dropdown */}
-              <div className="relative" ref={sortRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsSortOpen((v) => !v)}
-                  className={`flex items-center gap-2 pl-3 pr-2.5 py-2 rounded-lg border text-[12px] font-medium transition-all duration-200 cursor-pointer ${
-                    isSortOpen
-                      ? 'border-aquiz-green/30 bg-white ring-2 ring-aquiz-green/20 text-gray-900'
-                      : 'border-gray-200 bg-gray-50/60 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {SORT_LABELS[sortBy]}
-                  <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isSortOpen ? 'rotate-180' : ''}`} />
-                </button>
+              {/* Stats & Sort */}
+              <div className="flex items-center justify-between sm:justify-end gap-4 px-1 sm:px-0 shrink-0">
+                <div className="text-[11px] font-medium text-gray-400">
+                  <span className="text-gray-900 font-bold">{sorted.length}</span> article{sorted.length > 1 ? 's' : ''}
+                </div>
+                
+                <div className="w-px h-4 bg-gray-200 hidden sm:block"></div>
 
-                {/* Dropdown menu */}
-                {isSortOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-40 bg-white rounded-xl border border-gray-200 shadow-lg shadow-black/8 py-1 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
-                    {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => { setSortBy(key); setIsSortOpen(false) }}
-                        className={`w-full text-left px-3 py-2 text-[12px] transition-colors duration-150 ${
-                          sortBy === key
-                            ? 'text-aquiz-green font-semibold bg-aquiz-green/5'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          {sortBy === key && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-aquiz-green shrink-0" />
-                          )}
-                          {label}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Row 2 — Filter pills + count — with horizontal scroll on mobile */}
-          <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none -mx-1 px-1 pb-0.5">
-              <button
-                type="button"
-                onClick={() => { setActiveCategory(null); setVisibleCount(ITEMS_PER_LOAD) }}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all duration-200 ${
-                  activeCategory === null
-                    ? 'bg-aquiz-green text-white shadow-sm shadow-aquiz-green/20'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-150 hover:text-gray-700'
-                }`}
-              >
-                Tous
-              </button>
-              {categories.map(([key, label]) => {
-                const count = allArticles.filter((a) => a.category === key).length
-                return (
+                {/* Custom Sort Dropdown */}
+                <div className="relative" ref={sortRef}>
                   <button
-                    key={key}
                     type="button"
-                    onClick={() => { setActiveCategory(activeCategory === key ? null : key); setVisibleCount(ITEMS_PER_LOAD) }}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all duration-200 ${
-                      activeCategory === key
-                        ? 'bg-aquiz-green text-white shadow-sm shadow-aquiz-green/20'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-150 hover:text-gray-700'
+                    onClick={() => setIsSortOpen((v) => !v)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200 cursor-pointer ${
+                      isSortOpen
+                        ? 'bg-aquiz-green/10 text-aquiz-green ring-1 ring-aquiz-green/20'
+                        : 'bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900 ring-1 ring-inset ring-gray-200 shadow-sm'
                     }`}
                   >
-                    {label}
-                    <span className="ml-1 text-[9px] opacity-50">{count}</span>
+                    <span className="opacity-70 hidden sm:inline">Trier par :</span> {SORT_LABELS[sortBy]}
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${isSortOpen ? 'rotate-180 text-aquiz-green' : 'text-gray-400'}`} />
                   </button>
-                )
-              })}
+
+                  <AnimatePresence>
+                    {isSortOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-[calc(100%+6px)] w-44 bg-white rounded-xl border border-gray-150 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.12)] p-1.5 z-50"
+                      >
+                        {(Object.entries(SORT_LABELS) as [SortOption, string][]).map(([key, label]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => { setSortBy(key); setIsSortOpen(false) }}
+                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[12px] font-medium transition-colors duration-150 ${
+                              sortBy === key
+                                ? 'bg-aquiz-green/10 text-aquiz-green'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            }`}
+                          >
+                            {label}
+                            {sortBy === key && <Check className="w-3.5 h-3.5" />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
             </div>
 
-            {/* Spacer + result count */}
-            <div className="ml-auto shrink-0">
-              <span className="text-[11px] text-gray-300 tabular-nums whitespace-nowrap">
-                {sorted.length} article{sorted.length > 1 ? 's' : ''}
-              </span>
+            {/* Categories */}
+            <div className="pt-1.5 sm:pt-2 border-t border-gray-100 flex items-center">
+              <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none pb-1 -mx-1 px-1 sm:mx-0 sm:px-0 w-full sm:justify-center">
+                <button
+                  type="button"
+                  onClick={() => { setActiveCategory(null); setVisibleCount(ITEMS_PER_LOAD) }}
+                  className={`px-3 py-1 rounded-md text-[11px] shrink-0 transition-all duration-300 ${
+                    activeCategory === null
+                      ? 'bg-aquiz-green text-white font-semibold shadow-md shadow-aquiz-green/20 scale-[1.02]'
+                      : 'bg-transparent text-gray-500 font-medium hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  Tous
+                </button>
+                
+                {categories.map(([key, label]) => {
+                  const count = allArticles.filter((a) => a.category === key).length
+                  const isActive = activeCategory === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { setActiveCategory(isActive ? null : key); setVisibleCount(ITEMS_PER_LOAD) }}
+                      className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-[11px] shrink-0 transition-all duration-300 border ${
+                        isActive
+                          ? 'border-transparent bg-aquiz-green text-white font-semibold shadow-md shadow-aquiz-green/20 scale-[1.02]'
+                          : 'border-gray-100/50 bg-gray-50/50 text-gray-600 font-medium hover:bg-white hover:border-gray-200 hover:text-gray-900 hover:shadow-sm'
+                      }`}
+                    >
+                      {label}
+                      <span className={`flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded text-[9px] font-bold transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-gray-200/50 text-gray-500 group-hover:bg-gray-100 group-hover:text-gray-600'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -496,10 +535,10 @@ export default function BlogPage() {
         {/* TRENDING                                          */}
         {/* ══════════════════════════════════════════════════ */}
         {trending.length > 0 && (
-          <div className="mt-7">
+          <div className="mt-5 sm:mt-7">
             <SectionDivider label="Tendances" accent />
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
               {trending.map((article, i) => (
                 <motion.div
                   key={article.slug}
@@ -517,7 +556,7 @@ export default function BlogPage() {
         {/* ══════════════════════════════════════════════════ */}
         {/* CTA SIMULATEUR                                    */}
         {/* ══════════════════════════════════════════════════ */}
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8">
           <SimulateurCTA />
         </div>
 
@@ -525,10 +564,10 @@ export default function BlogPage() {
         {/* ALL ARTICLES                                      */}
         {/* ══════════════════════════════════════════════════ */}
         {rest.length > 0 && (
-          <div className="mt-9">
+          <div className="mt-7 sm:mt-9">
             <SectionDivider label="Explorer" />
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-4">
               {visibleRest.map((article, i) => (
                 <motion.div
                   key={article.slug}
@@ -543,14 +582,14 @@ export default function BlogPage() {
 
             {/* Load more */}
             {hasMore && (
-              <div className="flex flex-col items-center mt-8 pt-6 border-t border-gray-100">
-                <p className="text-[12px] text-gray-400 mb-3">
+              <div className="flex flex-col items-center mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100">
+                <p className="text-[11px] sm:text-[12px] text-gray-400 mb-2.5 sm:mb-3">
                   {visibleCount} sur {rest.length} articles
                 </p>
                 <button
                   type="button"
                   onClick={() => setVisibleCount((v) => v + ITEMS_PER_LOAD)}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-950 text-white text-[13px] font-semibold shadow-sm hover:bg-gray-800 active:scale-[0.97] transition-all duration-200"
+                  className="inline-flex items-center gap-2 px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-gray-950 text-white text-[12px] sm:text-[13px] font-semibold shadow-sm hover:bg-gray-800 active:scale-[0.97] transition-all duration-200 w-full sm:w-auto justify-center"
                 >
                   Voir plus d&apos;articles
                   <ArrowRight className="w-4 h-4" />
@@ -563,7 +602,7 @@ export default function BlogPage() {
         {/* ══════════════════════════════════════════════════ */}
         {/* NEWSLETTER + TOPICS                               */}
         {/* ══════════════════════════════════════════════════ */}
-        <div className="mt-12 rounded-2xl bg-gray-50 ring-1 ring-gray-200/60 relative isolate overflow-hidden">
+        <div className="mt-8 sm:mt-12 rounded-xl sm:rounded-2xl bg-gray-50 ring-1 ring-gray-200/60 relative isolate overflow-hidden">
           {/* Green accent bar */}
           <div className="absolute top-0 inset-x-0 h-0.75 bg-aquiz-green" />
 
@@ -571,53 +610,38 @@ export default function BlogPage() {
           <div className="absolute -top-16 right-1/4 w-48 h-48 rounded-full bg-aquiz-green/6 blur-3xl" />
           <div className="absolute -bottom-12 -left-12 w-40 h-40 rounded-full bg-aquiz-green/4 blur-3xl" />
 
-          <div className="relative z-10 p-5 sm:p-7 lg:p-8">
-            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-6 lg:gap-8 items-center">
+          <div className="relative z-10 p-4 sm:p-7 lg:p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-5 sm:gap-6 lg:gap-8 items-center">
 
               {/* Left: Newsletter */}
               <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-aquiz-green/15 bg-aquiz-green/5 mb-4">
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full border border-aquiz-green/15 bg-aquiz-green/5 mb-3 sm:mb-4">
                   <Mail className="w-3 h-3 text-aquiz-green" />
-                  <span className="text-[10px] font-bold text-aquiz-green tracking-wider uppercase">Newsletter</span>
+                  <span className="text-[9px] sm:text-[10px] font-bold text-aquiz-green tracking-wider uppercase">Newsletter</span>
                 </div>
 
-                <h2 className="text-lg sm:text-xl font-extrabold text-gray-900 tracking-tight mb-1.5 leading-snug">
+                <h2 className="text-base sm:text-lg md:text-xl font-extrabold text-gray-900 tracking-tight mb-1.5 leading-snug">
                   Ne manquez aucun article
                 </h2>
-                <p className="text-[12px] text-gray-400 mb-4 max-w-sm leading-relaxed">
+                <p className="text-[11px] sm:text-[12px] text-gray-400 mb-3 sm:mb-4 max-w-sm leading-relaxed">
                   Analyses du marche, guides pratiques et conseils financiers — chaque semaine dans votre boite.
                 </p>
 
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="flex-1 relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
-                    <input
-                      type="email"
-                      placeholder="votre@email.com"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-900 text-[13px] placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-aquiz-green/30 focus:border-aquiz-green/30 transition-all duration-300"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="px-5 py-2.5 rounded-xl bg-gray-950 text-white text-[13px] font-bold hover:bg-aquiz-green active:scale-[0.98] transition-all duration-300 shrink-0"
-                  >
-                    S&apos;abonner
-                  </button>
-                </div>
+                <NewsletterForm source="blog" variant="inline" />
                 <p className="text-[10px] text-gray-400 mt-2.5 flex items-center gap-1.5">
                   <svg className="w-2.5 h-2.5 text-aquiz-green/50" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" /></svg>
-                  Pas de spam. Desinscription en un clic.
+                  Pas de spam. Désinscription en un clic.
                 </p>
               </div>
 
               {/* Right: Topics */}
-              <div className="rounded-xl border border-gray-200/80 bg-white p-4 sm:p-5 shadow-sm">
-                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-3 flex items-center gap-2">
+              <div className="rounded-xl border border-gray-200/80 bg-white p-3.5 sm:p-5 shadow-sm">
+                <h3 className="text-[9px] sm:text-[10px] font-bold text-gray-400 uppercase tracking-[0.15em] mb-2.5 sm:mb-3 flex items-center gap-2">
                   <Hash className="w-3 h-3" />
                   Sujets populaires
                 </h3>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5 sm:gap-2">
                   {[
                     { icon: TrendingUp, label: 'Taux & marché immobilier', category: 'marche' as BlogCategory },
                     { icon: BookOpen, label: 'Guides pratiques', category: 'guides' as BlogCategory },
@@ -629,14 +653,14 @@ export default function BlogPage() {
                         key={topic.label}
                         type="button"
                         onClick={() => { setActiveCategory(topic.category); setVisibleCount(ITEMS_PER_LOAD); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-100 hover:bg-aquiz-green/5 hover:border-aquiz-green/20 transition-all duration-300 cursor-pointer group w-full text-left"
+                        className="flex items-center gap-2.5 sm:gap-3 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg bg-gray-50 border border-gray-100 hover:bg-aquiz-green/5 hover:border-aquiz-green/20 transition-all duration-300 cursor-pointer group w-full text-left"
                       >
-                        <div className="w-8 h-8 rounded-lg bg-aquiz-green/10 text-aquiz-green flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:text-white group-hover:shadow-md group-hover:shadow-aquiz-green/20 transition-all duration-300">
-                          <topic.icon className="w-3.5 h-3.5" />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-aquiz-green/10 text-aquiz-green flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:text-white group-hover:shadow-md group-hover:shadow-aquiz-green/20 transition-all duration-300">
+                          <topic.icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-semibold text-gray-800 truncate group-hover:text-aquiz-green transition-colors duration-300">{topic.label}</p>
-                          <p className="text-[10px] text-gray-400">{count} articles</p>
+                          <p className="text-[11px] sm:text-[12px] font-semibold text-gray-800 truncate group-hover:text-aquiz-green transition-colors duration-300">{topic.label}</p>
+                          <p className="text-[9px] sm:text-[10px] text-gray-400">{count} articles</p>
                         </div>
                         <ArrowUpRight className="w-3 h-3 text-gray-300 group-hover:text-aquiz-green transition-all duration-300" />
                       </button>

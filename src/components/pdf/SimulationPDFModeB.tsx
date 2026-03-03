@@ -347,58 +347,69 @@ const s = StyleSheet.create({
   footerPage: { fontSize: 5.5, color: C.grayLight },
   // IA Card
   iaCard: {
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: C.green,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 14,
     backgroundColor: '#f0fdf4',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
   },
   iaBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     marginBottom: 6,
   },
-  iaBadgeText: {
-    fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
-    color: C.green,
-    backgroundColor: C.greenLight,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  iaBadgeIcon: {
+    backgroundColor: C.green,
     borderRadius: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  iaBadgeText: {
+    fontSize: 5.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.white,
+    letterSpacing: 0.5,
   },
   iaTitle: {
-    fontSize: 9,
+    fontSize: 8,
     fontFamily: 'Helvetica-Bold',
     color: C.black,
   },
   iaText: {
     fontSize: 7,
-    color: C.black,
-    lineHeight: 1.5,
-    marginTop: 4,
+    color: C.gray,
+    lineHeight: 1.6,
   },
   iaCliffhanger: {
     fontSize: 7,
     fontFamily: 'Helvetica-Bold',
     color: C.greenDark,
+    lineHeight: 1.5,
     marginTop: 6,
   },
   iaEconomie: {
-    backgroundColor: C.greenLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    backgroundColor: C.white,
     borderRadius: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginTop: 6,
-    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 0.5,
+    borderColor: '#bbf7d0',
   },
-  iaEconomieText: {
-    fontSize: 7,
+  iaEconomieValue: {
+    fontSize: 14,
     fontFamily: 'Helvetica-Bold',
     color: C.greenDark,
+  },
+  iaEconomieLabel: {
+    fontSize: 6,
+    color: C.gray,
   },
   // Quartier scores
   quartierRow: {
@@ -566,6 +577,22 @@ function genererConseilsModeB(props: SimulationPDFModeBProps): string[] {
     conseils.push(`Le coût du crédit (${fmt(coutTotalCredit)} EUR) représente ${Math.round(ratioCredit * 100)}% du prix du bien. Un apport plus important ou un taux plus bas réduirait significativement ce coût.`)
   }
 
+  // DPE & diagnostics (ancien)
+  if (typeBien === 'ancien') {
+    conseils.push('Vérifiez le DPE (Diagnostic de Performance Énergétique). Une passoire thermique (F ou G) implique des travaux obligatoires et impacte la valeur de revente.')
+  }
+
+  // Négociation
+  if (typeBien === 'ancien' && infoLocalisation?.prixLocalM2 && infoLocalisation.surfaceEstimee) {
+    const prixM2Bien = prixBien / infoLocalisation.surfaceEstimee
+    const ecart = Math.round(((prixM2Bien / infoLocalisation.prixLocalM2) - 1) * 100)
+    if (ecart > 5) {
+      conseils.push(`Ce bien est ${ecart}% au-dessus du prix médian du secteur. Une marge de négociation existe probablement.`)
+    } else if (ecart < -5) {
+      conseils.push(`Ce bien est ${Math.abs(ecart)}% en dessous du prix médian. Bonne affaire potentielle, mais vérifiez l'état du bien et les charges.`)
+    }
+  }
+
   return conseils.slice(0, 6)
 }
 
@@ -731,33 +758,53 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
               </View>
             </View>
           </View>
+
+          {/* Verdict de faisabilité */}
+          <View style={{ marginTop: 14, borderRadius: 6, borderWidth: 1, borderColor: apportSuffisant ? '#bbf7d0' : '#fed7aa', backgroundColor: apportSuffisant ? '#f0fdf4' : '#fffbeb', paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: apportSuffisant ? C.green : C.orange, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                {apportSuffisant ? 'OK' : '!'}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: apportSuffisant ? C.greenDark : C.orange }}>
+                {apportSuffisant
+                  ? 'Projet réalisable'
+                  : 'Projet à consolider'}
+              </Text>
+              <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, lineHeight: 1.4 }}>
+                {apportSuffisant
+                  ? `Avec un apport de ${fmt(apport)} EUR et une mensualité de ${fmt(mensualiteTotal)} EUR/mois sur ${dureeAns} ans, ce projet est dans les normes bancaires. Un conseiller AQUIZ peut optimiser votre taux et réduire le coût total.`
+                  : `Votre apport de ${fmt(apport)} EUR est en dessous du minimum conseillé (${fmt(apportMinimum10)} EUR). Les banques pourraient demander des garanties supplémentaires. Un conseiller AQUIZ peut identifier des solutions adaptées.`}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <Footer logoUrl={logoUrl} />
       </Page>
 
-      {/* ═══════ PAGE 2+ : COMPARAISON DURÉES & CONSEILS (auto-wrap) ═══════ */}
+      {/* ═══════ PAGE 2+ : ANALYSE COMPLÈTE & ACCOMPAGNEMENT (auto-wrap) ═══════ */}
       <Page size="A4" style={s.pageWrap}>
         <Footer logoUrl={logoUrl} />
 
         <View style={s.content}>
           {/* Titre de section */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
-            <Text style={s.pageTitle}>ANALYSE COMPARATIVE</Text>
-            <Text style={s.pageSub}>Durées de prêt & conseils personnalisés</Text>
+            <Text style={s.pageTitle}>ANALYSE COMPLÈTE</Text>
+            <Text style={s.pageSub}>Comparaison, quartier, IA & accompagnement</Text>
           </View>
-          {/* Tableau comparatif durées */}
-          <View style={{ marginTop: 12 }}>
+
+          {/* ═══ 1. Tableau comparatif durées ═══ */}
+          <View style={{ marginTop: 8 }}>
             <SectionTitle title="MENSUALITÉ SELON LA DURÉE DU PRÊT" />
             <View style={{ marginTop: 6 }}>
-              {/* Table header */}
               <View style={s.tableHeader}>
                 <Text style={[s.tableHeaderText, { flex: 1 }]}>Durée</Text>
                 <Text style={[s.tableHeaderText, { flex: 1.5 }]}>Mensualité</Text>
                 <Text style={[s.tableHeaderText, { flex: 1.5 }]}>Revenus requis</Text>
                 <Text style={[s.tableHeaderText, { flex: 1.5 }]}>Coût total crédit</Text>
               </View>
-              {/* Table rows */}
               {simulationsDuree.map((sim) => {
                 const isSelected = sim.duree === dureeAns
                 return (
@@ -777,13 +824,19 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                   </View>
                 )
               })}
+              {/* Note explicative */}
+              <View style={{ backgroundColor: C.grayBg, borderRadius: 3, padding: 6, marginTop: 4 }}>
+                <Text style={{ fontSize: 6, color: C.gray, lineHeight: 1.4 }}>
+                  *Durée sélectionnée. Plus la durée est longue, plus la mensualité est basse — mais le coût total du crédit augmente. Un conseiller AQUIZ peut vous aider à trouver le meilleur équilibre.
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Localisation si disponible */}
+          {/* ═══ 2. Localisation & marché local ═══ */}
           {infoLocalisation && (
-            <View style={{ marginTop: 14 }}>
-              <SectionTitle title="INFORMATIONS LOCALISATION" />
+            <View style={{ marginTop: 14 }} wrap={false}>
+              <SectionTitle title={`LOCALISATION & MARCHÉ — ${nomCommune || codePostal}`} />
               <View style={s.localCard}>
                 {infoLocalisation.nomCommune && (
                   <View style={s.localRow}>
@@ -801,7 +854,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                   <View style={s.localRow}>
                     <Text style={[s.localLabel, { color: C.greenDark }]}>PTZ estimé</Text>
                     <Text style={[s.localValue, { color: C.greenDark }]}>
-                      {fmt(infoLocalisation.ptzMontant)} EUR
+                      {fmt(infoLocalisation.ptzMontant)} EUR (prêt à taux zéro)
                     </Text>
                   </View>
                 )}
@@ -813,21 +866,117 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                 )}
                 {infoLocalisation.surfaceEstimee && (
                   <View style={s.localRow}>
-                    <Text style={s.localLabel}>Surface estimée</Text>
-                    <Text style={s.localValue}>~{infoLocalisation.surfaceEstimee} m²</Text>
+                    <Text style={s.localLabel}>Surface estimée pour {fmt(prixBien)} EUR</Text>
+                    <Text style={[s.localValue, { color: C.greenDark }]}>~{infoLocalisation.surfaceEstimee} m²</Text>
                   </View>
                 )}
                 {infoLocalisation.nbVentes && (
                   <View style={s.localRow}>
-                    <Text style={s.localLabel}>Ventes recensées</Text>
-                    <Text style={s.localValue}>{infoLocalisation.nbVentes} transactions</Text>
+                    <Text style={s.localLabel}>Transactions recensées (DVF)</Text>
+                    <Text style={s.localValue}>{infoLocalisation.nbVentes} ventes</Text>
                   </View>
                 )}
               </View>
             </View>
           )}
 
-          {/* Conseils personnalisés */}
+          {/* ═══ 3. Qualité du quartier ═══ */}
+          {quartier && (
+            <View style={{ marginTop: 14 }} wrap={false}>
+              <SectionTitle title={`QUALITÉ DU QUARTIER — ${nomCommune || codePostal}`} />
+
+              {/* Score global mis en avant */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 8 }}>
+                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: quartier.scoreGlobal / 10 >= 7 ? C.greenLight : quartier.scoreGlobal / 10 >= 4 ? C.orangeLight : '#fee2e2', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: quartier.scoreGlobal / 10 >= 7 ? C.greenDark : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
+                    {(quartier.scoreGlobal / 10).toFixed(1)}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                    Score global : {(quartier.scoreGlobal / 10).toFixed(1)}/10
+                  </Text>
+                  <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, lineHeight: 1.3 }}>
+                    {quartier.scoreGlobal / 10 >= 7 ? 'Quartier bien desservi avec de bons équipements.' : quartier.scoreGlobal / 10 >= 4 ? 'Quartier correct, quelques points à vérifier.' : 'Quartier peu équipé, vigilance recommandée.'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Détail des scores — barres horizontales */}
+              <View style={{ borderWidth: 0.5, borderColor: C.grayBorder, borderRadius: 4, overflow: 'hidden' }}>
+                {[
+                  { label: 'Commerces', score: quartier.commerces / 10, icon: 'Supermarchés, boulangeries' },
+                  { label: 'Écoles', score: quartier.ecoles / 10, icon: 'Écoles, collèges, lycées' },
+                  { label: 'Santé', score: quartier.sante / 10, icon: 'Médecins, pharmacies' },
+                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, icon: 'Parcs, jardins' },
+                  ...(quartier.niveauVie != null ? [{ label: 'Niveau de vie', score: quartier.niveauVie, icon: 'Revenu médian INSEE' }] : []),
+                  ...(quartier.qualiteAir != null ? [{ label: 'Qualité air', score: quartier.qualiteAir, icon: 'Indice ATMO' }] : []),
+                ].map((item, idx) => (
+                  <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? C.white : C.grayBg, borderBottomWidth: 0.3, borderBottomColor: C.grayBorder }}>
+                    <View style={{ width: 70 }}>
+                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{item.label}</Text>
+                    </View>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {/* Barre */}
+                      <View style={{ flex: 1, height: 5, backgroundColor: '#e6e6e6', borderRadius: 2 }}>
+                        <View style={{ height: 5, borderRadius: 2, width: `${item.score * 10}%`, backgroundColor: item.score >= 7 ? C.green : item.score >= 4 ? C.orange : C.red }} />
+                      </View>
+                      {/* Score */}
+                      <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', width: 30, textAlign: 'right', color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }}>
+                        {item.score.toFixed(1)}/10
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 5, color: C.grayLight, width: 75, textAlign: 'right' }}>{item.icon}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {quartier.synthese && (
+                <View style={{ backgroundColor: C.grayBg, borderRadius: 3, padding: 6, marginTop: 6 }}>
+                  <Text style={{ fontSize: 6.5, color: C.gray, lineHeight: 1.4 }}>
+                    {quartier.synthese}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ═══ 4. Synthèse IA ═══ */}
+          {syntheseIA && (
+            <View style={s.iaCard} wrap={false}>
+              <View style={s.iaBadge}>
+                <View style={s.iaBadgeIcon}>
+                  <Text style={s.iaBadgeText}>IA</Text>
+                </View>
+                <Text style={[s.iaBadgeText, { color: C.green, fontWeight: 'bold', marginLeft: 4 }]}>Analyse personnalisée AQUIZ</Text>
+              </View>
+              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
+              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
+                <View style={s.iaEconomie}>
+                  <Text style={s.iaEconomieValue}>
+                    Jusqu&apos;à {fmt(syntheseIA.economieEstimee)} EUR
+                  </Text>
+                  <Text style={s.iaEconomieLabel}>
+                    d&apos;économie potentielle avec un accompagnement optimisé
+                  </Text>
+                </View>
+              )}
+              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
+              {/* Mention source IA AQUIZ */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: '#bbf7d0' }}>
+                <View style={{ backgroundColor: C.green, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1.5 }}>
+                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                    IA AQUIZ
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 5.5, color: C.grayLight, lineHeight: 1.4 }}>
+                  Analyse g{'\u00e9'}n{'\u00e9'}r{'\u00e9'}e par l&apos;IA AQUIZ {'\u00e0'} partir de vos donn{'\u00e9'}es de simulation et des prix du march{'\u00e9'} local.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ═══ 5. Conseils personnalisés ═══ */}
           <View style={{ marginTop: 14 }} wrap={false}>
             <SectionTitle title="CONSEILS PERSONNALISÉS" />
             <View style={s.conseilCard}>
@@ -839,78 +988,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </View>
           </View>
 
-          {/* ═══ Synthèse IA ═══ */}
-          {syntheseIA && (
-            <View style={s.iaCard} wrap={false}>
-              <View style={s.iaBadge}>
-                <Text style={s.iaBadgeText}>IA</Text>
-                <Text style={s.iaTitle}>Analyse personnalisée AQUIZ</Text>
-              </View>
-              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
-              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
-                <View style={s.iaEconomie}>
-                  <Text style={s.iaEconomieText}>
-                    Économie potentielle estimée : {fmt(syntheseIA.economieEstimee)} EUR
-                  </Text>
-                </View>
-              )}
-              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
-            </View>
-          )}
-
-          {/* ═══ Qualité du quartier ═══ */}
-          {quartier && (
-            <View style={{ marginTop: 14 }} wrap={false}>
-              <SectionTitle title={`QUALITÉ DU QUARTIER — ${nomCommune || codePostal}`} />
-              <View style={s.quartierRow}>
-                {[
-                  { label: 'GLOBAL', score: quartier.scoreGlobal / 10, desc: 'Score composite' },
-                  { label: 'TRANSPORTS', score: quartier.transports / 10, desc: 'Bus, métro, tram, gare' },
-                  { label: 'COMMERCES', score: quartier.commerces / 10, desc: 'Supermarchés, boulangeries' },
-                  { label: 'ÉCOLES', score: quartier.ecoles / 10, desc: 'Écoles, collèges, lycées' },
-                  { label: 'SANTÉ', score: quartier.sante / 10, desc: 'Médecins, pharmacies' },
-                  { label: 'ESPACES VERTS', score: quartier.espaceVerts / 10, desc: 'Parcs, jardins, aires de jeux' },
-                ].map((item) => (
-                  <View key={item.label} style={s.quartierItem}>
-                    <Text style={s.quartierLabel}>{item.label}</Text>
-                    <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
-                      {item.score.toFixed(1)}
-                    </Text>
-                    <Text style={s.quartierMax}>/10</Text>
-                    <Text style={s.quartierDesc}>{item.desc}</Text>
-                  </View>
-                ))}
-              </View>
-              {/* Scores enrichis : Risques, Niveau de vie, Qualité air */}
-              {(quartier.risques != null || quartier.niveauVie != null || quartier.qualiteAir != null) && (
-                <View style={[s.quartierRow, { marginTop: 6 }]}>
-                  {[
-                    quartier.risques != null ? { label: 'RISQUES', score: quartier.risques, desc: 'Inondation, industriel, radon' } : null,
-                    quartier.niveauVie != null ? { label: 'NIVEAU DE VIE', score: quartier.niveauVie, desc: 'Revenu médian INSEE' } : null,
-                    quartier.qualiteAir != null ? { label: 'QUALITÉ AIR', score: quartier.qualiteAir, desc: 'Indice ATMO pollution' } : null,
-                  ]
-                    .filter((item): item is { label: string; score: number; desc: string } => item !== null)
-                    .map((item) => (
-                      <View key={item.label} style={s.quartierItem}>
-                        <Text style={s.quartierLabel}>{item.label}</Text>
-                        <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
-                          {item.score.toFixed(1)}
-                        </Text>
-                        <Text style={s.quartierMax}>/10</Text>
-                        <Text style={s.quartierDesc}>{item.desc}</Text>
-                      </View>
-                    ))}
-                </View>
-              )}
-              {quartier.synthese && (
-                <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 6, lineHeight: 1.4 }}>
-                  {quartier.synthese}
-                </Text>
-              )}
-            </View>
-          )}
-
-          {/* Résumé */}
+          {/* ═══ 6. Résumé ═══ */}
           <View style={{ marginTop: 14, backgroundColor: C.grayBg, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 12 }} wrap={false}>
             <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
               EN RÉSUMÉ
@@ -923,14 +1001,19 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
               sera de {fmt(mensualiteTotal)} EUR (crédit + assurance) pour un coût total
               de projet de {fmt(totalProjet)} EUR.
             </Text>
+            <Text style={{ fontSize: 6.5, color: apportSuffisant ? C.greenDark : C.orange, fontFamily: 'Helvetica-Bold', marginTop: 4 }}>
+              {apportSuffisant
+                ? 'Verdict : Ce projet est réalisable dans les normes bancaires actuelles.'
+                : 'Verdict : Ce projet nécessite un ajustement (apport ou durée) pour être accepté par les banques.'}
+            </Text>
           </View>
 
-          {/* CTA */}
+          {/* ═══ 7. CTA final ═══ */}
           <View style={s.ctaCard} wrap={false}>
             <View>
-              <Text style={s.ctaTitle}>Besoin d&apos;accompagnement ?</Text>
+              <Text style={s.ctaTitle}>Prêt à concrétiser cet achat ?</Text>
               <Text style={s.ctaSub}>
-                Un conseiller AQUIZ peut étudier votre dossier et optimiser votre financement.
+                Un conseiller AQUIZ analyse votre dossier, négocie votre taux et vous accompagne jusqu&apos;à la signature.
               </Text>
             </View>
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>

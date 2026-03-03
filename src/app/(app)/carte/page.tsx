@@ -1,8 +1,8 @@
 'use client'
 
 /**
- * Page Carte Interactive - Où puis-je acheter ?
- * Design minimaliste AQUIZ - Version épurée
+ * Page Carte Interactive Pro — Où puis-je acheter ?
+ * Moteur WebGL MapLibre GL · Heatmap · Clusters · Recherche · Dark/Light
  */
 
 import { Button } from '@/components/ui/button'
@@ -19,38 +19,54 @@ import type { StatutZone, TypeBienCarte, ZoneCalculee } from '@/types/carte'
 import {
     ArrowLeft,
     Building2,
+    ChevronLeft,
     Filter,
+    Flame,
     Home,
     Info,
     Lightbulb,
     Loader2,
+    Ruler,
+    Search,
+    TrendingDown,
+    TrendingUp,
     X,
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-// Import dynamique de la carte (Leaflet SSR)
-const CarteInteractive = dynamic(
-  () => import('@/components/carte/CarteInteractive'),
-  { 
+// Import dynamique de la carte MapLibre (WebGL, pas de SSR)
+const CarteMapLibre = dynamic(
+  () => import('@/components/carte/CarteMapLibre'),
+  {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full bg-aquiz-gray-lightest flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-aquiz-gray animate-spin" />
+      <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative">
+            <div className="w-14 h-14 border-4 border-slate-200 rounded-full" />
+            <div className="absolute inset-0 w-14 h-14 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <p className="text-sm text-slate-500 font-medium">Initialisation WebGL...</p>
+        </div>
       </div>
-    )
-  }
+    ),
+  },
+)
+
+const SearchAdresse = dynamic(
+  () => import('@/components/carte/SearchAdresse'),
+  { ssr: false },
 )
 
 function CartePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isHydrated = useHydration()
-  const { resultats, parametresModeA, setZoneSelectionnee: saveZoneToStore } = useSimulateurStore()
-  
-  // Détecter l'origine de la navigation
-  // On mémorise en sessionStorage pour ne pas perdre l'info après un détour (carte→aides→carte)
+  const { resultats, setZoneSelectionnee: saveZoneToStore } = useSimulateurStore()
+
+  // ─── Navigation context ──────────────────────────────────
   const fromParam = searchParams.get('from')
   const [fromSimulation, setFromSimulation] = useState(false)
   useEffect(() => {
@@ -61,9 +77,8 @@ function CartePageContent() {
       setFromSimulation(true)
     }
   }, [fromParam])
-  const hasSimulationData = !!(resultats?.prixAchatMax && resultats.prixAchatMax > 0)
 
-  // États
+  // ─── States ──────────────────────────────────────────────
   const [typeBien, setTypeBien] = useState<TypeBienCarte>('appartement')
   const [filtreStatuts, setFiltreStatuts] = useState<StatutZone[]>([])
   const [filtreDepartements, setFiltreDepartements] = useState<string[]>([])
@@ -72,7 +87,12 @@ function CartePageContent() {
   const [customBudget, setCustomBudget] = useState<number>(300000)
   const [showBudgetHint, setShowBudgetHint] = useState(false)
 
-  // Budget input: affichage formaté (300 000) avec saisie numérique
+  // ─── Pro features ────────────────────────────────────────
+  const [showHeatmap, setShowHeatmap] = useState(true)
+  const [showSearch, setShowSearch] = useState(false)
+  const [flyToCoords, setFlyToCoords] = useState<{ lat: number; lng: number; zoom?: number } | null>(null)
+
+  // ─── Budget input ────────────────────────────────────────
   const [budgetInputValue, setBudgetInputValue] = useState(formatMontant(300000))
   const budgetInputRef = useRef<HTMLInputElement>(null)
 
@@ -87,7 +107,6 @@ function CartePageContent() {
   const handleBudgetFocus = useCallback(() => {
     setBudgetInputValue(customBudget === 0 ? '' : customBudget.toString())
     setShowBudgetHint(false)
-    // Sélectionner tout le texte après le render
     requestAnimationFrame(() => budgetInputRef.current?.select())
   }, [customBudget])
 
@@ -95,93 +114,75 @@ function CartePageContent() {
     setBudgetInputValue(formatMontant(customBudget))
   }, [customBudget])
 
-  // Afficher le hint budget en accès direct après un court délai
   useEffect(() => {
     if (!fromSimulation && isHydrated) {
-      const showTimer = setTimeout(() => setShowBudgetHint(true), 800)
-      const hideTimer = setTimeout(() => setShowBudgetHint(false), 6000)
-      return () => { clearTimeout(showTimer); clearTimeout(hideTimer) }
+      const show = setTimeout(() => setShowBudgetHint(true), 800)
+      const hide = setTimeout(() => setShowBudgetHint(false), 6000)
+      return () => { clearTimeout(show); clearTimeout(hide) }
     }
   }, [fromSimulation, isHydrated])
 
-  // DVF Data
+  // ─── DVF Data ────────────────────────────────────────────
   const departementsIDF = ['75', '77', '78', '91', '92', '93', '94', '95']
   const { zones: zonesReelles, isLoading: dvfLoading } = useDVFData(departementsIDF)
 
-  // Effacer la sélection si la zone n'a plus de données valides
   useEffect(() => {
-    if (zoneSelectionnee && zoneSelectionnee.prixM2 === 0) {
-      setZoneSelectionnee(null)
-    }
+    if (zoneSelectionnee && zoneSelectionnee.prixM2 === 0) setZoneSelectionnee(null)
   }, [zoneSelectionnee, typeBien])
 
-  // CSS Leaflet — ne pas supprimer au démontage pour éviter le bug de shrink au retour
-  useEffect(() => {
-    const LEAFLET_CSS_ID = 'leaflet-css-global'
-    if (!document.getElementById(LEAFLET_CSS_ID)) {
-      const link = document.createElement('link')
-      link.id = LEAFLET_CSS_ID
-      link.rel = 'stylesheet'
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-      link.integrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='
-      link.crossOrigin = ''
-      document.head.appendChild(link)
-    }
-    // Pas de cleanup : le CSS reste chargé pour les retours navigation
-  }, [])
-
-  // Budget utilisateur
+  // ─── Budget ──────────────────────────────────────────────
   const budget = useMemo(() => {
     if (!isHydrated) return 300000
-    // Si on vient de la simulation, utiliser le budget calculé
     if (fromSimulation && resultats?.prixAchatMax) return resultats.prixAchatMax
-    // Sinon, budget personnalisé
     return customBudget
   }, [isHydrated, fromSimulation, resultats, customBudget])
 
-  // Centre de la région
   const centreRegion = CENTRES_REGIONS['ile-de-france']
 
-  // Source de données - filtrer par type de bien dès la source
+  // ─── Zone computation ────────────────────────────────────
   const zonesSource = useMemo(() => {
     const source = zonesReelles.length > 0 ? zonesReelles : ZONES_ILE_DE_FRANCE
-    // Filtrer les zones qui ont un prix pour le type de bien sélectionné
-    // ET exclure les zones avec des données incorrectes (nom = département)
     return source.filter(z => {
       const prixM2 = typeBien === 'appartement' ? z.prixM2Appartement : z.prixM2Maison
       if (prixM2 <= 0) return false
-      // Exclure les zones où le nom est le département (données corrompues)
-      if (z.nom === z.departement) return false
-      if (!z.nom || z.nom.length < 2) return false
+      if (z.nom === z.departement || !z.nom || z.nom.length < 2) return false
       return true
     })
   }, [zonesReelles, typeBien])
 
-  // Calcul des zones
-  const zonesCalculees = useMemo(() => {
-    return calculerToutesZones(zonesSource, budget, typeBien)
-  }, [zonesSource, budget, typeBien])
+  const zonesCalculees = useMemo(() =>
+    calculerToutesZones(zonesSource, budget, typeBien),
+  [zonesSource, budget, typeBien])
 
-  // Filtrage additionnel (statut, département)
   const zonesFiltrees = useMemo(() => {
     let zones = [...zonesCalculees]
-    if (filtreStatuts.length > 0) {
-      zones = zones.filter(z => filtreStatuts.includes(z.statut))
-    }
-    if (filtreDepartements.length > 0) {
-      zones = filtrerParDepartement(zones, filtreDepartements)
-    }
+    if (filtreStatuts.length > 0) zones = zones.filter(z => filtreStatuts.includes(z.statut))
+    if (filtreDepartements.length > 0) zones = filtrerParDepartement(zones, filtreDepartements)
     return zones
   }, [zonesCalculees, filtreStatuts, filtreDepartements])
 
-  // Statistiques
+  // ─── Stats ───────────────────────────────────────────────
   const stats = useMemo(() => {
     const vertes = zonesFiltrees.filter(z => z.statut === 'vert').length
     const oranges = zonesFiltrees.filter(z => z.statut === 'orange').length
-    return { vertes, oranges, total: zonesFiltrees.length }
+    const rouges = zonesFiltrees.filter(z => z.statut === 'rouge').length
+    return { vertes, oranges, rouges, total: zonesFiltrees.length }
   }, [zonesFiltrees])
 
-  // Départements uniques
+  // Stats de prix pour le panneau de détail
+  const deptStats = useMemo(() => {
+    if (!zoneSelectionnee) return null
+    const deptZones = zonesCalculees.filter(z => z.codeDepartement === zoneSelectionnee.codeDepartement)
+    if (deptZones.length === 0) return null
+    const prices = deptZones.map(z => z.prixM2).sort((a, b) => a - b)
+    return {
+      min: prices[0],
+      max: prices[prices.length - 1],
+      median: prices[Math.floor(prices.length / 2)],
+      count: deptZones.length,
+    }
+  }, [zoneSelectionnee, zonesCalculees])
+
   const departementsDisponibles = useMemo(() => {
     const depts = new Set(ZONES_ILE_DE_FRANCE.map(z => z.codeDepartement))
     return Array.from(depts).sort()
@@ -189,14 +190,9 @@ function CartePageContent() {
 
   const getDeptLabel = (code: string) => {
     const labels: Record<string, string> = {
-      '75': 'Paris',
-      '77': 'Seine-et-Marne',
-      '78': 'Yvelines',
-      '91': 'Essonne',
-      '92': 'Hauts-de-Seine',
-      '93': 'Seine-Saint-Denis',
-      '94': 'Val-de-Marne',
-      '95': "Val-d'Oise",
+      '75': 'Paris', '77': 'Seine-et-Marne', '78': 'Yvelines',
+      '91': 'Essonne', '92': 'Hauts-de-Seine', '93': 'Seine-Saint-Denis',
+      '94': 'Val-de-Marne', '95': "Val-d'Oise",
     }
     return labels[code] || code
   }
@@ -212,34 +208,38 @@ function CartePageContent() {
   return (
     <div className="h-[calc(100dvh-72px)] md:h-[calc(100dvh-88px)] flex flex-col bg-white overflow-hidden">
       <h1 className="sr-only">Carte des prix immobiliers en Île-de-France</h1>
-      
-      {/* ============================================ */}
-      {/* BARRE CONTEXTUELLE PRO                      */}
-      {/* ============================================ */}
-      <div className="shrink-0 bg-white border-b border-slate-200/80 relative z-[40]">
-        <div className="px-2 sm:px-5 h-12 flex items-center justify-between gap-1.5 sm:gap-2">
-          
-          {/* Gauche: Retour + Toggle */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {fromSimulation && (
-              <>
-                <button
-                  onClick={() => {
-                    sessionStorage.removeItem('aquiz-carte-from-simulation')
-                    router.push('/simulateur/mode-a?returning=1')
-                  }}
-                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-full text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-all text-[11px] font-medium"
-                  title="Retour à la simulation"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Simulation</span>
-                </button>
 
-                <div className="w-px h-5 bg-slate-200 hidden sm:block" />
-              </>
+      {/* ════════════════════════════════════════════ */}
+      {/* BARRE D'OUTILS PRO                         */}
+      {/* ════════════════════════════════════════════ */}
+      <div className="shrink-0 border-b relative z-40 bg-white border-slate-200/80">
+        <div className="px-2 sm:px-4 h-12 flex items-center justify-between gap-1 sm:gap-2">
+
+          {/* Gauche: Retour + Type + Recherche */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+            {fromSimulation ? (
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem('aquiz-carte-from-simulation')
+                  router.push('/simulateur/mode-a?returning=1')
+                }}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Simulation</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => router.push('/')}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Retour</span>
+              </button>
             )}
 
-            <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-100 rounded-full p-[3px]">
+            {/* Type toggle */}
+            <div className="flex items-center gap-0.5 rounded-full p-0.75 bg-slate-100">
               <button
                 onClick={() => setTypeBien('appartement')}
                 className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
@@ -264,11 +264,31 @@ function CartePageContent() {
                 Maison
               </button>
             </div>
+
+            {/* Search — desktop inline, mobile toggle */}
+            <div className="hidden md:block flex-1 max-w-xs">
+              <SearchAdresse
+                onSelect={(result) => {
+                  setFlyToCoords({ lat: result.lat, lng: result.lng, zoom: result.zoom })
+                }}
+                placeholder="Rechercher une ville..."
+              />
+            </div>
+            <button
+              onClick={() => { setShowSearch(!showSearch); if (!showSearch) setShowFilters(false) }}
+              className={`md:hidden p-1.5 rounded-full transition-colors ${
+                showSearch
+                  ? 'bg-slate-900 text-white'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              }`}
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Droite: Budget + Filtres */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Budget: éditable si pas de simulation, badge fixe sinon */}
+          {/* Droite: Budget + Contrôles Pro + Filtres */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            {/* Budget */}
             {fromSimulation ? (
               <div className="relative group">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50/80 rounded-full border border-emerald-200/50">
@@ -276,20 +296,18 @@ function CartePageContent() {
                   <span className="text-[11px] font-bold text-emerald-700 tabular-nums">{formatMontant(budget)} €</span>
                   <Info className="w-3 h-3 text-emerald-400" />
                 </div>
-                {/* Tooltip au hover */}
                 <div className="absolute top-full right-0 mt-1.5 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
                   <div className="bg-slate-900 text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
                     <span className="text-emerald-400 font-semibold">Budget issu de votre simulation</span>
-                    <br />
-                    <span className="text-slate-400">Relancez une simulation pour modifier</span>
+                    <br /><span className="text-slate-400">Relancez une simulation pour modifier</span>
                     <div className="absolute -top-1 right-4 w-2 h-2 bg-slate-900 rotate-45" />
                   </div>
                 </div>
               </div>
             ) : (
               <div className="relative">
-                <div className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 bg-slate-50 rounded-full border border-slate-200">
-                  <span className="text-[10px] text-slate-500 font-medium hidden sm:inline">Budget</span>
+                <div className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200">
+                  <span className="text-[10px] font-medium hidden sm:inline text-slate-500">Budget</span>
                   <input
                     ref={budgetInputRef}
                     type="text"
@@ -298,18 +316,13 @@ function CartePageContent() {
                     onChange={handleBudgetChange}
                     onFocus={handleBudgetFocus}
                     onBlur={handleBudgetBlur}
-                    className="w-18 sm:w-24 text-[11px] font-bold text-slate-800 bg-transparent border-none outline-none tabular-nums text-right"
+                    className="w-18 sm:w-24 text-[11px] font-bold bg-transparent border-none outline-none tabular-nums text-right text-slate-800"
                   />
                   <span className="text-[10px] text-slate-500">€</span>
                 </div>
-                {/* Hint animé pour indiquer de modifier le budget */}
-                <div
-                  className={`absolute top-full right-0 mt-1.5 z-50 transition-all duration-300 ${
-                    showBudgetHint
-                      ? 'opacity-100 translate-y-0'
-                      : 'opacity-0 -translate-y-1 pointer-events-none'
-                  }`}
-                >
+                <div className={`absolute top-full right-0 mt-1.5 z-50 transition-all duration-300 ${
+                  showBudgetHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
+                }`}>
                   <div className="bg-aquiz-black text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1.5">
                     <Lightbulb className="w-3 h-3 text-aquiz-green shrink-0" />
                     <span><span className="text-aquiz-green font-semibold">Modifiez le budget</span><span className="text-slate-300"> pour adapter la carte</span></span>
@@ -319,15 +332,27 @@ function CartePageContent() {
               </div>
             )}
 
+            {/* Heatmap toggle */}
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`
-                flex items-center gap-1.5 px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200
-                ${showFilters 
-                  ? 'bg-slate-900 text-white shadow-md' 
+              onClick={() => setShowHeatmap(!showHeatmap)}
+              title={showHeatmap ? 'Masquer la heatmap' : 'Afficher la heatmap'}
+              className={`p-[6px] rounded-full text-[11px] transition-all duration-200 ${
+                showHeatmap
+                  ? 'bg-orange-500/15 text-orange-500'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Filtres */}
+            <button
+              onClick={() => { setShowFilters(!showFilters); if (!showFilters) setShowSearch(false) }}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                showFilters
+                  ? 'bg-slate-900 text-white shadow-md'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
-                }
-              `}
+              }`}
             >
               <Filter className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Filtres</span>
@@ -339,109 +364,126 @@ function CartePageContent() {
             </button>
           </div>
         </div>
+
+        {/* Search mobile — expandable */}
+        {showSearch && (
+          <div className="md:hidden px-3 pb-2.5">
+            <SearchAdresse
+              onSelect={(result) => {
+                setFlyToCoords({ lat: result.lat, lng: result.lng, zoom: result.zoom })
+                setShowSearch(false)
+              }}
+              placeholder="Rechercher une ville, une adresse..."
+            />
+          </div>
+        )}
       </div>
 
-      {/* ============================================ */}
-      {/* CONTENU PRINCIPAL - Carte pleine page       */}
-      {/* ============================================ */}
+      {/* ════════════════════════════════════════════ */}
+      {/* CONTENU PRINCIPAL — Carte WebGL plein écran */}
+      {/* ════════════════════════════════════════════ */}
       <main className="flex-1 relative overflow-hidden">
         
-        {/* Carte en fond - z-index bas */}
+        {/* Carte MapLibre GL (WebGL) */}
         <div className="absolute inset-0 z-0">
-          <CarteInteractive
+          <CarteMapLibre
             zonesCalculees={zonesFiltrees}
             onSelectZone={(zone) => {
-              // Ne pas sélectionner les zones sans données DVF
-              if (zone && zone.prixM2 > 0) {
-                setZoneSelectionnee(zone)
-              }
+              if (zone && zone.prixM2 > 0) setZoneSelectionnee(zone)
             }}
             zoneSelectionnee={zoneSelectionnee}
-            typeBien={typeBien}
-            filtreStatuts={filtreStatuts.length > 0 ? filtreStatuts : undefined}
             centreInitial={centreRegion.centre}
             zoomInitial={centreRegion.zoom}
+            showHeatmap={showHeatmap}
+            flyToCoords={flyToCoords}
           />
         </div>
 
         {/* Loading DVF */}
         {dvfLoading && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-aquiz-gray-lighter">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-1000">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full shadow-lg border bg-white border-slate-200">
               <Loader2 className="w-4 h-4 text-aquiz-green animate-spin" />
-              <span className="text-sm text-aquiz-gray">Chargement des données...</span>
+              <span className="text-sm text-slate-600">
+                Chargement DVF...
+              </span>
             </div>
           </div>
         )}
 
-        {/* Légende discrète — centrée sur mobile, gauche sur desktop (masquée quand popup ouverte) */}
-        <div className={`absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 z-20 ${zoneSelectionnee ? 'hidden sm:block' : ''}`}>
-          <div className="bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-white/50 px-2.5 sm:px-3 py-1.5">
-            <div className="flex items-center gap-2 sm:gap-3 text-[10px]">
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-1 ring-emerald-300/50" />
-                <span className="text-slate-600 font-medium">Confort <span className="font-bold text-slate-800">{stats.vertes}</span></span>
+        {/* ─── Légende interactive ─── */}
+        <div className={`absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 sm:left-4 sm:translate-x-0 z-20 transition-opacity ${
+          zoneSelectionnee ? 'hidden sm:block' : ''
+        }`}>
+          <div className="rounded-2xl shadow-lg border px-3 sm:px-4 py-2 bg-white/95 backdrop-blur-md border-white/50">
+            <div className="flex items-center gap-3 sm:gap-4 text-[10px] sm:text-[11px]">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-emerald-400/20" />
+                <span className="text-slate-600">
+                  Confort <span className="font-bold text-slate-800">{stats.vertes}</span>
+                </span>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-400 ring-1 ring-amber-300/50" />
-                <span className="text-slate-600 font-medium">Accessible <span className="font-bold text-slate-800">{stats.oranges}</span></span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-400/20" />
+                <span className="text-slate-600">
+                  Accessible <span className="font-bold text-slate-800">{stats.oranges}</span>
+                </span>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-red-400 ring-1 ring-red-300/50" />
-                <span className="text-slate-600 font-medium">Limité</span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-400 ring-2 ring-red-400/20" />
+                <span className="text-slate-600">
+                  Limité <span className="font-bold text-slate-800">{stats.rouges}</span>
+                </span>
               </div>
+              {showHeatmap && (
+                <div className="hidden sm:flex items-center gap-1.5 border-l pl-3 border-slate-200">
+                  <Flame className="w-3 h-3 text-orange-400" />
+                  <span className="text-slate-400">Heatmap active</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Panel Filtres */}
+        {/* Zone count badge */}
+        <div className={`absolute top-3 left-3 z-20 ${showFilters ? 'hidden' : ''}`}>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg border bg-white/95 backdrop-blur border-white/50 text-slate-600">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            <span className="font-bold text-slate-800">{stats.total}</span> zones · {typeBien === 'appartement' ? 'Appart.' : 'Maisons'} · WebGL
+          </div>
+        </div>
+
+        {/* ─── Panel Filtres ─── */}
         {showFilters && (
-          <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-auto sm:right-4 z-[40] sm:w-72">
-            <div className="bg-white rounded-xl shadow-xl border border-aquiz-gray-lighter overflow-hidden">
-              <div className="px-4 py-3 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                <span className="font-semibold text-aquiz-black">Filtres</span>
-                <button 
-                  onClick={() => setShowFilters(false)}
-                  className="p-1 text-aquiz-gray hover:text-aquiz-black transition-colors"
-                >
+          <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-auto sm:right-14 z-40 sm:w-72">
+            <div className="rounded-xl shadow-xl border overflow-hidden bg-white border-slate-200">
+              <div className="px-4 py-3 border-b flex items-center justify-between border-slate-200">
+                <span className="font-semibold text-slate-900">Filtres</span>
+                <button onClick={() => setShowFilters(false)} className="p-1 transition-colors text-slate-400 hover:text-slate-800">
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              
               <div className="p-4 space-y-4">
                 {/* Statut */}
                 <div>
-                  <p className="text-xs font-medium text-aquiz-gray mb-2 uppercase tracking-wide">Statut</p>
+                  <p className="text-xs font-medium mb-2 uppercase tracking-wide text-slate-400">Accessibilité</p>
                   <div className="flex flex-wrap gap-2">
                     {(['vert', 'orange', 'rouge'] as const).map((statut) => {
                       const isActive = filtreStatuts.includes(statut)
-                      const colors = {
-                        vert: 'bg-aquiz-green',
-                        orange: 'bg-aquiz-orange',
-                        rouge: 'bg-aquiz-red',
-                      }
-                      const labels = {
-                        vert: 'Confort',
-                        orange: 'Accessible',
-                        rouge: 'Limité',
-                      }
+                      const colors = { vert: 'bg-emerald-400', orange: 'bg-amber-400', rouge: 'bg-red-400' }
+                      const labels = { vert: 'Confort', orange: 'Accessible', rouge: 'Limité' }
                       return (
                         <button
                           key={statut}
                           onClick={() => {
-                            if (isActive) {
-                              setFiltreStatuts(filtreStatuts.filter(s => s !== statut))
-                            } else {
-                              setFiltreStatuts([...filtreStatuts, statut])
-                            }
+                            if (isActive) setFiltreStatuts(filtreStatuts.filter(s => s !== statut))
+                            else setFiltreStatuts([...filtreStatuts, statut])
                           }}
-                          className={`
-                            flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
-                            ${isActive 
-                              ? 'bg-aquiz-black text-white' 
-                              : 'bg-aquiz-gray-lightest text-aquiz-gray hover:bg-aquiz-gray-lighter'
-                            }
-                          `}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                            isActive
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
                         >
                           <div className={`w-2 h-2 rounded-full ${colors[statut]}`} />
                           {labels[statut]}
@@ -453,7 +495,7 @@ function CartePageContent() {
 
                 {/* Départements */}
                 <div>
-                  <p className="text-xs font-medium text-aquiz-gray mb-2 uppercase tracking-wide">Départements</p>
+                  <p className="text-xs font-medium mb-2 uppercase tracking-wide text-slate-400">Départements</p>
                   <div className="space-y-1 max-h-48 overflow-y-auto">
                     {departementsDisponibles.map((code) => {
                       const isActive = filtreDepartements.includes(code)
@@ -461,36 +503,27 @@ function CartePageContent() {
                         <button
                           key={code}
                           onClick={() => {
-                            if (isActive) {
-                              setFiltreDepartements(filtreDepartements.filter(d => d !== code))
-                            } else {
-                              setFiltreDepartements([...filtreDepartements, code])
-                            }
+                            if (isActive) setFiltreDepartements(filtreDepartements.filter(d => d !== code))
+                            else setFiltreDepartements([...filtreDepartements, code])
                           }}
-                          className={`
-                            w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors
-                            ${isActive 
-                              ? 'bg-aquiz-black text-white' 
-                              : 'hover:bg-aquiz-gray-lightest text-aquiz-black'
-                            }
-                          `}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                            isActive
+                              ? 'bg-slate-900 text-white'
+                              : 'text-slate-800 hover:bg-slate-50'
+                          }`}
                         >
                           <span>{getDeptLabel(code)}</span>
-                          <span className={isActive ? 'text-white/60' : 'text-aquiz-gray'}>{code}</span>
+                          <span className={isActive ? 'text-white/60' : 'text-slate-400'}>{code}</span>
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* Reset */}
                 {(filtreStatuts.length > 0 || filtreDepartements.length > 0) && (
                   <button
-                    onClick={() => {
-                      setFiltreStatuts([])
-                      setFiltreDepartements([])
-                    }}
-                    className="w-full py-2 text-sm text-aquiz-gray hover:text-aquiz-black transition-colors"
+                    onClick={() => { setFiltreStatuts([]); setFiltreDepartements([]) }}
+                    className="w-full py-2 text-sm transition-colors text-slate-400 hover:text-slate-800"
                   >
                     Réinitialiser les filtres
                   </button>
@@ -500,72 +533,139 @@ function CartePageContent() {
           </div>
         )}
 
-        {/* Zone sélectionnée - Slide panel */}
-        {zoneSelectionnee && (
-          <div className="absolute bottom-0 left-0 right-0 z-50 sm:left-auto sm:right-4 sm:bottom-4 sm:w-104">
-            <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-aquiz-gray-lighter overflow-y-auto max-h-[75vh] animate-in slide-in-from-bottom duration-300">
+        {/* ─── Panneau de détail ─── */}
+        {zoneSelectionnee && (() => {
+          const statutColor = zoneSelectionnee.statut === 'vert' ? '#22c55e' : zoneSelectionnee.statut === 'orange' ? '#f59e0b' : '#ef4444'
+          const statutLabel = zoneSelectionnee.statut === 'vert' ? 'Accessible' : zoneSelectionnee.statut === 'orange' ? 'Tendu' : 'Hors budget'
+          const statutTextClass = zoneSelectionnee.statut === 'vert' ? 'text-emerald-700' : zoneSelectionnee.statut === 'orange' ? 'text-amber-700' : 'text-red-700'
+          const statutBadgeBg = zoneSelectionnee.statut === 'vert' ? 'bg-emerald-50' : zoneSelectionnee.statut === 'orange' ? 'bg-amber-50' : 'bg-red-50'
+
+          return (
+          <div className="absolute bottom-2 left-2 right-2 z-40 sm:left-auto sm:right-3 sm:bottom-3 sm:w-[380px] sm:max-h-[calc(100%-60px)]">
+            <div className="rounded-xl shadow-xl border border-slate-200 overflow-y-auto max-h-[60vh] sm:max-h-[75vh] bg-white">
               
-              {/* Header zone */}
-              <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-aquiz-gray-lighter">
-                <h2 className="sr-only">Détail de la zone sélectionnée</h2>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2.5 sm:gap-3">
+              {/* Header */}
+              <div className="px-4 pt-3.5 pb-3 border-b border-slate-100">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <div
-                      className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center"
-                      style={{ 
-                        backgroundColor: zoneSelectionnee.statut === 'vert' ? '#22c55e15' : 
-                                        zoneSelectionnee.statut === 'orange' ? '#f59e0b15' : '#ef444415'
-                      }}
-                    >
-                      <div
-                        className="w-4 h-4 rounded-full"
-                        style={{ 
-                          backgroundColor: zoneSelectionnee.statut === 'vert' ? '#22c55e' : 
-                                          zoneSelectionnee.statut === 'orange' ? '#f59e0b' : '#ef4444'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <h3 className="text-sm sm:text-base font-semibold text-aquiz-black">{zoneSelectionnee.nom}</h3>
-                      <p className="text-xs sm:text-sm text-aquiz-gray">
-                        {zoneSelectionnee.departement} • Zone PTZ {getZonePTZ(zoneSelectionnee.codePostal)}
+                      className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                      style={{ backgroundColor: statutColor, boxShadow: `0 0 0 2px ${statutColor}30, 0 0 0 3px white` }}
+                    />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-slate-900 truncate leading-tight">
+                        {zoneSelectionnee.nom}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                        {zoneSelectionnee.departement} · PTZ {getZonePTZ(zoneSelectionnee.codePostal)} · {zoneSelectionnee.codePostal}
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setZoneSelectionnee(null)}
-                    className="p-1.5 text-aquiz-gray hover:text-aquiz-black hover:bg-aquiz-gray-lightest rounded-lg transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${statutBadgeBg} ${statutTextClass}`}>
+                      {statutLabel}
+                    </span>
+                    <button
+                      onClick={() => setZoneSelectionnee(null)}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="px-4 py-3 sm:px-5 sm:py-4">
+              {/* Contenu */}
+              <div className="px-4 py-3 space-y-2.5">
                 {zoneSelectionnee.prixM2 > 0 ? (
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div className="text-center bg-aquiz-gray-lightest rounded-xl py-2 sm:py-3">
-                      <p className="text-xl sm:text-2xl font-bold text-aquiz-black">{zoneSelectionnee.surfaceMax}</p>
-                      <p className="text-[10px] sm:text-xs text-aquiz-gray">m² max</p>
+                  <>
+                    {/* Chiffres clés */}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <div className="text-center rounded-lg py-2 bg-slate-50">
+                        <p className="text-lg font-bold text-slate-900 leading-none">
+                          {zoneSelectionnee.surfaceMax}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">m² max</p>
+                      </div>
+                      <div className="text-center rounded-lg py-2 bg-slate-50">
+                        <p className="text-base font-bold text-slate-900 leading-none">
+                          {formatMontant(zoneSelectionnee.prixM2)}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">€/m²</p>
+                      </div>
+                      <div className="text-center rounded-lg py-2 bg-slate-50">
+                        <p className="text-base font-bold text-slate-900 leading-none">
+                          {formatMontant(budget)}
+                        </p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">budget €</p>
+                      </div>
                     </div>
-                    <div className="text-center bg-aquiz-gray-lightest rounded-xl py-2 sm:py-3">
-                      <p className="text-lg sm:text-xl font-bold text-aquiz-black">{formatMontant(zoneSelectionnee.prixM2)}</p>
-                      <p className="text-[10px] sm:text-xs text-aquiz-gray">€/m² médian</p>
+
+                    {/* Type de logement */}
+                    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-slate-50">
+                      <Ruler className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800">
+                          {zoneSelectionnee.commentaireLogement}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {zoneSelectionnee.surfaceMin}–{zoneSelectionnee.surfaceMax} m² accessibles
+                        </p>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Comparaison départementale */}
+                    {deptStats && (
+                      <div className="rounded-lg border border-slate-100 p-3 space-y-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                          vs {zoneSelectionnee.departement} ({deptStats.count} communes)
+                        </p>
+                        <div className="space-y-1">
+                          <div className="relative h-2 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-400">
+                            <div
+                              className="absolute top-1/2 w-2.5 h-2.5 bg-white rounded-full shadow ring-2 ring-slate-700"
+                              style={{
+                                left: `${Math.min(Math.max(((zoneSelectionnee.prixM2 - deptStats.min) / (deptStats.max - deptStats.min)) * 100, 2), 98)}%`,
+                                transform: 'translate(-50%, -50%)',
+                              }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] font-medium">
+                            <span className="text-emerald-600">{formatMontant(deptStats.min)} €/m²</span>
+                            <span className="text-slate-400">médian {formatMontant(deptStats.median)}</span>
+                            <span className="text-red-500">{formatMontant(deptStats.max)} €/m²</span>
+                          </div>
+                        </div>
+
+                        {zoneSelectionnee.evolutionPrix1an !== undefined && zoneSelectionnee.evolutionPrix1an !== 0 && (
+                          <div className="flex items-center gap-1.5">
+                            {zoneSelectionnee.evolutionPrix1an < 0 ? (
+                              <TrendingDown className="w-3 h-3 text-emerald-500" />
+                            ) : (
+                              <TrendingUp className="w-3 h-3 text-red-500" />
+                            )}
+                            <span className={`text-[10px] font-semibold ${
+                              zoneSelectionnee.evolutionPrix1an < 0 ? 'text-emerald-600' : 'text-red-500'
+                            }`}>
+                              {zoneSelectionnee.evolutionPrix1an > 0 ? '+' : ''}{zoneSelectionnee.evolutionPrix1an.toFixed(1)}% sur 1 an
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="text-center bg-aquiz-gray-lightest rounded-xl py-4">
-                    <p className="text-sm text-aquiz-gray">Données insuffisantes</p>
-                    <p className="text-xs text-aquiz-gray/70 mt-1">Aucune vente enregistrée en 2024</p>
+                  <div className="text-center rounded-lg py-4 bg-slate-50">
+                    <p className="text-sm text-slate-500">Données insuffisantes</p>
+                    <p className="text-xs mt-1 text-slate-400">Aucune vente enregistrée récemment</p>
                   </div>
                 )}
               </div>
 
               {/* Actions */}
-              <div className="px-4 pb-3 sm:px-5 sm:pb-5 flex gap-2.5 sm:gap-3">
+              <div className="px-4 pb-3 pt-0.5 flex gap-2">
                 <Button
-                  className="flex-1 h-9 sm:h-11 text-sm sm:text-base bg-aquiz-green hover:bg-aquiz-green/90 text-aquiz-black font-semibold"
+                  className="flex-1 h-9 text-sm bg-aquiz-green hover:bg-aquiz-green/90 text-aquiz-black font-semibold"
                   onClick={() => {
                     saveZoneToStore({
                       codeInsee: zoneSelectionnee.codeInsee,
@@ -584,7 +684,7 @@ function CartePageContent() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-9 sm:h-11 text-sm sm:text-base border-aquiz-gray-lighter"
+                  className="h-9 px-4 text-sm border-slate-200 hover:bg-slate-50"
                   onClick={() => setZoneSelectionnee(null)}
                 >
                   Fermer
@@ -592,7 +692,8 @@ function CartePageContent() {
               </div>
             </div>
           </div>
-        )}
+          )
+        })()}
       </main>
     </div>
   )

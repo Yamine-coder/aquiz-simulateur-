@@ -31,7 +31,7 @@ const syntheseRequestSchema = z.object({
   capitalEmpruntable: z.number().min(0).max(10_000_000),
   apport: z.number().min(0).max(10_000_000),
   dureeAns: z.number().int().min(5).max(30),
-  tauxInteret: z.number().min(0).max(0.15),
+  tauxInteret: z.number().min(0).max(15),
   mensualite: z.number().min(0).max(50_000),
   scoreFaisabilite: z.number().min(0).max(100),
   tauxEndettement: z.number().min(0).max(100),
@@ -47,11 +47,11 @@ const syntheseRequestSchema = z.object({
     codePostal: z.string().max(10),
   }).optional(),
   quartier: z.object({
-    scoreGlobal: z.number().min(0).max(10),
-    transports: z.number().min(0).max(10),
-    commerces: z.number().min(0).max(10),
-    ecoles: z.number().min(0).max(10),
-    sante: z.number().min(0).max(10),
+    scoreGlobal: z.number().min(0).max(100),
+    transports: z.number().min(0).max(100),
+    commerces: z.number().min(0).max(100),
+    ecoles: z.number().min(0).max(100),
+    sante: z.number().min(0).max(100),
     synthese: z.string().max(2000),
     risques: z.number().nullable().optional(),
     risquesDetail: z.string().nullable().optional(),
@@ -74,7 +74,7 @@ interface SyntheseResponse {
 // PROMPT SYSTEM
 // ============================================
 
-const SYSTEM_PROMPT_MODE_A = `Tu es analyste financier immobilier senior chez AQUIZ, spécialisé dans l'optimisation de dossiers de prêt immobilier en France.
+const SYSTEM_PROMPT_MODE_A = `Tu es conseiller en acquisition immobilière senior chez AQUIZ, expert du marché français. Tu accompagnes les acheteurs sur TOUT le parcours : choix du bien, analyse du quartier, négociation, aspects juridiques, financement et adéquation avec le projet de vie.
 
 ${EXPERTISE_IMMOBILIER}
 
@@ -89,21 +89,21 @@ Le client vient de simuler "Combien puis-je acheter ?". Son PDF contient DÉJÀ 
 - Diagnostic bancaire (score, probabilité, points forts, points de vigilance)
 - Recommandations personnalisées numérotées
 - Scénarios alternatifs chiffrés
-- Données marché local si disponibles
-- Scores quartier sur 9 axes si disponibles
+
+CONTEXTE IMPORTANT : En Mode A, le client n'a PAS encore choisi de bien ni de localisation. Il cherche à savoir combien il peut acheter. Ton analyse doit donc porter sur la STRATÉGIE D'ACHAT à adopter — pas sur un quartier ou des risques géographiques spécifiques.
 
 RÈGLE ABSOLUE : NE MENTIONNE JAMAIS un chiffre déjà dans le PDF (taux endettement, reste à vivre, %, apport, mensualité, score). Le client LES VOIT. Reformuler un chiffre affiché = zéro valeur ajoutée.
 
 TON RÔLE UNIQUE — Apporter ce que l'ALGORITHME NE PEUT PAS :
-1. DIRECTION STRATÉGIQUE — Indiquer le TYPE de banques adaptées à ce profil (mutualistes, en ligne, spécialisées...) SANS nommer les établissements précis. Réserver les noms pour le conseiller.
-2. PIÈGE MÉCONNU — Un risque ou erreur courante que les emprunteurs de ce profil font. Donner l'ALERTE, pas la solution détaillée.
-3. LEVIER CACHÉ — Révéler l'EXISTENCE d'un mécanisme d'économie (délégation assurance, lissage, domiciliation...) et son ordre de grandeur, SANS donner le calcul exact ni les noms des prestataires.
-4. CE QUE LE CONSEILLER AQUIZ FAIT CONCRÈTEMENT — Terminer par UNE phrase qui dit ce que le conseiller apporte : identifier les banques, négocier le taux, monter le dossier optimisé, etc.
+1. STRATÉGIE D'ACHAT — Avec ce budget et ce profil, quelle stratégie d'acquisition est la plus pertinente ? Neuf vs ancien, type de bien à privilégier, critères de choix de quartier, horizon de détention idéal. Donner la DIRECTION sans détailler la tactique.
+2. VIGILANCE ACQUISITION — Un risque ou un piège courant que les acheteurs de ce profil font. Penser : DPE/passoire thermique, copropriété piégeuse, achat précipité, coûts cachés (travaux, charges, taxe foncière), revente difficile. Donner l'ALERTE, pas la solution détaillée.
+3. OPPORTUNITÉ CACHÉE — Révéler l'EXISTENCE d'un levier d'économie ou d'optimisation (négociation, aides, choix du bien, timing) et son ordre de grandeur, SANS donner la recette.
+4. CE QUE LE CONSEILLER AQUIZ FAIT CONCRÈTEMENT — Terminer par UNE phrase montrant l'accompagnement GLOBAL d'AQUIZ : analyse du bien, négociation, vérification juridique, financement — pas juste la recherche de prêt.
 
 STRATÉGIE CONTENU (TRÈS IMPORTANT) :
-- Tu donnes le DIAGNOSTIC ("il existe un levier d'économie sur l'assurance") → gratuit
-- Tu TAISES le TRAITEMENT (noms exacts de banques, noms d'assureurs, calculs précis, timing exact) → réservé au conseiller
-- Tu termines en montrant que le conseiller AQUIZ maîtrise ces leviers
+- Tu donnes le DIAGNOSTIC ("il existe un levier", "attention à ce point") → gratuit
+- Tu TAISES le TRAITEMENT (détails précis, noms, tactiques étape par étape) → réservé au conseiller
+- L'acquisition immobilière c'est : le bien + le quartier + la négociation + le juridique + le financement + le projet de vie. Couvre AU MOINS 2 de ces axes, ne te limite pas au financement.
 
 IMPORTANT : Le cliffhanger doit être une QUESTION spécifique au profil, pas générique.
 
@@ -112,7 +112,7 @@ ${EXEMPLES_ANALYSES.modeA}
 RÉPONSE en JSON strict :
 {"synthese": "[100-150 mots, AUCUN chiffre déjà dans le PDF]", "economieEstimee": [entier euros], "cliffhanger": "[1 phrase question spécifique]"}`
 
-const SYSTEM_PROMPT_MODE_B = `Tu es analyste immobilier senior chez AQUIZ, spécialisé dans l'évaluation de biens et la négociation immobilière en France.
+const SYSTEM_PROMPT_MODE_B = `Tu es conseiller en acquisition immobilière senior chez AQUIZ, expert de l'évaluation de biens, de la négociation et de l'accompagnement acheteur en France.
 
 ${EXPERTISE_IMMOBILIER}
 
@@ -132,15 +132,15 @@ Le client vient de simuler "Puis-je acheter CE bien ?". Son PDF contient DÉJÀ 
 RÈGLE ABSOLUE : NE MENTIONNE JAMAIS un chiffre déjà dans le PDF (prix m², taux endettement, reste à vivre, mensualité, scores quartier, évolution marché). Le client LES VOIT.
 
 TON RÔLE UNIQUE — Apporter ce que l'ALGORITHME NE PEUT PAS :
-1. VERDICT MARCHÉ — Ce bien est-il surcoté, juste prix ou bonne affaire ? Donner la direction qualitative SANS détailler les arguments de négociation exacts.
-2. SIGNAL D'ALERTE ou OPPORTUNITÉ — Quelque chose que le prix/scores ne montrent pas. Révéler le RISQUE ou l'OPPORTUNITÉ, pas la stratégie pour en tirer parti.
-3. POTENTIEL DE NÉGOCIATION — Indiquer qu'une marge existe et son ordre de grandeur, SANS donner les arguments précis ni la tactique (réservés au conseiller).
-4. CE QUE LE CONSEILLER AQUIZ FAIT CONCRÈTEMENT — Terminer par UNE phrase qui dit ce que le conseiller apporte : analyse des PV d'AG, négociation du prix, comparaison offres bancaires, etc.
+1. VERDICT BIEN — Ce bien est-il une bonne acquisition ? Regarder au-delà du prix : état probable (neuf/ancien/à rénover), risques copropriété, qualité de l'environnement, potentiel de valorisation. Donner la direction qualitative.
+2. SIGNAL D'ALERTE ou OPPORTUNITÉ — Quelque chose d'invisible dans les chiffres. Penser : DPE et coût de rénovation, travaux de copro votés, projets d'urbanisme, nuisances, horizon de détention, potentiel locatif en cas de revente.
+3. STRATÉGIE DE NÉGOCIATION — Indiquer qu'une marge existe et son ordre de grandeur, les leviers potentiels (durée de mise en vente, travaux, marché local), SANS donner les arguments mot-à-mot.
+4. CE QUE LE CONSEILLER AQUIZ FAIT CONCRÈTEMENT — Terminer par UNE phrase sur l'accompagnement GLOBAL : vérification du bien (diagnostics, PV d'AG, PLU), négociation du prix, montage financier, suivi jusqu'à la signature.
 
 STRATÉGIE CONTENU (TRÈS IMPORTANT) :
-- Tu donnes le DIAGNOSTIC ("ce bien présente une marge de négociation") → gratuit
-- Tu TAISES le TRAITEMENT (arguments exacts, tactique de négociation, noms de banques/assureurs) → réservé au conseiller
-- Tu termines en montrant que le conseiller AQUIZ maîtrise ces leviers
+- Tu donnes le DIAGNOSTIC ("ce bien présente des points de vigilance", "une marge de négociation existe") → gratuit
+- Tu TAISES le TRAITEMENT (arguments exacts, tactique détaillée, noms d'établissements) → réservé au conseiller
+- L'analyse d'un bien c'est : le bien lui-même + le quartier + le marché + la négociation + le juridique + le financement. Couvre AU MOINS 2-3 de ces axes dans ta synthèse.
 
 IMPORTANT : Le cliffhanger doit être lié au BIEN ou au MARCHÉ spécifique, pas générique.
 
@@ -355,7 +355,7 @@ MOYENNES NATIONALES (pour comparaison) :
 function generateFallbackSynthese(data: SyntheseRequest): SyntheseResponse {
   const pctApport = data.prixAchatMax > 0 ? Math.round((data.apport / data.prixAchatMax) * 100) : 0
 
-  // Économie réaliste : 0.2pt de taux + 30% assurance externe
+  // Économie réaliste : négociation prix + optimisation financement
   const economieTaux = Math.round(data.capitalEmpruntable * 0.002 * data.dureeAns)
   const economieAssurance = Math.round(data.mensualite * 0.15 * data.dureeAns * 12)
   const economieEstimee = Math.min(economieTaux + economieAssurance, 30000)
@@ -369,26 +369,33 @@ function generateFallbackSynthese(data: SyntheseRequest): SyntheseResponse {
         ? Math.round(((data.prixAchatMax / data.marche.surfaceEstimee) / data.marche.prixM2Median - 1) * 100)
         : null
       if (ecart !== null && ecart > 5) {
-        parts.push(`Ce bien est au-dessus de la médiane du secteur — une marge de négociation existe mais nécessite des arguments solides pour convaincre le vendeur.`)
+        parts.push(`Ce bien est au-dessus du prix médian du secteur — avant de faire une offre, il faut comprendre si cet écart se justifie par des prestations supérieures ou s'il y a une marge de négociation réelle.`)
       } else if (ecart !== null && ecart < -3) {
-        parts.push(`Bonne nouvelle : ce bien est en-dessous du prix médian local. C'est un prix intéressant, mais attention à vérifier s'il n'y a pas de raison cachée (travaux, copropriété fragile...).`)
+        parts.push(`Ce bien est positionné en-dessous du marché local, ce qui peut être une opportunité — mais à ce prix, il est prudent de vérifier l'état réel du bien, le DPE et la situation de la copropriété.`)
       } else {
-        parts.push(`Ce bien est dans la fourchette du marché local. La négociation sera possible mais demandera une stratégie ciblée.`)
+        parts.push(`Ce bien est dans la fourchette du marché local. La question n'est pas seulement le prix, mais ce que le bien et son environnement apportent à votre projet de vie sur le long terme.`)
       }
     }
 
     if (data.typeBien === 'ancien') {
-      parts.push(`En ancien, les PV d'assemblée générale de copropriété peuvent révéler des travaux votés représentant un levier de négociation que peu d'acheteurs exploitent.`)
+      parts.push(`En ancien, les documents de copropriété (PV d'AG, carnet d'entretien) et les diagnostics techniques sont des mines d'information — ils révèlent des travaux à venir et des coûts cachés que le prix affiché ne reflète pas.`)
     } else {
-      parts.push(`En neuf, la négociation porte rarement sur le prix affiché — mais des leviers existent sur les prestations et le timing d'achat dans le programme.`)
+      parts.push(`En neuf, au-delà du prix, pensez à vérifier la réputation du promoteur, les délais de livraison annoncés vs réels, et les prestations incluses — c'est souvent là que se joue la vraie valeur de l'achat.`)
     }
 
-    // Risques
+    // Risques quartier
     if (data.quartier?.risques != null && data.quartier.risques < 5) {
-      parts.push(`Attention : la zone présente des risques identifiés qui méritent une analyse approfondie avant toute offre.`)
+      parts.push(`Attention : la zone présente des risques identifiés (Géorisques) qui méritent une analyse approfondie avant toute offre — c'est un point que beaucoup d'acheteurs découvrent trop tard.`)
     }
 
-    parts.push(`Un conseiller AQUIZ analyse ces éléments pour vous et construit une offre argumentée visant la meilleure réduction possible.`)
+    // Quartier & projet de vie
+    if (data.quartier && data.quartier.scoreGlobal > 0) {
+      if (data.quartier.transports != null && data.quartier.transports < 4) {
+        parts.push(`Le secteur est mal desservi en transports, ce qui peut impacter votre quotidien mais aussi la revente future — c'est un critère à intégrer dans votre réflexion.`)
+      }
+    }
+
+    parts.push(`Un conseiller AQUIZ analyse le bien dans sa globalité — état, copropriété, quartier, potentiel de négociation et financement — pour vous aider à prendre une décision éclairée.`)
 
     const negoEconomie = data.marche ? Math.round(data.prixAchatMax * 0.05) : 0
     const totalEconomie = economieEstimee + negoEconomie
@@ -396,36 +403,40 @@ function generateFallbackSynthese(data: SyntheseRequest): SyntheseResponse {
     return {
       synthese: parts.join(' '),
       economieEstimee: totalEconomie,
-      cliffhanger: `Un conseiller AQUIZ peut analyser ce bien en détail et identifier les leviers de négociation spécifiques — souhaitez-vous un accompagnement personnalisé ?`,
+      cliffhanger: `Avez-vous vérifié les diagnostics techniques et les PV de copropriété de ce bien ? Un conseiller AQUIZ peut les analyser et identifier les leviers concrets avant votre offre.`,
     }
   }
 
-  // MODE A — Analyse du profil (diagnostic gratuit, traitement réservé)
+  // MODE A — Analyse du profil et stratégie d'acquisition
   const parts: string[] = []
   const statut = data.statutProfessionnel
 
+  // Stratégie d'achat selon l'apport
   if (pctApport >= 20) {
-    parts.push(`Votre niveau d'apport est au-dessus de la moyenne nationale des primo-accédants — c'est un signal fort qui ouvre l'accès à des conditions préférentielles dans certains établissements.`)
+    parts.push(`Votre niveau d'apport vous donne une vraie liberté de choix — non seulement pour le financement, mais aussi pour cibler des biens qui nécessitent des travaux, où la négociation est plus forte.`)
   } else if (pctApport < 10) {
-    parts.push(`Votre apport est en-dessous du seuil de confort de la plupart des banques. Certaines acceptent ce niveau, mais le choix de l'établissement devient déterminant.`)
+    parts.push(`Avec un apport modeste, la stratégie d'achat doit être précise : privilégiez les biens au juste prix dans des secteurs à forte demande — c'est la meilleure façon de sécuriser votre projet tout en construisant du patrimoine.`)
   }
 
+  // Profil et projet de vie
   if (statut === 'cdi' || statut === 'fonctionnaire') {
-    parts.push(`Votre statut est un atout majeur — certains types de banques proposent des offres réservées à ce profil avec des taux plus compétitifs.`)
+    parts.push(`Votre stabilité professionnelle est un atout pour tout le parcours d'acquisition — du financement à la négociation, les vendeurs et les banques sont rassurés par ce type de profil.`)
   } else if (statut === 'independant') {
-    parts.push(`En tant qu'indépendant, les critères varient fortement d'une banque à l'autre — certaines acceptent une pondération de revenus plus favorable qui augmente significativement la capacité.`)
+    parts.push(`En tant qu'indépendant, le parcours d'achat demande une préparation spécifique — pas seulement pour le financement, mais aussi pour structurer une offre crédible face aux vendeurs qui préfèrent souvent les profils salariés.`)
   } else if (statut === 'cdd' || statut === 'interim') {
-    parts.push(`En ${statut === 'cdd' ? 'CDD' : 'intérim'}, le choix de la banque est crucial. Certaines sont plus ouvertes aux profils non-CDI et proposent des conditions adaptées.`)
+    parts.push(`En ${statut === 'cdd' ? 'CDD' : 'intérim'}, l'achat est possible mais la stratégie doit être ciblée — il faut identifier les bons secteurs, les bons biens ET les solutions de financement adaptées en même temps.`)
   }
 
-  parts.push(`Il existe aussi un levier important sur l'assurance emprunteur : la différence entre l'offre bancaire et une alternative externe peut représenter plusieurs milliers d'euros sur la durée du prêt.`)
-  parts.push(`Un conseiller AQUIZ identifie les établissements les plus adaptés à votre profil et négocie les meilleures conditions à votre place.`)
+  // Vigilance acquisition
+  parts.push(`Quel que soit le budget, la vraie différence se fait sur le choix du bien : un DPE défavorable, des travaux de copropriété imprévus ou un quartier mal desservi peuvent transformer une bonne affaire en mauvais investissement.`)
+
+  parts.push(`Un conseiller AQUIZ vous accompagne sur tout le parcours — analyse des biens, vérification des documents, négociation du prix et montage financier — pour que votre achat soit le bon.`)
 
   const synthese = parts.join(' ')
 
   return {
     synthese,
     economieEstimee,
-    cliffhanger: `Un conseiller AQUIZ peut comparer les offres de plus de 30 banques et négocier les conditions optimales pour votre profil — souhaitez-vous un accompagnement personnalisé ?`,
+    cliffhanger: `Savez-vous quels critères vérifier en priorité sur un bien avant de faire une offre ? Un conseiller AQUIZ peut vous guider pour éviter les pièges courants.`,
   }
 }

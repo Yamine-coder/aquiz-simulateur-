@@ -19,6 +19,9 @@
 /.next/
 /out/
 
+# health check cache
+/.cache/
+
 # production
 /build
 

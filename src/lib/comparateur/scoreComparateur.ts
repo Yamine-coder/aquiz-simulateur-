@@ -7,7 +7,7 @@
  * 2. Rendement locatif (15%) - estimation automatique
  * 3. Performance énergétique (12%) - DPE + coût énergie estimé
  * 4. Emplacement / quartier (15%) - OpenStreetMap
- * 5. Risques naturels (8%) - Géorisques
+ * 5. Transports (8%) - OpenStreetMap desserte transports
  * 6. État du bien / travaux (10%) - année construction + DPE
  * 7. Charges & fiscalité (8%) - charges copro + taxe foncière
  * 8. Surface & agencement (5%) - rapport surface/pièces
@@ -30,7 +30,7 @@ export type AxeScoring =
   | 'rendement'
   | 'energie'
   | 'emplacement'
-  | 'risques'
+  | 'transports'
   | 'etatBien'
   | 'charges'
   | 'surface'
@@ -115,6 +115,7 @@ export interface DonneesEnrichiesScoring {
     ecoles?: number
     sante?: number
     espaceVerts?: number
+    transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }>
   }
 }
 
@@ -128,7 +129,7 @@ const POIDS_AXES: Record<AxeScoring, number> = {
   rendement: 15,
   energie: 12,
   emplacement: 15,
-  risques: 8,
+  transports: 8,
   etatBien: 10,
   charges: 8,
   surface: 5,
@@ -142,7 +143,7 @@ const LABELS_AXES: Record<AxeScoring, string> = {
   rendement: 'Rendement locatif',
   energie: 'Performance énergie',
   emplacement: 'Emplacement',
-  risques: 'Sécurité zone',
+  transports: 'Transports',
   etatBien: 'État du bien',
   charges: 'Charges & fiscalité',
   surface: 'Surface & agencement',
@@ -608,7 +609,7 @@ function scorerEmplacement(
       texte: 'Emplacement premium',
       detail: atouts.length > 0
         ? `Score ${scoreQ}/100 — excellente couverture en ${atouts.join(', ')}`
-        : `Score quartier ${scoreQ}/100 — transports, commerces, écoles à proximité`,
+        : `Score quartier ${scoreQ}/100 — commerces, écoles, santé à proximité`,
       type: 'avantage',
       axe: 'emplacement',
       impact: score - 50
@@ -666,103 +667,79 @@ function scorerEmplacement(
 }
 
 /**
- * Axe 5 : Risques naturels (8%)
- * Géorisques
+ * Axe 5 : Transports (8%)
+ * Sous-score transports du quartier (OpenStreetMap)
  */
-function scorerRisques(
+function scorerTransports(
   enrichi?: DonneesEnrichiesScoring
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const points: PointAnalysePro[] = []
 
-  if (!enrichi?.risques?.success) {
+  if (!enrichi?.quartier?.success || enrichi.quartier.transports === undefined) {
     return {
-      axe: 'risques',
-      label: LABELS_AXES.risques,
+      axe: 'transports',
+      label: LABELS_AXES.transports,
       score: 50,
-      poids: POIDS_AXES.risques,
+      poids: POIDS_AXES.transports,
       disponible: false,
-      detail: 'Données Géorisques non disponibles',
+      detail: 'Données transports non disponibles',
       impact: 'neutre',
       points: []
     }
   }
 
-  let score = enrichi.risques.scoreRisque ?? 50
-
-  if (enrichi.risques.zoneInondable) {
-    score = Math.max(0, score - 15)
-    points.push({
-      texte: 'Zone inondable identifiée',
-      detail: 'Surcoût assurance, contraintes de construction',
-      type: 'attention',
-      axe: 'risques',
-      impact: -15
-    })
-  }
-
-  if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 3) {
-    score = Math.max(0, score - 5)
-    points.push({
-      texte: 'Potentiel radon élevé',
-      detail: 'Prévoir un diagnostic radon (zone catégorie 3)',
-      type: 'conseil',
-      axe: 'risques',
-      impact: -5
-    })
-  }
-
-  score = Math.max(0, Math.min(100, score))
+  const score = Math.max(0, Math.min(100, enrichi.quartier.transports))
 
   let detail: string
   let impact: ResultatAxe['impact']
 
-  if (score >= 80) {
-    detail = 'Zone sûre — aucun risque majeur'
+  if (score >= 75) {
+    detail = `Très bien desservi en transports (${score}/100)`
     impact = 'positif'
-    const absences: string[] = []
-    if (!enrichi.risques.zoneInondable) absences.push('hors zone inondable')
-    if (!enrichi.risques.niveauRadon || enrichi.risques.niveauRadon < 2) absences.push('radon négligeable')
     points.push({
-      texte: 'Zone à faible risque',
-      detail: absences.length > 0
-        ? `Score Géorisques ${score}/100 — ${absences.join(', ')}`
-        : `Score Géorisques ${score}/100 — aucun risque naturel ou technologique majeur`,
+      texte: 'Excellente desserte transports',
+      detail: `Score ${score}/100 — transports en commun, gares ou métro à proximité`,
       type: 'avantage',
-      axe: 'risques',
+      axe: 'transports',
       impact: score - 50
     })
   } else if (score >= 50) {
-    detail = 'Quelques risques à surveiller'
+    detail = `Desserte correcte (${score}/100)`
     impact = 'neutre'
-    const risquesPresents: string[] = []
-    if (enrichi.risques.zoneInondable) risquesPresents.push('proximité zone inondable')
-    if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 2) risquesPresents.push(`radon catégorie ${enrichi.risques.niveauRadon}`)
     points.push({
-      texte: 'Risques modérés identifiés',
-      detail: risquesPresents.length > 0
-        ? `Score ${score}/100 — éléments à surveiller : ${risquesPresents.join(', ')}`
-        : `Score Géorisques ${score}/100 — pas de risque majeur, quelques points de vigilance`,
+      texte: 'Transports accessibles',
+      detail: `Score ${score}/100 — quelques lignes de bus ou gare accessible`,
       type: 'conseil',
-      axe: 'risques',
+      axe: 'transports',
       impact: 0
     })
-  } else {
-    detail = 'Zone à risques identifiés'
+  } else if (score >= 25) {
+    detail = `Peu de transports (${score}/100)`
     impact = 'negatif'
     points.push({
-      texte: 'Zone à risques significatifs',
-      detail: 'Consultez Géorisques.gouv.fr pour le détail des risques',
+      texte: 'Desserte transports limitée',
+      detail: `Score ${score}/100 — véhicule conseillé pour les déplacements quotidiens`,
       type: 'attention',
-      axe: 'risques',
+      axe: 'transports',
+      impact: score - 50
+    })
+  } else {
+    detail = `Zone très peu desservie (${score}/100)`
+    impact = 'negatif'
+    points.push({
+      texte: 'Quasi aucun transport en commun',
+      detail: `Score ${score}/100 — véhicule indispensable, impact sur la revente`,
+      type: 'attention',
+      axe: 'transports',
       impact: score - 50
     })
   }
 
   return {
-    axe: 'risques',
-    label: LABELS_AXES.risques,
+    axe: 'transports',
+    label: LABELS_AXES.transports,
     score,
-    poids: POIDS_AXES.risques,
+    poids: POIDS_AXES.transports,
     disponible: true,
     detail,
     impact,
@@ -1410,7 +1387,7 @@ export function calculerScorePro(
   const rendement = scorerRendement(annonce)
   const energie = scorerEnergie(annonce)
   const emplacement = scorerEmplacement(enrichi)
-  const risques = scorerRisques(enrichi)
+  const transports = scorerTransports(enrichi)
   const etatBien = scorerEtatBien(annonce)
   const charges = scorerCharges(annonce)
   const surface = scorerSurface(annonce, annonces)
@@ -1418,7 +1395,7 @@ export function calculerScorePro(
   const plusValue = scorerPlusValue(annonce, enrichi, etatBien.budgetTravaux)
 
   const tousAxes = [
-    prixMarche, rendement, energie, emplacement, risques,
+    prixMarche, rendement, energie, emplacement, transports,
     etatBien, charges, surface, equipements, plusValue
   ]
 
@@ -1504,17 +1481,14 @@ export function calculerScorePro(
   if (scoreGlobal >= 80) {
     verdict = 'Excellent choix'
     recommandation = 'fortement_recommande'
-  } else if (scoreGlobal >= 68) {
+  } else if (scoreGlobal >= 70) {
     verdict = 'Très bon potentiel'
     recommandation = 'recommande'
-  } else if (scoreGlobal >= 56) {
+  } else if (scoreGlobal >= 60) {
     verdict = 'Bon potentiel'
-    recommandation = 'recommande'
+    recommandation = 'a_etudier'
   } else if (scoreGlobal >= 45) {
     verdict = 'À étudier'
-    recommandation = 'a_etudier'
-  } else if (scoreGlobal >= 32) {
-    verdict = 'Avec réserves'
     recommandation = 'prudence'
   } else {
     verdict = 'Peu recommandé'
@@ -1566,7 +1540,7 @@ export function calculerScorePro(
     // Cas 7 : Profil contrasté (un axe très fort, un très faible)
     const conseilAxeFaible = axeFaible.axe === 'energie' ? 'Budgétez la rénovation énergétique.'
       : axeFaible.axe === 'charges' ? 'Vérifiez l\'historique des charges de copropriété.'
-      : axeFaible.axe === 'risques' ? 'Consultez Géorisques.gouv.fr pour le détail des risques.'
+      : axeFaible.axe === 'transports' ? 'Vérifiez la desserte en transports en commun pour vos trajets quotidiens.'
       : axeFaible.axe === 'etatBien' ? 'Faites estimer les travaux par un professionnel.'
       : 'Évaluez si ce point est bloquant pour votre projet.'
     conseilPerso = `Profil contrasté : excellent en ${axeForte.label.toLowerCase()} (${axeForte.score}/100) mais faible en ${axeFaible.label.toLowerCase()} (${axeFaible.score}/100). ${conseilAxeFaible}`
@@ -1685,7 +1659,7 @@ export function genererSyntheseComparaison(
 export const RADAR_AXES = [
   { key: 'prix', label: 'Prix' },
   { key: 'quartier', label: 'Quartier' },
-  { key: 'risques', label: 'Sécurité' },
+  { key: 'transports', label: 'Transports' },
   { key: 'energie', label: 'Énergie' },
   { key: 'confort', label: 'Confort' },
   { key: 'budget', label: 'Budget' },
@@ -1701,7 +1675,7 @@ export function scoreToRadarData(result: ScoreComparateurResult): Array<{ label:
   return [
     { label: 'prix', value: getAxe('prixMarche')?.score ?? 50 },
     { label: 'quartier', value: getAxe('emplacement')?.score ?? 50 },
-    { label: 'risques', value: getAxe('risques')?.score ?? 50 },
+    { label: 'transports', value: getAxe('transports')?.score ?? 50 },
     { label: 'energie', value: getAxe('energie')?.score ?? 50 },
     { label: 'confort', value: moyennePonderee([
       { score: getAxe('etatBien')?.score ?? 50, poids: 2 },

@@ -5,7 +5,6 @@ import {
     ArrowRight,
     BarChart3,
     Building2,
-    Calculator,
     CheckCircle,
     Clock,
     FileSearch,
@@ -20,7 +19,7 @@ import {
     Star,
     Target,
     Users,
-    Wallet,
+    Wallet
 } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -29,7 +28,7 @@ import {
     FadeIn,
     MagneticHover,
     StaggerContainer,
-    StaggerItem,
+    StaggerItem
 } from './Motion'
 
 // ============================================
@@ -43,6 +42,7 @@ const stats: { value: number; suffix: string; label: string; icon: typeof Users 
   { value: 98, suffix: '%', label: 'Taux de satisfaction', icon: Star },
 ]
 
+// StatsBar supprimé — stats intégrées directement dans HeroSection (floating card)
 export function StatsBar() {
   return (
     <section className="relative -mt-8 sm:-mt-10 z-20 pb-4">
@@ -103,7 +103,7 @@ const services = [
 
 export function ServicesSection() {
   return (
-    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="services">
+    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-18 md:scroll-mt-20" id="services">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <FadeIn className="text-center mb-16">
@@ -350,8 +350,8 @@ const outils = [
     icon: Scale,
     title: 'Comparateur de biens',
     subtitle: 'Analysez et comparez',
-    description: 'Comparez jusqu\'à 3 biens côte à côte : prix, charges, rentabilité et localisation en un coup d\'œil.',
-    features: ['Jusqu\'à 3 biens', 'Analyse détaillée', 'Score par critère', 'Export résultats'],
+    description: 'Comparez jusqu\'à 4 biens côte à côte : prix, charges, rentabilité et localisation en un coup d\'œil.',
+    features: ['Jusqu\'à 4 biens', 'Analyse détaillée', 'Score par critère', 'Export résultats'],
     href: '/comparateur',
     color: 'from-purple-500/20 to-pink-500/10',
     popular: false,
@@ -370,7 +370,7 @@ const outils = [
 
 export function OutilsSection() {
   return (
-    <section className="py-16 sm:py-24 md:py-32 bg-aquiz-black relative overflow-hidden scroll-mt-20 md:scroll-mt-24" id="outils">
+    <section className="py-16 sm:py-24 md:py-32 bg-aquiz-black relative overflow-hidden scroll-mt-18 md:scroll-mt-20" id="outils">
       {/* Background effects */}
       <div className="absolute inset-0">
         <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-aquiz-green/8 rounded-full blur-[80px]" />
@@ -390,38 +390,32 @@ export function OutilsSection() {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center mb-20">
           {/* Left — text */}
           <FadeIn>
-            <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-white/10 bg-white/5 text-aquiz-green text-sm font-medium mb-6">
-              <Calculator className="w-4 h-4" />
-              Outils gratuits
-            </span>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-5 leading-tight">
+            <h2 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-white mb-4 sm:mb-5 leading-tight">
               Simulez votre projet{' '}
               <span className="text-aquiz-green">en quelques clics.</span>
             </h2>
-            <p className="text-base sm:text-lg text-white/45 leading-relaxed mb-6 sm:mb-8 max-w-lg">
-              Nos outils en ligne analysent votre capacité d&apos;emprunt, comparent des biens et cartographient les prix du marché — le tout sans inscription.
+            <p className="text-sm sm:text-base md:text-lg text-white leading-relaxed mb-6 sm:mb-8 max-w-lg">
+              Nos outils en ligne analysent votre capacité d&apos;emprunt, comparent des biens et cartographient les prix du marché.
             </p>
 
-            <div className="flex flex-wrap gap-4 sm:gap-6 mb-6 sm:mb-8">
-              <div>
-                <p className="text-2xl font-bold text-white">4</p>
-                <p className="text-xs text-white/30">Outils disponibles</p>
+            <div className="grid grid-cols-3 gap-3 sm:gap-5 mb-6 sm:mb-8">
+              <div className="text-center sm:text-left">
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white">4</p>
+                <p className="text-[10px] sm:text-xs text-white/35 leading-tight mt-0.5">Outils disponibles</p>
               </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <p className="text-2xl font-bold text-aquiz-green">100%</p>
-                <p className="text-xs text-white/30">Gratuit & sans inscription</p>
+              <div className="text-center sm:text-left border-l border-white/10 pl-3 sm:pl-5">
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-aquiz-green">100%</p>
+                <p className="text-[10px] sm:text-xs text-white/35 leading-tight mt-0.5">Gratuit &amp; sans inscription</p>
               </div>
-              <div className="w-px h-10 bg-white/10" />
-              <div>
-                <p className="text-2xl font-bold text-white">2 min</p>
-                <p className="text-xs text-white/30">Résultat instantané</p>
+              <div className="text-center sm:text-left border-l border-white/10 pl-3 sm:pl-5">
+                <p className="text-xl sm:text-2xl md:text-3xl font-bold text-white">2 min</p>
+                <p className="text-[10px] sm:text-xs text-white/35 leading-tight mt-0.5">Résultat instantané</p>
               </div>
             </div>
 
             <Link
               href="/simulateur"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-aquiz-green text-white font-semibold rounded-xl shadow-lg shadow-aquiz-green/20 hover:brightness-110 hover:-translate-y-0.5 transition-all duration-300"
+              className="inline-flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 bg-aquiz-green text-white text-sm sm:text-base font-semibold rounded-xl shadow-lg shadow-aquiz-green/20 hover:brightness-110 hover:-translate-y-0.5 transition-all duration-300"
             >
               Lancer une simulation
               <ArrowRight className="w-4 h-4" />
@@ -757,36 +751,36 @@ const steps = [
   {
     number: '01',
     title: 'Étude de votre projet',
-    description: 'Simulez votre capacité d\'emprunt avec nos outils gratuits, puis échangez avec un expert AQUIZ pour définir ensemble votre stratégie : budget réaliste, localisation, type de bien.',
-    details: ['Simulation en ligne gratuite', 'Vérification éligibilité PTZ & aides', 'RDV stratégique 30 min · gratuit'],
+    description: 'Simulez votre capacité d\'emprunt avec nos outils gratuits, puis échangez avec un conseiller AQUIZ pour définir ensemble votre stratégie : budget réaliste, localisation, type de bien.',
+    details: ['Simulation en ligne gratuite', 'Vérification éligibilité aux dispositifs et aux aides', 'RDV prise de contact'],
     icon: Target,
   },
   {
     number: '02',
     title: 'Recherche & visites',
-    description: 'Notre équipe prospecte activement les portails, agences partenaires et biens off-market. Nous vous accompagnons en visite pour identifier ce qui ne se voit pas : travaux, charges, potentiel.',
-    details: ['Accès biens off-market', 'Présélection qualifiée', 'Analyse technique sur place'],
+    description: 'Notre équipe prospecte activement les portails, agences partenaires et biens off-market. Nous vous accompagnons en visite pour identifier les éléments essentiels à savoir.',
+    details: ['Présélection qualifiée', 'Analyse technique du bien', 'Accès biens off-market'],
     icon: FileSearch,
   },
   {
     number: '03',
     title: 'Négociation & financement',
-    description: 'Nous négocions le meilleur prix en nous appuyant sur les données réelles du marché. En parallèle, nos courtiers partenaires obtiennent les conditions de financement optimales.',
-    details: ['Négociation basée sur les prix réels', 'Mise en relation courtier', 'Montage dossier bancaire'],
+    description: 'Nous négocions au prix le plus juste en nous appuyant sur notre expertise ainsi que les données réelles du marché. En parallèle, nos courtiers partenaires obtiennent les conditions de financement optimales.',
+    details: ['Négociation basée sur les prix réels du marché', 'Réalisation des devis en cas de travaux', 'Montage du dossier bancaire sur mesure'],
     icon: Handshake,
   },
   {
     number: '04',
     title: 'Sécurisation jusqu\'aux clés',
-    description: 'Du compromis à l\'acte authentique, nous vérifions chaque document : conditions suspensives, appel de fonds, levée de réserves. Vous signez en toute sérénité.',
-    details: ['Suivi compromis & conditions', 'Coordination notaire', 'Remise des clés accompagnée'],
+    description: 'Du compromis à l\'acte authentique, nous procédons à la vérification de tous les éléments avec notre notaire partenaire pour que vous puissiez signer en toute sérénité.',
+    details: ['Mise à disposition d\'un notaire dédié', 'Rassemblement de tous les documents notariaux', 'Suivi du compromis à la remise des clés'],
     icon: KeyRound,
   },
 ]
 
 export function ProcessSection() {
   return (
-    <section className="py-16 sm:py-24 md:py-32 bg-white overflow-hidden scroll-mt-20 md:scroll-mt-24" id="methode">
+    <section className="py-16 sm:py-24 md:py-32 bg-white overflow-hidden scroll-mt-18 md:scroll-mt-20" id="methode">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn className="text-center mb-16">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-aquiz-green/10 text-aquiz-green text-sm font-medium mb-4">
@@ -883,7 +877,7 @@ export function ProcessSection() {
           <MagneticHover>
             <Link
               href="/simulateur"
-              className="inline-flex items-center gap-2 px-8 py-4 bg-aquiz-green text-white font-semibold rounded-full hover:bg-aquiz-green/90 transition-all shadow-lg shadow-aquiz-green/20 group"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-aquiz-green text-white font-semibold rounded-xl hover:bg-aquiz-green/90 transition-all shadow-lg shadow-aquiz-green/20 group"
             >
               Commencer ma simulation
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -899,39 +893,38 @@ export function ProcessSection() {
 // TARIFS
 // ============================================
 
+const TARIF_FEATURES = ['Accompagnement complet', 'Négociation incluse', 'Suivi notaire']
+
 const tarifs = [
   {
     price: '5 900€',
     priceSuffix: ' TTC',
-    label: 'Forfait Essentiel',
     condition: 'Pour un bien d\u2019une valeur',
     threshold: 'inférieure à 500 000€',
-    features: ['Accompagnement complet', 'Négociation incluse', 'Suivi notaire'],
+    features: TARIF_FEATURES,
     popular: true,
   },
   {
     price: '8 900€',
     priceSuffix: ' TTC',
-    label: 'Forfait Premium',
     condition: 'Pour un bien d\u2019une valeur comprise',
     threshold: 'entre 500 000€ et 800 000€',
-    features: ['Accompagnement premium', 'Chasse immobilière', 'Suivi personnalisé', 'Off-market'],
+    features: TARIF_FEATURES,
     popular: false,
   },
   {
     price: '2%',
     priceSuffix: ' TTC',
-    label: 'Sur mesure',
     condition: 'Pour un bien d\u2019une valeur comprise',
     threshold: 'entre 800 000€ et 1 000 000€',
-    features: ['Service dédié', 'Chasse exclusive', 'Conseil patrimonial', 'Conciergerie'],
+    features: TARIF_FEATURES,
     popular: false,
   },
 ]
 
 export function TarifsSection() {
   return (
-    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-20 md:scroll-mt-24" id="tarifs">
+    <section className="py-16 sm:py-24 md:py-32 bg-white scroll-mt-18 md:scroll-mt-20" id="tarifs">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <FadeIn className="text-center mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
@@ -944,7 +937,7 @@ export function TarifsSection() {
 
         <StaggerContainer className="grid md:grid-cols-3 gap-5 lg:gap-6" staggerDelay={0.1}>
           {tarifs.map((tarif) => (
-            <StaggerItem key={tarif.label}>
+            <StaggerItem key={tarif.price}>
               <motion.div
                 className={`relative rounded-2xl p-6 lg:p-8 h-full flex flex-col transition-shadow duration-300 ${
                   tarif.popular
@@ -959,15 +952,8 @@ export function TarifsSection() {
                   </span>
                 )}
 
-                {/* Label */}
-                <p className={`text-xs font-semibold uppercase tracking-wider mb-4 ${
-                  tarif.popular ? 'text-aquiz-green' : 'text-aquiz-gray'
-                }`}>
-                  {tarif.label}
-                </p>
-
                 {/* Price */}
-                <div className="mb-4">
+                <div className="mb-4 text-center">
                   <span className={`text-4xl lg:text-5xl font-bold ${
                     tarif.popular ? 'text-white' : 'text-aquiz-black'
                   }`}>
@@ -983,7 +969,7 @@ export function TarifsSection() {
                 </div>
 
                 {/* Condition */}
-                <p className={`text-sm leading-relaxed mb-6 ${
+                <p className={`text-sm leading-relaxed mb-6 text-center ${
                   tarif.popular ? 'text-white/50' : 'text-aquiz-gray'
                 }`}>
                   {tarif.condition}<br />
@@ -1034,6 +1020,9 @@ export function TarifsSection() {
           <p className="text-center text-xs text-aquiz-gray mt-8">
             Honoraires TTC sauf mention contraire. Payables uniquement au succès de la mission.
           </p>
+          <p className="text-center text-xs text-aquiz-gray/70 mt-2 italic">
+            Les honoraires de courtage ne sont pas inclus dans nos tarifs.
+          </p>
         </FadeIn>
       </div>
     </section>
@@ -1046,21 +1035,21 @@ export function TarifsSection() {
 
 const testimonials = [
   {
-    quote: 'AQUIZ m\'a permis d\'y voir clair dans mon budget. En 2 minutes, je savais combien je pouvais emprunter. Le rendez-vous conseil a tout concrétisé.',
+    quote: 'Je ne savais pas vraiment par où commencer pour acheter mon premier appartement. L\'équipe m\'a aidé à comprendre ma capacité d\'emprunt et les étapes à suivre. Ça m\'a surtout rassuré d\'avoir quelqu\'un pour répondre à mes questions pendant le processus.',
     name: 'Marie D.',
     role: 'Primo-accédante, Paris 11e',
     rating: 5,
     avatarBg: 'bg-emerald-100 text-emerald-700',
   },
   {
-    quote: 'Grâce à la chasse immobilière, nous avons trouvé un appartement off-market à un prix en dessous du marché. Un gain de temps incroyable.',
+    quote: 'Nous cherchions depuis plusieurs mois sans succès. Grâce à leur accompagnement, on a pu affiner notre projet et visiter des biens qui correspondaient vraiment à notre budget. On a finalement trouvé un appartement qui nous plaît beaucoup.',
     name: 'Thomas & Julie L.',
     role: 'Couple, Boulogne-Billancourt',
     rating: 5,
     avatarBg: 'bg-blue-100 text-blue-700',
   },
   {
-    quote: 'Le simulateur est vraiment bien fait, avec les données de prix réelles. Et l\'accompagnement ensuite est à la hauteur des promesses.',
+    quote: 'Je n\'ai pas eu le temps de me rendre compte qu\'un achat immobilier est tout un parcours du combattant.',
     name: 'Karim B.',
     role: 'Investisseur, Saint-Denis',
     rating: 5,
@@ -1070,7 +1059,7 @@ const testimonials = [
 
 export function TestimonialsSection() {
   return (
-    <section className="py-12 sm:py-16 md:py-20 bg-aquiz-gray-lightest scroll-mt-20 md:scroll-mt-24" id="temoignages">
+    <section className="py-12 sm:py-16 md:py-20 bg-aquiz-gray-lightest scroll-mt-18 md:scroll-mt-20" id="temoignages">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header compact + note globale */}
@@ -1090,7 +1079,7 @@ export function TestimonialsSection() {
         <StaggerContainer className="grid md:grid-cols-3 gap-4" staggerDelay={0.1}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
-              <article className="relative bg-white rounded-xl p-5 h-full border border-aquiz-gray-lighter/40 hover:border-aquiz-green/30 hover:shadow-md transition-all duration-300">
+              <article className="relative bg-white rounded-2xl p-5 h-full border border-aquiz-gray-lighter/40 hover:border-aquiz-green/30 hover:shadow-md transition-all duration-300">
                 {/* Top: stars + quote icon */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex gap-0.5">
