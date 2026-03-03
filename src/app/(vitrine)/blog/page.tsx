@@ -9,7 +9,7 @@ import { ArrowRight, ArrowUpRight, Banknote, BookOpen, Calculator, Check, Chevro
 import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 // ─── Design tokens ───
 
@@ -240,6 +240,14 @@ const SORT_LABELS: Record<SortOption, string> = {
 }
 
 export default function BlogPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#FAFAF9]" />}>
+      <BlogPageContent />
+    </Suspense>
+  )
+}
+
+function BlogPageContent() {
   const searchParams = useSearchParams()
 
   const [activeCategory, setActiveCategory] = useState<BlogCategory | null>(() => {
