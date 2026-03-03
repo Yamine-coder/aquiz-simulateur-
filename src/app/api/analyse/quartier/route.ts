@@ -307,7 +307,7 @@ export async function GET(request: NextRequest) {
           poiLon = element.center.lon
         }
         
-        if (!poiLat) continue
+        if (!poiLat || !poiLon) continue
         
         const amenity = tags.amenity || tags.leisure || tags.railway || tags.highway || tags.shop || tags.public_transport
         if (!amenity) continue
