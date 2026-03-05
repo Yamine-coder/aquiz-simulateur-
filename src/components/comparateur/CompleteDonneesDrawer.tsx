@@ -116,7 +116,7 @@ export function CompleteDonneesDrawer({ annonce, open, onClose }: CompleteDonnee
 interface DrawerFieldProps {
   field: keyof NouvelleAnnonce
   label: string
-  fieldType: 'number' | 'text' | 'boolean' | 'dpe'
+  fieldType: 'number' | 'text' | 'boolean' | 'dpe' | 'orientation'
   suffix?: string
   placeholder?: string
   isSaved: boolean
