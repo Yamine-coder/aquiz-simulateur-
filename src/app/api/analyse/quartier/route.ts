@@ -455,8 +455,9 @@ export async function GET(request: NextRequest) {
           // Fusionner les lignes dans le survivant
           if (busStops[j].lignes) {
             if (!busStops[i].lignes) busStops[i].lignes = []
-            for (const l of busStops[j].lignes) {
-              if (!busStops[i].lignes.includes(l)) busStops[i].lignes.push(l)
+            const lignesJ = busStops[j].lignes!
+            for (const l of lignesJ) {
+              if (!busStops[i].lignes!.includes(l)) busStops[i].lignes!.push(l)
             }
           }
           removedBusIds.add(j)
