@@ -29,12 +29,24 @@ interface GASPARRisque {
   num_risque?: string
 }
 
+/**
+ * Détermine le niveau de risque à partir du libellé GASPAR.
+ * Les codes num_risque sont des catégories (pas des niveaux de sévérité).
+ * On utilise donc le libellé pour détecter des mots-clés de gravité.
+ */
 function determinerNiveau(risque: GASPARRisque): 'faible' | 'moyen' | 'fort' {
-  // Logique simplifiée basée sur le code risque
-  const numRisque = risque.num_risque || ''
-  if (numRisque.includes('3') || numRisque.includes('4')) return 'fort'
-  if (numRisque.includes('2')) return 'moyen'
-  return 'faible'
+  const libelle = (risque.libelle_risque_jo || '').toLowerCase()
+  
+  // Mots-clés indiquant un risque fort
+  if (libelle.includes('majeur') || libelle.includes('très fort') || libelle.includes('seveso seuil haut')) {
+    return 'fort'
+  }
+  // Mots-clés indiquant un risque moyen
+  if (libelle.includes('moyen') || libelle.includes('modéré') || libelle.includes('seveso seuil bas')) {
+    return 'moyen'
+  }
+  // Par défaut, risque identifié → au moins moyen (prudence)
+  return 'moyen'
 }
 
 export async function GET(request: NextRequest) {
@@ -144,11 +156,38 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // ── Appel API Radon (best effort, ne bloque pas) ──────
+    let niveauRadon: number | null = null
+    try {
+      const radonCtrl = new AbortController()
+      const radonTimeout = setTimeout(() => radonCtrl.abort(), 4000)
+      const radonRes = await fetch(
+        `https://georisques.gouv.fr/api/v1/radon?latlon=${lat},${lon}`,
+        { headers: { 'Accept': 'application/json' }, signal: radonCtrl.signal }
+      )
+      clearTimeout(radonTimeout)
+      if (radonRes.ok) {
+        const radonData = await radonRes.json()
+        // L'API renvoie un tableau avec classement (1=faible, 2=moyen, 3=élevé)
+        if (radonData.data && Array.isArray(radonData.data) && radonData.data.length > 0) {
+          const classement = radonData.data[0].classe_potentiel
+          if (typeof classement === 'number' && classement >= 1 && classement <= 3) {
+            niveauRadon = classement
+          }
+        }
+      }
+    } catch {
+      // Radon optionnel — on continue sans
+    }
+
     // Calculer le score global (100 = sûr, 0 = très risqué)
+    // Éviter le double-comptage : les risques inondation sont déjà pénalisés via zoneInondable
+    const nonFloodNaturels = risquesNaturels.filter(r => r.type !== 'inondation')
     let scoreGlobal = 100
-    scoreGlobal -= risquesNaturels.length * 10
+    scoreGlobal -= nonFloodNaturels.length * 10
     scoreGlobal -= risquesTechnologiques.length * 15
     if (zoneInondable) scoreGlobal -= 20
+    if (niveauRadon && niveauRadon >= 3) scoreGlobal -= 10
     scoreGlobal = Math.max(0, Math.min(100, scoreGlobal))
     
     // Générer la synthèse
@@ -159,7 +198,10 @@ export async function GET(request: NextRequest) {
       if (zoneInondable) alertes.push('Zone inondable')
       if (risquesNaturels.length > 0) alertes.push(`${risquesNaturels.length} risque(s) naturel(s)`)
       if (risquesTechnologiques.length > 0) alertes.push(`${risquesTechnologiques.length} risque(s) techno(s)`)
+      if (niveauRadon && niveauRadon >= 3) alertes.push('Radon élevé')
       synthese = '⚠️ ' + alertes.join(' • ')
+    } else if (niveauRadon && niveauRadon >= 3) {
+      synthese = '⚠️ Potentiel radon élevé'
     }
     
     const responseData = {
@@ -168,7 +210,7 @@ export async function GET(request: NextRequest) {
         risquesNaturels,
         risquesTechnologiques,
         zoneInondable,
-        niveauRadon: null, // API Radon séparée (georisques.gouv.fr/api/v1/radon) — non implémentée
+        niveauRadon,
         scoreGlobal,
         synthese
       },

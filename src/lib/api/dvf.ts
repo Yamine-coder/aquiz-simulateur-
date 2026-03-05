@@ -94,8 +94,8 @@ export async function fetchDVFParDepartement(
     codeDepartement: zone.codeDepartement,
     prixM2MedianAppartement: zone.prixM2Appartement,
     prixM2MedianMaison: zone.prixM2Maison,
-    nbTransactionsAppartement: Math.floor(Math.random() * 500) + 100, // Simulé
-    nbTransactionsMaison: Math.floor(Math.random() * 200) + 50, // Simulé
+    nbTransactionsAppartement: 0, // Données locales : nombre exact inconnu
+    nbTransactionsMaison: 0, // Données locales : nombre exact inconnu
     evolutionPrix1an: zone.evolutionPrix1an ?? 0,
     evolutionPrix5ans: zone.evolutionPrix5ans ?? 0,
     latitude: zone.centre.lat,
@@ -130,8 +130,8 @@ export async function fetchDVFParCommune(
     codeDepartement: zone.codeDepartement,
     prixM2MedianAppartement: zone.prixM2Appartement,
     prixM2MedianMaison: zone.prixM2Maison,
-    nbTransactionsAppartement: Math.floor(Math.random() * 500) + 100,
-    nbTransactionsMaison: Math.floor(Math.random() * 200) + 50,
+    nbTransactionsAppartement: 0, // Données locales : nombre exact inconnu
+    nbTransactionsMaison: 0, // Données locales : nombre exact inconnu
     evolutionPrix1an: zone.evolutionPrix1an ?? 0,
     evolutionPrix5ans: zone.evolutionPrix5ans ?? 0,
     latitude: zone.centre.lat,
@@ -153,8 +153,8 @@ export async function fetchDVFIleDeFrance(): Promise<DVFResponse> {
     codeDepartement: zone.codeDepartement,
     prixM2MedianAppartement: zone.prixM2Appartement,
     prixM2MedianMaison: zone.prixM2Maison,
-    nbTransactionsAppartement: Math.floor(Math.random() * 500) + 100,
-    nbTransactionsMaison: Math.floor(Math.random() * 200) + 50,
+    nbTransactionsAppartement: 0, // Données locales : nombre exact inconnu
+    nbTransactionsMaison: 0, // Données locales : nombre exact inconnu
     evolutionPrix1an: zone.evolutionPrix1an ?? 0,
     evolutionPrix5ans: zone.evolutionPrix5ans ?? 0,
     latitude: zone.centre.lat,

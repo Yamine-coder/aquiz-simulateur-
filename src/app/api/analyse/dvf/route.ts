@@ -8,7 +8,7 @@
  */
 
 import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf';
-import { fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
+import { calculerMediane, fetchDVFDepartement, type DVFDepartementStats } from '@/lib/api/dvf-real';
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
 import { ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 const deptCache = new ServerCache<DVFDepartementStats>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 100 })
 
 interface DVFRawTransaction {
+  id_mutation?: string
   valeur_fonciere?: number
   surface_reelle_bati?: number
   date_mutation?: string
@@ -50,8 +51,14 @@ function getFallbackData(codePostal: string, typeBien: string) {
 
 /**
  * Charge les données DVF directement (sans HTTP vers soi-même)
+ * Filtre par surface pour une comparaison pertinente
  */
-async function fetchFromInternalData(codePostal: string, typeBien: string) {
+async function fetchFromInternalData(
+  codePostal: string,
+  typeBien: string,
+  surfaceMin?: number,
+  surfaceMax?: number
+) {
   try {
     // Extraire le département
     let codeDept = codePostal.substring(0, 2)
@@ -71,36 +78,69 @@ async function fetchFromInternalData(codePostal: string, typeBien: string) {
       deptCache.set(cacheKey, deptData)
     }
 
-    // Chercher les communes avec ce code postal
-    const communes = deptData.communes.filter(c => c.codePostal === codePostal)
-    if (communes.length === 0) return null
+    // Filtrer les transactions individuelles par code postal et type de bien
+    const typeLocal = typeBien === 'Appartement' ? 'Appartement' : 'Maison'
+    const allTransactions = deptData.transactions.filter(
+      t => t.codePostal === codePostal && t.typeLocal === typeLocal
+    )
 
-    // Calculer le prix pondéré
-    const items = communes
-      .filter(c => typeBien === 'Appartement' ? c.prixM2MedianAppart > 0 : c.prixM2MedianMaison > 0)
-      .map(c => ({
-        prix: typeBien === 'Appartement' ? c.prixM2MedianAppart : c.prixM2MedianMaison,
-        nb: typeBien === 'Appartement' ? c.nbVentesAppart : c.nbVentesMaison
-      }))
+    if (allTransactions.length === 0) return null
 
-    if (items.length === 0) return null
+    // ── Filtrage par surface (stratégie progressive) ───────────
+    // 1. D'abord : fourchette demandée (surfaceMin–surfaceMax)
+    // 2. Si < 5 transactions : élargir ±50% autour de la surface cible
+    // 3. Si toujours < 5 : toutes surfaces avec avertissement
+    const MIN_TRANSACTIONS = 5
 
-    const totalVentes = items.reduce((sum, d) => sum + d.nb, 0)
-    const prixM2Median = totalVentes > 0
-      ? Math.round(items.reduce((sum, d) => sum + d.prix * d.nb, 0) / totalVentes)
-      : items[0].prix
+    let filtered = allTransactions
+    let avertissement: string | undefined
+
+    if (surfaceMin !== undefined && surfaceMax !== undefined) {
+      // Tentative 1 : fourchette demandée
+      filtered = allTransactions.filter(t => t.surface >= surfaceMin && t.surface <= surfaceMax)
+
+      if (filtered.length < MIN_TRANSACTIONS) {
+        // Tentative 2 : élargir de 50%
+        const centre = (surfaceMin + surfaceMax) / 2
+        const range = (surfaceMax - surfaceMin) / 2
+        const widerMin = Math.max(9, centre - range * 1.5)
+        const widerMax = centre + range * 1.5
+        filtered = allTransactions.filter(t => t.surface >= widerMin && t.surface <= widerMax)
+        
+        if (filtered.length >= MIN_TRANSACTIONS) {
+          avertissement = `Fourchette élargie (${Math.round(widerMin)}–${Math.round(widerMax)} m²) – ${filtered.length} transactions`
+        }
+      }
+
+      if (filtered.length < MIN_TRANSACTIONS) {
+        // Tentative 3 : toutes surfaces
+        filtered = allTransactions
+        avertissement = `Prix médian toutes surfaces confondues (${allTransactions.length} transactions) – pas assez de biens similaires en surface`
+      }
+    }
+
+    // Calculer la médiane sur les transactions filtrées
+    const prixM2List = filtered.map(t => t.prixM2)
+    const prixM2Median = Math.round(calculerMediane(prixM2List))
 
     if (!prixM2Median || prixM2Median === 0) return null
 
+    // Prix total médian (estimé si on a les surfaces)
+    const prixTotaux = filtered.map(t => t.prixM2 * t.surface)
+    const prixMedian = prixTotaux.length >= MIN_TRANSACTIONS
+      ? Math.round(calculerMediane(prixTotaux))
+      : null
+
     return {
-      prixMedian: null,
+      prixMedian,
       prixMoyen: null,
       prixMin: null,
       prixMax: null,
       prixM2Median,
       prixM2Moyen: prixM2Median,
-      nbTransactions: totalVentes || 50,
+      nbTransactions: filtered.length,
       evolution12Mois: null,
+      avertissement
     }
   } catch {
     return null
@@ -140,15 +180,31 @@ async function fetchFromCquest(codePostal: string, typeBien: string, surfaceMin?
     
     if (!result.resultats || result.resultats.length === 0) return null
     
-    // Filtrer et transformer les transactions
-    let transactions = result.resultats
-      .filter((t: DVFRawTransaction) => t.valeur_fonciere && t.surface_reelle_bati && t.surface_reelle_bati > 0)
-      .map((t: DVFRawTransaction) => ({
-        prix: t.valeur_fonciere as number,
-        surface: t.surface_reelle_bati as number,
-        prixM2: Math.round((t.valeur_fonciere as number) / (t.surface_reelle_bati as number)),
-        date: t.date_mutation
-      }))
+    // Dédupliquer par id_mutation (DVF peut avoir plusieurs lignes par transaction : appart + parking, etc.)
+    // On garde la ligne avec la plus grande surface (le bien principal)
+    const byMutation = new Map<string, DVFRawTransaction>()
+    for (const t of result.resultats as DVFRawTransaction[]) {
+      if (!t.valeur_fonciere || !t.surface_reelle_bati || t.surface_reelle_bati <= 0) continue
+      const key = t.id_mutation || `${t.valeur_fonciere}_${t.date_mutation}`
+      const existing = byMutation.get(key)
+      if (!existing || (t.surface_reelle_bati > (existing.surface_reelle_bati || 0))) {
+        byMutation.set(key, t)
+      }
+    }
+    
+    // Filtrer et transformer les transactions (avec filtre prix aberrants)
+    let transactions = Array.from(byMutation.values())
+      .map((t: DVFRawTransaction) => {
+        const prixM2 = Math.round((t.valeur_fonciere as number) / (t.surface_reelle_bati as number))
+        return {
+          prix: t.valeur_fonciere as number,
+          surface: t.surface_reelle_bati as number,
+          prixM2,
+          date: t.date_mutation
+        }
+      })
+      // Filtrer les valeurs aberrantes (même seuil que dvf-real.ts)
+      .filter((t: { prixM2: number }) => t.prixM2 >= 500 && t.prixM2 <= 30000)
     
     if (surfaceMin) {
       const min = parseFloat(surfaceMin)
@@ -220,8 +276,10 @@ export async function GET(request: NextRequest) {
     )
   }
   
-  // 1. Essayer les données DVF directes (départementales)
-  const internalData = await fetchFromInternalData(codePostal, typeBien)
+  // 1. Essayer les données DVF directes (départementales) avec filtrage surface
+  const sMin = surfaceMin ? parseFloat(surfaceMin) : undefined
+  const sMax = surfaceMax ? parseFloat(surfaceMax) : undefined
+  const internalData = await fetchFromInternalData(codePostal, typeBien, sMin, sMax)
   if (internalData) {
     return NextResponse.json({ 
       success: true, 

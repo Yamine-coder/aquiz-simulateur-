@@ -257,7 +257,8 @@ describe('parseAnnonceHTML', () => {
   it('détecte le type appartement par défaut', () => {
     const html = '<html><body>Bien immobilier en centre-ville</body></html>'
     const result = parseAnnonceHTML(html, 'https://example.com')
-    expect(result.type).toBe('appartement')
+    // parseAnnonceHTML ne met PAS de default — c'est completerDonnees() qui le fait
+    expect(result.type).toBeUndefined()
   })
 
   it('extrait les équipements', () => {

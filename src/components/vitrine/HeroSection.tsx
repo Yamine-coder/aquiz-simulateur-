@@ -91,7 +91,7 @@ export function HeroSection() {
     <section
       ref={ref}
       id="hero"
-      className="relative h-[90vh] min-h-[600px] max-h-[900px] flex items-center justify-center overflow-hidden"
+      className="relative h-[85vh] min-h-[600px] max-h-[850px] flex items-center justify-center overflow-hidden"
     >
       {/* Background photo with parallax + grayscale */}
       <motion.div className="absolute inset-0 z-0" style={{ scale: imgScale, willChange: 'transform' }}>
@@ -148,7 +148,7 @@ export function HeroSection() {
 
         {/* Main heading */}
         <motion.h1
-          className="mt-7 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.05] tracking-tight"
+          className="mt-5 sm:mt-7 text-[1.75rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.1] sm:leading-[1.05] tracking-tight"
           initial={{ opacity: 0, y: 35 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -160,7 +160,7 @@ export function HeroSection() {
 
         {/* Subtitle */}
         <motion.p
-          className="mt-6 text-base md:text-lg text-white/45 max-w-xl mx-auto leading-relaxed"
+          className="mt-4 sm:mt-6 text-sm sm:text-base md:text-lg text-white/45 max-w-xl mx-auto leading-relaxed"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.65 }}
@@ -172,7 +172,7 @@ export function HeroSection() {
 
         {/* CTAs */}
         <motion.div
-          className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3"
+          className="mt-5 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.85 }}
@@ -212,7 +212,7 @@ export function HeroSection() {
 
         {/* Trust markers */}
         <motion.div
-          className="mt-12 flex items-center justify-center gap-5 sm:gap-8"
+          className="mt-6 sm:mt-10 flex items-center justify-center gap-4 sm:gap-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 1.2 }}
@@ -235,7 +235,7 @@ export function HeroSection() {
 
       {/* Scroll indicator — CSS animation only */}
       <motion.div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-2"
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 hidden sm:flex flex-col items-center gap-2"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.5, duration: 0.6 }}

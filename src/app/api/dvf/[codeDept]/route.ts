@@ -40,8 +40,9 @@ export async function GET(
     const cached = cache.get(cacheKey)
     
     if (cached) {
+      const { transactions: _t, ...cachedWithoutTransactions } = cached
       return NextResponse.json({
-        ...cached,
+        ...cachedWithoutTransactions,
         fromCache: true
       })
     }
@@ -53,8 +54,11 @@ export async function GET(
     // Mettre en cache
     cache.set(cacheKey, data)
     
+    // Ne pas sérialiser les transactions individuelles (trop volumineux)
+    const { transactions: _t, ...dataWithoutTransactions } = data
+    
     return NextResponse.json({
-      ...data,
+      ...dataWithoutTransactions,
       fromCache: false
     })
     

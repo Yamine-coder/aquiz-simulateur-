@@ -127,7 +127,7 @@ export default function ComparateurPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; ids: string[]; title?: string }>({
     open: false, ids: []
   })
-  const hydrated = useComparateurStore(s => s.annonces !== undefined)
+  const hydrated = useComparateurStore(s => s._hasHydrated)
   
   // Données calculées
   const annoncesFiltrees = getAnnoncesFiltrees(comparateur)
@@ -880,7 +880,7 @@ export default function ComparateurPage() {
                         annonce={annonce}
                         isSelected={isAnnonceSelected}
                         selectionDisabled={selectionIsFull}
-                        faisabilite={calculerFaisabilite(annonce.prix, comparateur.budgetMax)}
+                        faisabilite={calculerFaisabilite(annonce.prix, comparateur.budgetMax, annonce.anneeConstruction)}
                         onSelect={() => comparateur.toggleSelection(annonce.id)}
                         onEdit={() => setEditingId(annonce.id)}
                         onDelete={() => setDeleteConfirm({ open: true, ids: [annonce.id], title: annonce.titre })}
@@ -1107,7 +1107,7 @@ export default function ComparateurPage() {
                                       </div>
                                       <button
                                         type="button"
-                                        disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
+                                        disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
                                         onClick={handleSendPdfEmail}
                                         className="h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-4 sm:px-5 transition-colors shrink-0 flex items-center gap-2"
                                       >

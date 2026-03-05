@@ -3,6 +3,7 @@
  * Utilisé dans le comparateur et les annonces cards
  */
 
+import { calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import type { AnalyseFaisabilite } from '@/types/annonces'
 
 /**
@@ -14,37 +15,40 @@ import type { AnalyseFaisabilite } from '@/types/annonces'
  */
 export function calculerFaisabilite(
   prix: number,
-  budgetMax: number | null
+  budgetMax: number | null,
+  anneeConstruction?: number
 ): AnalyseFaisabilite | undefined {
   if (!budgetMax) return undefined
 
-  const ecart = budgetMax - prix
-  const pourcentage = Math.round((prix / budgetMax) * 100)
+  // Frais notaire selon neuf/ancien (2.5% vs 7.5%)
+  const { montant: fraisNotaire } = estimerFraisNotaire(prix, anneeConstruction)
 
-  // Frais notaire estimés (8% ancien par défaut)
-  const fraisNotaire = Math.round(prix * 0.08)
+  // Coût total = prix + frais de notaire (ce que l'acheteur doit réellement financer)
+  const coutTotal = prix + fraisNotaire
+  const ecart = budgetMax - coutTotal
+  const pourcentage = Math.round((coutTotal / budgetMax) * 100)
 
   let niveau: 'confortable' | 'limite' | 'impossible'
   let message: string
 
   if (pourcentage <= 90) {
     niveau = 'confortable'
-    message = `Dans votre budget avec une marge de ${ecart.toLocaleString('fr-FR')} €`
+    message = `Dans votre budget avec une marge de ${ecart.toLocaleString('fr-FR')} € (frais notaire inclus)`
   } else if (pourcentage <= 105) {
     niveau = 'limite'
     message = pourcentage <= 100
-      ? `Proche de votre budget max (${pourcentage}%)`
-      : `Légèrement au-dessus (+${Math.abs(ecart).toLocaleString('fr-FR')} €)`
+      ? `Proche de votre budget max (${pourcentage}% frais inclus)`
+      : `Légèrement au-dessus (+${Math.abs(ecart).toLocaleString('fr-FR')} € frais inclus)`
   } else {
     niveau = 'impossible'
-    message = `Dépasse votre budget de ${Math.abs(ecart).toLocaleString('fr-FR')} €`
+    message = `Dépasse votre budget de ${Math.abs(ecart).toLocaleString('fr-FR')} € (frais notaire inclus)`
   }
 
   return {
     faisable: pourcentage <= 100,
     ecartBudget: ecart,
     pourcentageBudget: pourcentage,
-    mensualiteEstimee: 0, // Simplifié — calculé avec les vrais paramètres dans TableauComparaison
+    mensualiteEstimee: calculerMensualite(coutTotal, 0, 3.5, 25), // Estimation sur coût total (25 ans, 3.5%, sans apport)
     fraisNotaire,
     niveau,
     message

@@ -18,8 +18,10 @@ interface UseAnalyseEnrichieReturn {
   analyses: Map<string, AnalyseComplete>
   isLoading: boolean
   loadingIds: Set<string>
+  failedIds: Set<string>
   error: string | null
   refreshAnalyse: (annonceId: string) => void
+  retryFailed: () => void
   getAnalyse: (annonceId: string) => AnalyseComplete | null
 }
 
@@ -78,10 +80,18 @@ function extraireCodePostal(ville: string): string {
 export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieReturn {
   const [analyses, setAnalyses] = useState<Map<string, AnalyseComplete>>(new Map())
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
+  const [failedIds, setFailedIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   // Ref pour lire les analyses sans les mettre dans les deps du useEffect
   const analysesRef = useRef(analyses)
   analysesRef.current = analyses
+  const failedIdsRef = useRef(failedIds)
+  failedIdsRef.current = failedIds
+  // BUG-10 : compteur de retries par ID pour éviter les boucles infinies
+  const retryCountRef = useRef<Map<string, number>>(new Map())
+  const MAX_RETRIES = 3
+  // BUG-06 : tracker un hash des champs clés pour détecter les modifications
+  const annonceHashRef = useRef<Map<string, string>>(new Map())
   
   // Analyser les annonces quand elles changent
   useEffect(() => {
@@ -90,8 +100,23 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
       return
     }
     
-    // Identifier les annonces qui n'ont pas encore été analysées
-    const annoncesSansAnalyse = annonces.filter(a => !analysesRef.current.has(a.id))
+    // Identifier les annonces qui n'ont pas encore été analysées (et pas en échec)
+    // BUG-06 : aussi re-analyser si les champs clés ont changé
+    const computeHash = (a: Annonce): string => `${a.prix}_${a.surface}_${a.codePostal}_${a.dpe}_${a.type}`
+    const annoncesSansAnalyse = annonces.filter(a => {
+      const hash = computeHash(a)
+      const prevHash = annonceHashRef.current.get(a.id)
+      if (prevHash && prevHash !== hash) {
+        // Champs clés modifiés → invalider l'ancienne analyse
+        annonceHashRef.current.set(a.id, hash)
+        return true
+      }
+      if (!analysesRef.current.has(a.id) && !failedIdsRef.current.has(a.id)) {
+        annonceHashRef.current.set(a.id, hash)
+        return true
+      }
+      return false
+    })
     
     if (annoncesSansAnalyse.length === 0) return
     
@@ -109,6 +134,10 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
           annoncesSansAnalyse.map(async (annonce) => {
             try {
               const bien = annonceToBienAnalyse(annonce)
+              // BUG-16 : Valider le code postal avant l'appel API
+              if (!bien.codePostal || bien.codePostal.length !== 5) {
+                logger.warn(`Analyse ${annonce.id} : code postal manquant ou invalide ("${bien.codePostal}"). Enrichissement partiel.`)
+              }
               const analyse = await analyserBien(bien)
               return { id: annonce.id, analyse }
             } catch (err) {
@@ -118,7 +147,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
           })
         )
         
-        // Mettre à jour les analyses
+        // Mettre à jour les analyses + tracker les échecs
         setAnalyses(prev => {
           const next = new Map(prev)
           resultats.forEach(({ id, analyse }) => {
@@ -128,6 +157,16 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
           })
           return next
         })
+        
+        // Enregistrer les IDs en échec pour ne pas les re-tenter en boucle
+        const newFailed = resultats.filter(r => !r.analyse).map(r => r.id)
+        if (newFailed.length > 0) {
+          setFailedIds(prev => {
+            const next = new Set(prev)
+            newFailed.forEach(id => next.add(id))
+            return next
+          })
+        }
         
         setError(null)
       } catch (err) {
@@ -145,6 +184,30 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
     
     analyserTout()
   }, [annonces]) // analyses retiré des deps — utilise analysesRef pour éviter le re-render cycle
+
+  // BUG-17 : Auto-retry des analyses en échec après 60 secondes (max 3 tentatives)
+  useEffect(() => {
+    if (failedIds.size === 0) return
+    const timer = setTimeout(() => {
+      // BUG-10 : ne retenter que les IDs qui n'ont pas atteint le max
+      const idsToRetry = new Set<string>()
+      for (const id of failedIds) {
+        const count = retryCountRef.current.get(id) || 0
+        if (count < MAX_RETRIES) {
+          retryCountRef.current.set(id, count + 1)
+          idsToRetry.add(id)
+        }
+      }
+      if (idsToRetry.size > 0) {
+        setFailedIds(prev => {
+          const next = new Set(prev)
+          for (const id of idsToRetry) next.delete(id)
+          return next
+        })
+      }
+    }, 60_000)
+    return () => clearTimeout(timer)
+  }, [failedIds])
   
   // Nettoyer les analyses des annonces supprimées
   useEffect(() => {
@@ -166,6 +229,12 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
     const annonce = annonces.find(a => a.id === annonceId)
     if (!annonce) return
     
+    // Retirer des échecs pour autoriser le re-fetch
+    setFailedIds(prev => {
+      const next = new Set(prev)
+      next.delete(annonceId)
+      return next
+    })
     setLoadingIds(prev => new Set(prev).add(annonceId))
     
     try {
@@ -192,13 +261,22 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
   const getAnalyse = useCallback((annonceId: string): AnalyseComplete | null => {
     return analyses.get(annonceId) || null
   }, [analyses])
+
+  // Relancer toutes les analyses en échec
+  const retryFailed = useCallback(() => {
+    if (failedIds.size === 0) return
+    // Vider les échecs → le useEffect les re-détectera comme "sans analyse"
+    setFailedIds(new Set())
+  }, [failedIds])
   
   return {
     analyses,
     isLoading: loadingIds.size > 0,
     loadingIds,
+    failedIds,
     error,
     refreshAnalyse,
+    retryFailed,
     getAnalyse
   }
 }

@@ -257,53 +257,117 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
   }
 
   /** Mots français courants qu'il ne faut PAS prendre pour des villes */
-  const MOTS_EXCLUS = /^(appartement|maison|villa|studio|duplex|loft|pavillon|immeuble|résidence|programme|vente|achat|annonce|prix|surface|pièces?|chambres?|étage|orientation|construction|description|parking|garage|terrasse|balcon|cave|code|bien|local|situé|centre|quartier)$/i
+  const MOTS_EXCLUS_RE = /^(appartement|maison|villa|studio|duplex|loft|pavillon|immeuble|résidence|programme|vente|achat|annonce|prix|surface|pièces?|chambres?|étage|orientation|construction|description|parking|garage|terrasse|balcon|cave|code|bien|local|situé|centre|quartier|ancien|neuf|lumineux|calme|proche|grand|petit|beau|belle|ville|secteur|rue|avenue|boulevard|sud|nord|est|ouest|au|aux|du|des|un|une|dans|vers|pour|avec|chez|entre)$/i
 
-  // ──── 1. Villes connues (le plus fiable) ────
-  const VILLES = [
-    'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
-    'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
-    'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
-    'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
-    'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
-    'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
-    'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
-    'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
-    'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
-    'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
-    'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
-    'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
-    'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
-    'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
-    'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
-  ]
-  const lower = texte.toLowerCase()
-  for (const v of VILLES) {
-    if (lower.includes(v.toLowerCase())) {
-      result.ville = v
-      break
+  /**
+   * Nettoie une ville capturée en retirant les mots-clés exclus en début de chaîne.
+   * Ex: "Appartement Paris" → "Paris", "Quartier calme" → "" (tout exclu), 
+   *     "Boulogne-Billancourt" → "Boulogne-Billancourt" (pas exclu).
+   */
+  const nettoyerVille = (raw: string): string | undefined => {
+    // Séparer par espaces (les mots liés par tiret restent groupés)
+    const mots = raw.split(/\s+/)
+    // Retirer les mots exclus en tête
+    let debut = 0
+    while (debut < mots.length && MOTS_EXCLUS_RE.test(mots[debut].replace(/-/g, ' ').split(/\s+/)[0])) {
+      // Vérifier si le mot-tiret entier n'est PAS un nom de ville composé
+      // Ex: "Centre-ville" → "Centre" est exclu, "ville" est exclu → tout exclu
+      // Ex: "Boulogne-Billancourt" → "Boulogne" n'est PAS exclu → on garde tout
+      const sousMots = mots[debut].split('-')
+      if (sousMots.every(sm => MOTS_EXCLUS_RE.test(sm))) {
+        debut++
+      } else {
+        break
+      }
     }
+    const cleaned = mots.slice(debut).join(' ').trim()
+    if (!cleaned || cleaned.length < 2) return undefined
+    // Vérifier que le résultat n'est pas entièrement composé de mots exclus
+    const resteMots = cleaned.split(/[\s-]+/)
+    if (resteMots.every(m => MOTS_EXCLUS_RE.test(m))) return undefined
+    return cleaned
   }
 
-  // ──── 2. Code postal 5 chiffres (avec validation dept) ────
+  // ──── 1. Code postal 5 chiffres (avec validation dept) — priorité haute ────
   const cpMatch = texte.match(/\b(\d{5})\b/)
   if (cpMatch && isValidCP(cpMatch[1])) {
     result.codePostal = cpMatch[1]
   }
 
-  // ──── 3. Pattern "Ville (75001)" ou "75001 Ville" (seulement si pas déjà trouvé) ────
-  if (!result.ville) {
-    const villeAvecCP = texte.match(/([A-ZÀ-Ÿ][a-zà-ÿ]+(?:-[A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(\s*(\d{5})\s*\)/) ||
-                        texte.match(/(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:-[A-ZÀ-Ÿa-zà-ÿ]+)*)/)
-    if (villeAvecCP) {
-      const [cp, ville] = /^\d{5}$/.test(villeAvecCP[1])
-        ? [villeAvecCP[1], villeAvecCP[2]]
-        : [villeAvecCP[2], villeAvecCP[1]]
+  // ──── 2. Pattern "Ville (75001)" ou "75001 Ville" — le plus fiable pour extraire le nom ────
+  const patternVilleCP = [
+    // "Ville (75001)" ou "Ville 75001"
+    /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(?\s*(\d{5})\s*\)?/,
+    // "75001 Ville" 
+    /(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)/,
+    // "à Ville" ou "de Ville" (localisation contextuelle)
+    /(?:à|de|sur|en|près de)\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*(?:\((\d{5})\))?/,
+  ]
+  
+  for (const pattern of patternVilleCP) {
+    const m = texte.match(pattern)
+    if (m) {
+      const [cp, villeRaw] = /^\d{5}$/.test(m[1])
+        ? [m[1], m[2]]
+        : [m[2], m[1]]
 
-      // Valider : CP valide ET nom de ville pas un mot courant
-      if (isValidCP(cp) && !MOTS_EXCLUS.test(ville)) {
-        result.ville = ville
-        result.codePostal = cp
+      const ville = villeRaw ? nettoyerVille(villeRaw) : undefined
+      if (ville && ville.length >= 2) {
+        if (!result.ville) result.ville = ville
+        if (cp && isValidCP(cp) && !result.codePostal) result.codePostal = cp
+        if (result.ville && result.codePostal) break
+      }
+    }
+  }
+
+  // ──── 3. Villes connues (fallback si pattern ci-dessus n'a rien trouvé) ────
+  if (!result.ville) {
+    const VILLES = [
+      // Top 60 agglomérations
+      'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
+      'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
+      'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
+      'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
+      'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
+      'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
+      'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
+      'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
+      'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
+      'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
+      'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
+      'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
+      'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
+      'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
+      'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
+      // Villes moyennes importantes
+      'La Rochelle', 'Colmar', 'Pau', 'Bayonne', 'Avignon',
+      'Cannes', 'Antibes', 'Valence', 'Chambéry', 'Troyes',
+      'Vannes', 'Lorient', 'Quimper', 'Saint-Brieuc', 'Saint-Nazaire',
+      'La Roche-sur-Yon', 'Chartres', 'Bourges', 'Châteauroux',
+      'Poitiers', 'Angoulême', 'Niort', 'Agen', 'Tarbes',
+      'Béziers', 'Sète', 'Carcassonne', 'Narbonne', 'Albi',
+      'Montauban', 'Rodez', 'Aurillac', 'Cahors', 'Périgueux',
+      'Bergerac', 'Mont-de-Marsan', 'Dax', 'Biarritz',
+      'Ajaccio', 'Bastia', 'Arles', 'Fréjus', 'Hyères',
+      'Gap', 'Briançon', 'Épinal', 'Thionville', 'Belfort',
+      'Beauvais', 'Compiègne', 'Saint-Quentin', 'Laon',
+      'Dunkerque', 'Calais', 'Boulogne-sur-Mer', 'Lens', 'Douai',
+      'Valenciennes', 'Maubeuge', 'Cambrai', 'Arras',
+      'Évreux', 'Cherbourg', 'Saint-Lô', 'Alençon',
+      'Blois', 'Vendôme', 'Auxerre', 'Sens', 'Nevers',
+      'Mâcon', 'Chalon-sur-Saône', 'Lons-le-Saunier',
+      'Bourg-en-Bresse', 'Oyonnax', 'Vienne', 'Roanne',
+      'Villefranche-sur-Saône', 'Saint-Priest', 'Vénissieux',
+      'Saint-Malo', 'Fougères', 'Vitré', 'Laval',
+      // DOM-TOM
+      'Fort-de-France', 'Pointe-à-Pitre', 'Cayenne',
+      'Saint-Denis', 'Saint-Pierre', 'Mamoudzou',
+    ]
+    const lower = texte.toLowerCase()
+    for (const v of VILLES) {
+      if (lower.includes(v.toLowerCase())) {
+        result.ville = v
+        break
       }
     }
   }
@@ -346,7 +410,7 @@ function extraireDPE(texte: string): ClasseDPE | undefined {
   // 2. Patterns textuels (pas affectés par l'échelle)
   const patterns = [
     /classe\s*(?:énergie|énergétique)\s*:?\s*([A-G])\b/i,
-    /DPE\s*:?\s*([A-G])(?![ \t]*[A-G])/i,
+    /DPE\s*:?\s*([A-G])(?![ \t]+[A-G](?![a-zA-Z]))/i,
     /\(DPE\)\s*([A-G])\b/i,
     /DPE\)\s*([A-G])\b/i,
     /diagnostic\s*(?:de\s*)?performance\s*énergétique\s*(?:\(DPE\))?\s*:?\s*([A-G])\b/i,
@@ -379,7 +443,7 @@ function extraireGES(texte: string): ClasseDPE | undefined {
   // 2. Patterns textuels
   const patterns = [
     /classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i,
-    /GES\s*:?\s*([A-G])(?![ \t]*[A-G])/i,
+    /GES\s*:?\s*([A-G])(?![ \t]+[A-G](?![a-zA-Z]))/i,
     /\(GES\)\s*([A-G])\b/i,
     /GES\)\s*([A-G])\b/i,
     /gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*(?:\(GES\))?\s*:?\s*([A-G])\b/i,
@@ -562,7 +626,19 @@ function extraireCharges(texte: string): number | undefined {
     if (m) {
       const c = extraireNombre(m[1])
       if (c && c > 0 && c < 50000) {
-        return c > 500 ? Math.round(c / 12) : c
+        // Analyser le contexte autour du match pour détecter la périodicité
+        const matchIndex = texte.indexOf(m[0])
+        const context = texte.slice(Math.max(0, matchIndex - 30), matchIndex + m[0].length + 30).toLowerCase()
+
+        const isAnnual = /\/\s*an|par\s+an|annuel|\/\s*année|charges?\s*(?:de\s+)?copropriété/i.test(context)
+        const isMonthly = /\/\s*mois|par\s+mois|mensuel/i.test(context)
+
+        if (isMonthly) return c
+        if (isAnnual) return Math.round(c / 12)
+        // Heuristique de dernier recours :
+        // > 1200€ sans contexte → probablement annuel (charges mensuelles rarement > 1200€)
+        // Seuil relevé car à Paris, charges mensuelles > 500€ sont courantes
+        return c > 1200 ? Math.round(c / 12) : c
       }
     }
   }
@@ -961,5 +1037,10 @@ export function compterChampsExtraits(data: DonneesExtraites): number {
   if (data.nbSallesBains) count++
   if (data.orientation) count++
   if (data.imageUrl) count++
+  // BUG-4 : compter les booléens extraits (ascenseur, parking, etc.)
+  if (data.ascenseur === true) count++
+  if (data.balconTerrasse === true) count++
+  if (data.parking === true) count++
+  if (data.cave === true) count++
   return count
 }

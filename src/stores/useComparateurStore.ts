@@ -18,6 +18,8 @@ import { persist } from 'zustand/middleware'
 // ============================================
 
 interface ComparateurState {
+  /** Flag de rehydration Zustand persist */
+  _hasHydrated: boolean
   /** Liste des annonces ajoutées */
   annonces: Annonce[]
   
@@ -122,6 +124,7 @@ function detecterSource(url?: string): Annonce['source'] {
 // ============================================
 
 const initialState = {
+  _hasHydrated: false,
   annonces: [] as Annonce[],
   annonceSelectionnees: [] as string[],
   filtres: {} as FiltresAnnonces,
@@ -163,7 +166,9 @@ export const useComparateurStore = create<ComparateurState>()(
         const annonce: Annonce = {
           id,
           source: detecterSource(nouvelleAnnonce.url),
-          prixM2: Math.round(nouvelleAnnonce.prix / nouvelleAnnonce.surface),
+          prixM2: nouvelleAnnonce.surface > 0
+            ? Math.round(nouvelleAnnonce.prix / nouvelleAnnonce.surface)
+            : 0,
           dateAjout: new Date(),
           favori: false,
           ...nouvelleAnnonce,
@@ -184,8 +189,21 @@ export const useComparateurStore = create<ComparateurState>()(
             
             const updated = { ...ann, ...updates }
             // Recalculer prix/m² si prix ou surface modifié
-            if (updates.prix || updates.surface) {
-              updated.prixM2 = Math.round(updated.prix / updated.surface)
+            if ('prix' in updates || 'surface' in updates) {
+              updated.prixM2 = updated.surface > 0
+                ? Math.round(updated.prix / updated.surface)
+                : 0
+            }
+            // BUG-07 : Recalculer le département si le code postal change
+            if ('codePostal' in updates && updated.codePostal) {
+              const cp = updated.codePostal
+              if (cp.startsWith('97')) {
+                updated.departement = cp.substring(0, 3) // DOM-TOM
+              } else if (cp.startsWith('20')) {
+                updated.departement = parseInt(cp) < 20200 ? '2A' : '2B' // Corse
+              } else {
+                updated.departement = cp.substring(0, 2)
+              }
             }
             return updated
           })
@@ -325,6 +343,7 @@ export const useComparateurStore = create<ComparateurState>()(
           if (cleanedSelection.length !== state.annonceSelectionnees.length) {
             state.annonceSelectionnees = cleanedSelection
           }
+          state._hasHydrated = true
         }
       },
     }
@@ -346,15 +365,8 @@ export function isUnlocked(state: ComparateurState): boolean {
   if (!state.unlocked || !state.unlockedAt) return false
   // TTL expiré → re-verrouillé
   if (Date.now() - state.unlockedAt >= UNLOCK_TTL_MS) return false
-  // Sélection changée depuis le déblocage → re-verrouillé
-  if (state.unlockedForSelection) {
-    const currentSel = [...state.annonceSelectionnees].sort()
-    const unlockedSel = state.unlockedForSelection
-    if (currentSel.length !== unlockedSel.length ||
-        currentSel.some((id, i) => id !== unlockedSel[i])) {
-      return false
-    }
-  }
+  // L'utilisateur a donné son email → on ne re-verrouille plus en cas de
+  // changement de sélection. Le TTL 30j suffit pour le re-engagement.
   return true
 }
 
@@ -388,7 +400,7 @@ export function getAnnoncesFiltrees(state: ComparateurState): Annonce[] {
     const ordresDPE = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'NC']
     const indexMax = ordresDPE.indexOf(filtres.dpeMax)
     result = result.filter((a) => {
-      if (a.dpe === 'NC') return true // NC passe toujours
+      if (a.dpe === 'NC') return false // NC exclu quand un filtre DPE est actif
       return ordresDPE.indexOf(a.dpe) <= indexMax
     })
   }
@@ -440,17 +452,21 @@ export function calculerStatistiques(annonces: Annonce[]): StatistiquesComparais
   }
   
   const prix = annonces.map((a) => a.prix)
-  const prixM2 = annonces.map((a) => a.prixM2)
+  const validForPrixM2 = annonces.filter((a) => a.prixM2 > 0)
+  const prixM2 = validForPrixM2.map((a) => a.prixM2)
   const surfaces = annonces.map((a) => a.surface)
   
   const prixMin = Math.min(...prix)
   const prixMax = Math.max(...prix)
   const prixMoyen = Math.round(prix.reduce((sum, p) => sum + p, 0) / prix.length)
-  const prixM2Moyen = Math.round(prixM2.reduce((sum, p) => sum + p, 0) / prixM2.length)
+  const prixM2Moyen = prixM2.length > 0
+    ? Math.round(prixM2.reduce((sum, p) => sum + p, 0) / prixM2.length)
+    : 0
   const surfaceMoyenne = Math.round(surfaces.reduce((sum, s) => sum + s, 0) / surfaces.length)
   
   // Meilleur rapport qualité/prix = meilleur prix/m² avec surface > moyenne
-  const meilleursRapport = annonces
+  // BUG-09 : exclure les annonces avec prixM2 = 0 (surface non renseignée)
+  const meilleursRapport = validForPrixM2
     .filter((a) => a.surface >= surfaceMoyenne * 0.9) // Au moins 90% de la surface moyenne
     .sort((a, b) => a.prixM2 - b.prixM2)
   const meilleurRapportId = meilleursRapport[0]?.id

@@ -56,6 +56,43 @@ const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouest
 /** Sites protégés par anti-bot lourd (DataDome, Cloudflare) → Playwright en priorité */
 const SITES_CHROME_FIRST = ['logic-immo']
 export async function POST(request: NextRequest) {
+  // ── Global cascade timeout (55s — under Vercel's 60s Pro limit) ──
+  const GLOBAL_TIMEOUT_MS = 55_000
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => timeoutController.abort(), GLOBAL_TIMEOUT_MS)
+
+  try {
+    const result = await Promise.race([
+      handleExtraction(request),
+      new Promise<NextResponse>((_, reject) => {
+        timeoutController.signal.addEventListener('abort', () =>
+          reject(new Error('GLOBAL_TIMEOUT'))
+        )
+      }),
+    ])
+    return result
+  } catch (err) {
+    if (err instanceof Error && err.message === 'GLOBAL_TIMEOUT') {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'L\'extraction a pris trop de temps. Essayez de coller le texte de l\'annonce.',
+          autoFallback: true,
+        },
+        { status: 504 }
+      )
+    }
+    console.error('Erreur extraction annonce (global):', err)
+    return NextResponse.json(
+      { success: false, error: 'Erreur serveur lors de l\'extraction' },
+      { status: 500 }
+    )
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function handleExtraction(request: NextRequest): Promise<NextResponse> {
   try {
     // ── Rate Limiting ─────────────────────────────────────
     const ip = getClientIP(request.headers)
@@ -573,7 +610,7 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
         'Accept-Language': 'fr-FR,fr;q=0.9',
         'Referer': 'https://www.leboncoin.fr/',
         'Origin': 'https://www.leboncoin.fr',
-        'api_key': 'ba0c2dad52b3ec',
+        'api_key': process.env.LEBONCOIN_API_KEY || '',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-site',
@@ -814,7 +851,7 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
             'Accept-Language': 'fr-FR,fr;q=0.9',
             'Referer': 'https://www.leboncoin.fr/',
             'Origin': 'https://www.leboncoin.fr',
-            'api_key': 'ba0c2dad52b3ec',
+            'api_key': process.env.LEBONCOIN_API_KEY || '',
           },
           signal: AbortSignal.timeout(10000),
         })

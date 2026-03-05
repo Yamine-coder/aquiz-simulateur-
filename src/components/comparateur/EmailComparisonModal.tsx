@@ -139,9 +139,11 @@ export function EmailComparisonModal({
     wasOpen.current = isOpen
   }, [isOpen, initialEmail])
 
+  const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email.includes('@') || isSubmitting) return
+    if (!isValidEmail(email) || isSubmitting) return
 
     setIsSubmitting(true)
     setError(null)
@@ -166,8 +168,8 @@ export function EmailComparisonModal({
           balconTerrasse: a.balconTerrasse,
           cave: a.cave,
           // Scoring
-          scoreGlobal: score?.scoreGlobal ?? 50,
-          verdict: score?.verdict ?? 'Analyse en cours',
+          scoreGlobal: score ? score.scoreGlobal : null,
+          verdict: score?.verdict ?? 'Analyse en attente',
           recommandation: score?.recommandation ?? 'a_etudier',
           conseilPerso: score?.conseilPerso ?? '',
           confiance: score?.confiance ?? 0,
@@ -367,7 +369,7 @@ export function EmailComparisonModal({
 
                 <button
                   type="submit"
-                  disabled={isSubmitting || !email.includes('@')}
+                  disabled={isSubmitting || !isValidEmail(email)}
                   className="w-full flex items-center justify-center gap-2 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-aquiz-green/20"
                 >
                   {isSubmitting ? (

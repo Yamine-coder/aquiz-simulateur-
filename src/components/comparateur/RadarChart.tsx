@@ -9,8 +9,9 @@ import { useMemo } from 'react'
 
 interface RadarDataPoint {
   label: string
-  value: number // 0-100
+  value: number // 0-100, or -1 if unavailable
   color?: string
+  disponible?: boolean
 }
 
 interface RadarChartProps {
@@ -117,14 +118,21 @@ export function RadarChart({
     return data.map((bien) => {
       const values = DIMENSIONS.map((dim) => {
         const point = bien.valeurs.find((v) => v.label === dim.key)
+        // Si l'axe est indisponible (disponible === false ou value === -1), utiliser 0
+        if (point?.disponible === false || point?.value === -1) return 0
         return point?.value ?? 50
+      })
+      const indisponibles = DIMENSIONS.map((dim) => {
+        const point = bien.valeurs.find((v) => v.label === dim.key)
+        return point?.disponible === false || point?.value === -1
       })
       return {
         id: bien.id,
         nom: bien.nom,
         couleur: bien.couleur,
         path: generateRadarPath(values, center, center, maxRadius),
-        values
+        values,
+        indisponibles,
       }
     })
   }, [data, center, maxRadius])
@@ -187,6 +195,7 @@ export function RadarChart({
               {/* Points sur les sommets */}
               {DIMENSIONS.map((dim, i) => {
                 const value = poly.values[i]
+                const isUnavailable = poly.indisponibles[i]
                 const radius = (value / 100) * maxRadius
                 const angle = i * angleStep
                 const point = polarToCartesian(center, center, radius, angle)
@@ -195,10 +204,11 @@ export function RadarChart({
                     key={`${poly.id}-${dim.key}`}
                     cx={point.x}
                     cy={point.y}
-                    r={4}
-                    fill={poly.couleur}
+                    r={isUnavailable ? 3 : 4}
+                    fill={isUnavailable ? '#9CA3AF' : poly.couleur}
                     stroke="white"
                     strokeWidth={2}
+                    opacity={isUnavailable ? 0.5 : 1}
                   />
                 )
               })}

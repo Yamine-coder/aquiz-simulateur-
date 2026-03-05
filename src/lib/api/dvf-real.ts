@@ -51,10 +51,20 @@ export interface DVFStatsCommune {
   dateCalcul: string
 }
 
+/** Transaction individuelle allégée pour filtrage surface */
+export interface DVFTransactionSlim {
+  codePostal: string
+  typeLocal: 'Appartement' | 'Maison'
+  surface: number
+  prixM2: number
+}
+
 export interface DVFDepartementStats {
   codeDepartement: string
   nomDepartement: string
   communes: DVFStatsCommune[]
+  /** Transactions individuelles pour filtrage par surface à la demande */
+  transactions: DVFTransactionSlim[]
   nbTotalVentes: number
   prixM2MedianGlobal: number
   dateMAJ: string
@@ -65,7 +75,9 @@ export interface DVFDepartementStats {
 // ============================================
 
 const DVF_BASE_URL = 'https://files.data.gouv.fr/geo-dvf/latest/csv'
-const ANNEE_COURANTE = 2025 // Données les plus récentes disponibles (mise à jour trimestrielle)
+// DVF publie les données l'année suivante (ex. transactions 2025 publiées courant 2026)
+// On prend l'année courante - 1 pour être sûr d'avoir des données complètes
+const ANNEE_COURANTE = new Date().getFullYear() - 1
 
 // Départements IDF
 const DEPARTEMENTS_IDF = ['75', '77', '78', '91', '92', '93', '94', '95']
@@ -147,7 +159,7 @@ function parseCSVLine(line: string, headers: string[]): DVFMutation | null {
 /**
  * Calcule la médiane d'un tableau de nombres
  */
-function calculerMediane(values: number[]): number {
+export function calculerMediane(values: number[]): number {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
@@ -155,26 +167,39 @@ function calculerMediane(values: number[]): number {
 }
 
 /**
- * Parse le CSV complet et retourne les mutations
+ * Parse le CSV complet et retourne les mutations (dédupliquées par id_mutation)
+ * 
+ * DVF peut avoir plusieurs lignes par mutation (multi-lots : appart + parking, etc.)
+ * On garde la ligne avec la plus grande surface par id_mutation (le bien principal)
  */
 function parseCSV(csvContent: string): DVFMutation[] {
   const lines = csvContent.split('\n')
   if (lines.length < 2) return []
   
   const headers = lines[0].split(',').map(h => h.trim())
-  const mutations: DVFMutation[] = []
   
+  // Phase 1 : parser toutes les lignes valides
+  const allMutations: DVFMutation[] = []
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
     if (!line) continue
-    
     const mutation = parseCSVLine(line, headers)
     if (mutation) {
-      mutations.push(mutation)
+      allMutations.push(mutation)
     }
   }
   
-  return mutations
+  // Phase 2 : dédupliquer par id_mutation (garder la plus grande surface)
+  const byMutation = new Map<string, DVFMutation>()
+  for (const m of allMutations) {
+    const key = m.id_mutation || `${m.valeur_fonciere}_${m.date_mutation}_${m.code_commune}`
+    const existing = byMutation.get(key)
+    if (!existing || m.surface_reelle_bati > existing.surface_reelle_bati) {
+      byMutation.set(key, m)
+    }
+  }
+  
+  return Array.from(byMutation.values())
 }
 
 /**
@@ -254,12 +279,17 @@ export async function fetchDVFDepartement(
 ): Promise<DVFDepartementStats> {
   const url = `${DVF_BASE_URL}/${annee}/departements/${codeDepartement}.csv.gz`
   
-  console.info(`[DVF] Fetch dept ${codeDepartement}`)
+  console.info(`[DVF] Fetch dept ${codeDepartement} (année ${annee})`)
   
   try {
     const response = await fetch(url)
     
     if (!response.ok) {
+      // Fallback : essayer l'année précédente (DVF publie avec retard)
+      if (annee === ANNEE_COURANTE) {
+        console.warn(`[DVF] Données ${annee} indisponibles pour dept ${codeDepartement}, essai ${annee - 1}`)
+        return fetchDVFDepartement(codeDepartement, annee - 1)
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
@@ -292,10 +322,19 @@ export async function fetchDVFDepartement(
     // Calculer prix médian global du département
     const tousLesPrix = mutations.map(m => m.valeur_fonciere / m.surface_reelle_bati)
     
+    // Stocker les transactions individuelles (allégées) pour filtrage surface
+    const transactions: DVFTransactionSlim[] = mutations.map(m => ({
+      codePostal: m.code_postal,
+      typeLocal: m.type_local as 'Appartement' | 'Maison',
+      surface: m.surface_reelle_bati,
+      prixM2: Math.round(m.valeur_fonciere / m.surface_reelle_bati)
+    }))
+    
     return {
       codeDepartement,
       nomDepartement: NOMS_DEPARTEMENTS[codeDepartement] || codeDepartement,
       communes: Array.from(statsParCommune.values()),
+      transactions,
       nbTotalVentes: mutations.length,
       prixM2MedianGlobal: Math.round(calculerMediane(tousLesPrix)),
       dateMAJ: new Date().toISOString()

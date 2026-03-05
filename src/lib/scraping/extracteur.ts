@@ -648,7 +648,15 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   // Pour les checks basés sur le texte (non-JSON), on utilise uniquement la description
   // et le titre pour éviter les faux positifs depuis le footer/nav/pubs.
   // Les patterns JSON restent sur le HTML complet (données structurées fiables).
-  const contentText = ((data.description || '') + ' ' + (data.titre || '')).toLowerCase()
+  let contentText = ((data.description || '') + ' ' + (data.titre || '')).toLowerCase()
+
+  // Fallback : si aucune description/titre n'a été trouvé, utiliser le texte du body
+  if (contentText.trim().length < 5) {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
+    if (bodyMatch) {
+      contentText = bodyMatch[1].replace(/<[^>]+>/g, ' ').toLowerCase()
+    }
+  }
   
   // Ascenseur
   if (/"ascenseur"\s*:\s*true/i.test(html) ||

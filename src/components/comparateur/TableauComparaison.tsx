@@ -18,7 +18,7 @@ import {
     calculerScorePro,
 } from '@/lib/comparateur/scoreComparateur'
 import { toEnrichiesScoring } from '@/lib/comparateur/toEnrichiesScoring'
-import type { Annonce, StatistiquesComparaison } from '@/types/annonces'
+import type { Annonce, NouvelleAnnonce, StatistiquesComparaison } from '@/types/annonces'
 import { COULEURS_DPE } from '@/types/annonces'
 import {
     Building2,
@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useMemo, useRef } from 'react'
+import { EditableCell, type EditableFieldType } from './EditableCell'
 import { MiniRadar } from './MiniRadar'
 import { LineBadge, TypeBadge } from './TransportIcons'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
@@ -83,19 +84,32 @@ interface TableauComparaisonProps {
   apport?: number
 }
 
-/** Ligne de comparaison - Design épuré */
+/** Configuration pour l'édition inline d'une ligne */
+interface EditConfig {
+  annonceIds: string[]
+  rawValues: unknown[]
+  field: keyof NouvelleAnnonce
+  fieldType: EditableFieldType
+  suffix?: string
+  placeholder?: string
+}
+
+/** Ligne de comparaison - Design épuré + édition inline */
 function LigneComparaison({
   label,
   values,
   format = 'text',
   highlight = 'none',
-  muted = false
+  muted = false,
+  editConfig,
 }: {
   label: string
   values: (string | number | boolean | React.ReactNode | undefined)[]
   format?: 'text' | 'prix' | 'dpe' | 'boolean'
   highlight?: 'min' | 'max' | 'none'
   muted?: boolean
+  /** Si fourni, les cellules vides affichent un bouton "Ajouter" cliquable */
+  editConfig?: EditConfig
 }) {
   // Trouver la meilleure valeur
   const numericValues = values.map((v) => typeof v === 'number' ? v : null)
@@ -112,23 +126,41 @@ function LigneComparaison({
   }
   
   const formatValue = (value: string | number | boolean | React.ReactNode | undefined, index: number) => {
+    // ─── Valeur manquante ───
     if (value === undefined || value === null) {
+      // Si editConfig → bouton "Ajouter" cliquable
+      if (editConfig) {
+        return (
+          <EditableCell
+            annonceId={editConfig.annonceIds[index]}
+            field={editConfig.field}
+            fieldType={editConfig.fieldType}
+            rawValue={editConfig.rawValues[index]}
+            suffix={editConfig.suffix}
+            placeholder={editConfig.placeholder}
+          />
+        )
+      }
       return <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
     }
     
     const isBest = index === bestIndex
     
+    // ─── Contenu formaté normal ───
+    let displayNode: React.ReactNode
     switch (format) {
       case 'prix':
-        return (
+        displayNode = (
           <span className={`font-medium ${isBest ? 'text-aquiz-green' : 'text-aquiz-black'}`}>
             {typeof value === 'number' ? value.toLocaleString('fr-FR') : value} €
           </span>
         )
+        break
       case 'dpe':
-        return value
+        displayNode = value
+        break
       case 'boolean':
-        return value ? (
+        displayNode = value ? (
           <div className="flex justify-center">
             <div className="w-6 h-6 rounded-full bg-aquiz-green/10 flex items-center justify-center">
               <Check className="w-4 h-4 text-aquiz-green" />
@@ -141,9 +173,28 @@ function LigneComparaison({
             </div>
           </div>
         )
+        break
       default:
-        return <span className={isBest ? 'font-semibold text-aquiz-green' : ''}>{String(value)}</span>
+        displayNode = <span className={isBest ? 'font-semibold text-aquiz-green' : ''}>{String(value)}</span>
     }
+
+    // ─── Si editConfig → wrapping avec edit au hover ───
+    if (editConfig) {
+      return (
+        <EditableCell
+          annonceId={editConfig.annonceIds[index]}
+          field={editConfig.field}
+          fieldType={editConfig.fieldType}
+          rawValue={editConfig.rawValues[index]}
+          suffix={editConfig.suffix}
+          placeholder={editConfig.placeholder}
+        >
+          {displayNode}
+        </EditableCell>
+      )
+    }
+
+    return displayNode
   }
   
   return (
@@ -438,11 +489,27 @@ export function TableauComparaison({
           <LigneComparaison
             label="Charges / mois"
             values={annonces.map((a) => a.chargesMensuelles ? `${a.chargesMensuelles} €` : undefined)}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.chargesMensuelles),
+              field: 'chargesMensuelles',
+              fieldType: 'number',
+              suffix: '€/mois',
+              placeholder: 'Ex: 150',
+            }}
           />
           
           <LigneComparaison
             label="Taxe foncière / an"
             values={annonces.map((a) => a.taxeFonciere ? `${a.taxeFonciere} €` : undefined)}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.taxeFonciere),
+              field: 'taxeFonciere',
+              fieldType: 'number',
+              suffix: '€/an',
+              placeholder: 'Ex: 1200',
+            }}
           />
 
           {/* Prix vs Marché (DVF) */}
@@ -464,15 +531,35 @@ export function TableauComparaison({
             {annonces.map((a) => {
               const enrichie = getAnalyseEnrichie(a.id)
               const ecart = enrichie?.marche?.success ? enrichie.marche.ecartPrixM2 : undefined
+              const medianMarche = enrichie?.marche?.success ? enrichie.marche.prixM2MedianMarche : undefined
+              const avertissement = enrichie?.marche?.avertissement
               const loading = loadingIds.has(a.id)
               return (
                 <td key={a.id} className="py-3.5 px-4 text-center text-sm">
                   {ecart !== undefined ? (
-                    <span className={`font-semibold ${
-                      ecart <= -5 ? 'text-green-600' : ecart <= 5 ? 'text-aquiz-gray-dark' : ecart <= 15 ? 'text-amber-500' : 'text-red-500'
-                    }`}>
-                      {ecart > 0 ? '+' : ''}{Math.round(ecart)}%
-                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-col items-center gap-0.5 cursor-help">
+                          <span className={`font-semibold ${
+                            ecart <= -5 ? 'text-green-600' : ecart <= 5 ? 'text-aquiz-gray-dark' : ecart <= 15 ? 'text-amber-500' : 'text-red-500'
+                          }`}>
+                            {ecart > 0 ? '+' : ''}{Math.round(ecart)}%
+                          </span>
+                          {medianMarche && (
+                            <span className="text-[9px] text-aquiz-gray-light">
+                              méd. {Math.round(medianMarche).toLocaleString('fr-FR')} €/m²
+                            </span>
+                          )}
+                          {avertissement && (
+                            <span className="text-[8px] text-amber-400">≈</span>
+                          )}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs">
+                        <p>Écart de {ecart > 0 ? '+' : ''}{Math.round(ecart)}% vs médiane DVF{medianMarche ? ` (${Math.round(medianMarche).toLocaleString('fr-FR')} €/m²)` : ''}</p>
+                        {avertissement && <p className="text-amber-500 mt-1">⚠ {avertissement}</p>}
+                      </TooltipContent>
+                    </Tooltip>
                   ) : loading ? (
                     <div className="flex flex-col items-center gap-1">
                       <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin" />
@@ -607,21 +694,48 @@ export function TableauComparaison({
               if (a.etage) return a.etagesTotal ? `${a.etage}/${a.etagesTotal}` : `${a.etage}e`
               return undefined
             })}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.etage),
+              field: 'etage',
+              fieldType: 'number',
+              placeholder: 'Ex: 3',
+            }}
           />
 
           <LigneComparaison
             label="Année de construction"
             values={annonces.map((a) => a.anneeConstruction ? String(a.anneeConstruction) : undefined)}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.anneeConstruction),
+              field: 'anneeConstruction',
+              fieldType: 'number',
+              placeholder: 'Ex: 1985',
+            }}
           />
 
           <LigneComparaison
             label="Orientation"
             values={annonces.map((a) => a.orientation || undefined)}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.orientation),
+              field: 'orientation',
+              fieldType: 'orientation',
+            }}
           />
 
           <LigneComparaison
             label="Salles de bains"
             values={annonces.map((a) => a.nbSallesBains || undefined)}
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.nbSallesBains),
+              field: 'nbSallesBains',
+              fieldType: 'number',
+              placeholder: 'Ex: 1',
+            }}
           />
           
           {/* Section Localisation & Risques */}
@@ -782,13 +896,18 @@ export function TableauComparaison({
             <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">Diagnostic DPE</td>
             {annonces.map((a) => (
               <td key={a.id} className="py-3.5 px-4 text-center">
-                {a.dpe && a.dpe !== 'NC' ? (
-                  <Badge className={`${COULEURS_DPE[a.dpe]} text-white text-xs`}>
-                    Classe {a.dpe}
-                  </Badge>
-                ) : (
-                  <span className="text-aquiz-gray text-xs">Non renseigné</span>
-                )}
+                <EditableCell
+                  annonceId={a.id}
+                  field="dpe"
+                  fieldType="dpe"
+                  rawValue={a.dpe && a.dpe !== 'NC' ? a.dpe : undefined}
+                >
+                  {a.dpe && a.dpe !== 'NC' ? (
+                    <Badge className={`${COULEURS_DPE[a.dpe]} text-white text-xs`}>
+                      Classe {a.dpe}
+                    </Badge>
+                  ) : null}
+                </EditableCell>
               </td>
             ))}
           </tr>
@@ -797,13 +916,18 @@ export function TableauComparaison({
             <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">Émissions GES</td>
             {annonces.map((a) => (
               <td key={a.id} className="py-3.5 px-4 text-center">
-                {a.ges && a.ges !== 'NC' ? (
-                  <Badge className={`${COULEURS_DPE[a.ges]} text-white text-xs`}>
-                    Classe {a.ges}
-                  </Badge>
-                ) : (
-                  <span className="text-aquiz-gray text-xs">—</span>
-                )}
+                <EditableCell
+                  annonceId={a.id}
+                  field="ges"
+                  fieldType="dpe"
+                  rawValue={a.ges && a.ges !== 'NC' ? a.ges : undefined}
+                >
+                  {a.ges && a.ges !== 'NC' ? (
+                    <Badge className={`${COULEURS_DPE[a.ges]} text-white text-xs`}>
+                      Classe {a.ges}
+                    </Badge>
+                  ) : null}
+                </EditableCell>
               </td>
             ))}
           </tr>
@@ -822,24 +946,48 @@ export function TableauComparaison({
             label="Balcon / Terrasse"
             values={annonces.map((a) => a.balconTerrasse)}
             format="boolean"
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.balconTerrasse),
+              field: 'balconTerrasse',
+              fieldType: 'boolean',
+            }}
           />
           
           <LigneComparaison
             label="Parking / Garage"
             values={annonces.map((a) => a.parking)}
             format="boolean"
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.parking),
+              field: 'parking',
+              fieldType: 'boolean',
+            }}
           />
           
           <LigneComparaison
             label="Ascenseur"
             values={annonces.map((a) => a.type === 'appartement' ? a.ascenseur : undefined)}
             format="boolean"
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.ascenseur),
+              field: 'ascenseur',
+              fieldType: 'boolean',
+            }}
           />
           
           <LigneComparaison
             label="Cave"
             values={annonces.map((a) => a.cave)}
             format="boolean"
+            editConfig={{
+              annonceIds: annonces.map((a) => a.id),
+              rawValues: annonces.map((a) => a.cave),
+              field: 'cave',
+              fieldType: 'boolean',
+            }}
           />
           
           {/* Comparaison budget si disponible */}

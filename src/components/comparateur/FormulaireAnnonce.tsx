@@ -100,6 +100,8 @@ export function FormulaireAnnonce({
   const [pastedText, setPastedText] = useState('')
   const [urlInput, setUrlInput] = useState('')
   const [isExtracting, setIsExtracting] = useState(false)
+  /** Ref guard to prevent concurrent extract calls (React state is async) */
+  const extractingRef = useRef(false)
   const [extractError, setExtractError] = useState<string | null>(null)
   const [extractSuccess, setExtractSuccess] = useState(false)
   const [extractCount, setExtractCount] = useState(0)
@@ -190,11 +192,13 @@ export function FormulaireAnnonce({
 
   // ===== EXTRACTION DEPUIS URL (via API + Jina Reader) =====
   const handleExtractUrl = async () => {
+    if (extractingRef.current) return
     if (!urlInput.trim()) {
       setExtractError('Collez l\'URL de l\'annonce')
       return
     }
     
+    extractingRef.current = true
     setIsExtracting(true)
     setExtractError(null)
     setExtractSuccess(false)
@@ -236,19 +240,24 @@ export function FormulaireAnnonce({
       setExtractError('Erreur de connexion. Vérifiez votre connexion internet.')
     } finally {
       setIsExtracting(false)
+      extractingRef.current = false
     }
   }
 
   // ===== EXTRACTION DEPUIS TEXTE COLLÉ =====
   const handleExtractFromText = async () => {
+    if (extractingRef.current) return
     if (!pastedText.trim()) {
       setExtractError('Collez le contenu de l\'annonce')
       return
     }
     
+    extractingRef.current = true
+    setIsExtracting(true)
     setExtractError(null)
     setExtractSuccess(false)
     
+    try {
     const data = parseTexteAnnonce(pastedText)
     
     // Enrichir avec les images extraites du HTML clipboard (og:image, <img>)
@@ -298,6 +307,10 @@ export function FormulaireAnnonce({
     setExtractSuccess(true)
     setAssistantMode(false)
     setActiveTab('manuel')
+    } finally {
+      setIsExtracting(false)
+      extractingRef.current = false
+    }
   }
   
   // ===== SOUMISSION =====
@@ -488,6 +501,9 @@ export function FormulaireAnnonce({
                 setPastedText(e.target.value)
                 setExtractError(null)
                 setExtractSuccess(false)
+                // BUG-3 : invalider le HTML clipboard si l'utilisateur tape manuellement
+                // (évite d'extraire les images d'un ancien copier-coller)
+                clipboardHtmlRef.current = ''
               }}
               // Auto-extract dès qu'on colle du texte en mode assistant
               onPaste={(e) => {
@@ -542,6 +558,8 @@ export function FormulaireAnnonce({
                         setExtractSuccess(true)
                         setAssistantMode(false)
                         setActiveTab('manuel')
+                      } else {
+                        setExtractError('Aucune donnée reconnue dans le texte collé. Essayez de copier uniquement la description de l\'annonce.')
                       }
                     }, 50)
                   }
@@ -558,11 +576,17 @@ export function FormulaireAnnonce({
             <Button
               type="button"
               onClick={handleExtractFromText}
-              disabled={!pastedText.trim()}
+              disabled={isExtracting || !pastedText.trim()}
               className="w-full bg-aquiz-green hover:bg-aquiz-green/85 active:scale-[0.98] h-11 rounded-lg text-white text-sm font-semibold shadow-sm transition-all duration-150 disabled:opacity-35 disabled:pointer-events-none"
             >
-              <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
-              Extraire les données
+              {isExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <ScanSearch className="h-3.5 w-3.5 mr-1.5" />
+                  Extraire les données
+                </>
+              )}
             </Button>
           </div>
           

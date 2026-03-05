@@ -102,6 +102,7 @@ export interface DonneesEnrichiesScoring {
   }
   risques?: {
     success: boolean
+    /** Score de risque 0-100 (100 = sûr, 0 = très risqué) */
     scoreRisque?: number
     verdict?: 'sûr' | 'vigilance' | 'risqué'
     zoneInondable?: boolean
@@ -109,11 +110,17 @@ export interface DonneesEnrichiesScoring {
   }
   quartier?: {
     success: boolean
+    /** Score global quartier 0-100 (pondéré OSM) */
     scoreQuartier?: number
+    /** Score transports 0-100 */
     transports?: number
+    /** Score commerces 0-100 */
     commerces?: number
+    /** Score écoles/éducation 0-100 */
     ecoles?: number
+    /** Score santé 0-100 */
     sante?: number
+    /** Score espaces verts 0-100 */
     espaceVerts?: number
     transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }>
   }
@@ -237,6 +244,11 @@ function estimerBudgetTravaux(anneeConstruction?: number, dpe?: ClasseDPE, surfa
  * On utilise le code postal pour approximer la zone
  */
 function estimerLoyerMensuel(prix: number, codePostal: string): number {
+  // Guard: code postal vide ou invalide → fallback moyenne nationale
+  if (!codePostal || codePostal.length < 2) {
+    return Math.round(prix * 0.004) // ~0.4% = moyenne nationale
+  }
+
   const cp = parseInt(codePostal.substring(0, 2))
   
   let ratioMensuel: number
@@ -483,9 +495,10 @@ function scorerEnergie(
   const coutM2 = COUT_ENERGIE_M2_AN[annonce.dpe] ?? 20
   const coutAnnuel = Math.round(coutM2 * annonce.surface)
 
-  // Score composite : 70% DPE + 30% coût relatif
-  // Coût annuel : <500€ = 100, 3000€+ = 0
-  const scoreCout = Math.round(Math.max(0, Math.min(100, 100 - (coutAnnuel / 30))))
+  // Score composite : 70% DPE + 30% coût/m² relatif
+  // Normalisé par m² pour ne pas pénaliser les grandes surfaces
+  // DPE G max = 38€/m²/an → score 0, DPE A = 4€/m²/an → score ~90
+  const scoreCout = Math.round(Math.max(0, Math.min(100, 100 - (coutM2 / 0.38))))
   const score = Math.round(scoreDpe * 0.7 + scoreCout * 0.3)
 
   const points: PointAnalysePro[] = []
@@ -1424,6 +1437,14 @@ export function calculerScorePro(
   }
   scoreGlobal = poidsEffectifTotal > 0 ? Math.round(scoreGlobal / poidsEffectifTotal) : 50
 
+  // 3b. Pénalité de confiance : les scores basés sur peu d'axes tendent vers 50
+  const confiance = Math.round(axesDisponibles.length / tousAxes.length * 100)
+  if (confiance < 70) {
+    // Facteur de pénalité : 70% confiance = facteur 0.85, 40% = facteur 0.7
+    const facteur = 0.5 + (confiance / 200)
+    scoreGlobal = Math.round(50 + (scoreGlobal - 50) * facteur)
+  }
+
   // 4. Bonus/malus budget (hors axes, impact direct)
   if (budgetMax && budgetMax > 0) {
     const pourcent = (annonce.prix / budgetMax) * 100
@@ -1495,8 +1516,7 @@ export function calculerScorePro(
     recommandation = 'deconseille'
   }
 
-  // 7. Confiance (calculé en amont pour usage dans le conseil)
-  const confiance = Math.round((axesDisponibles.length / tousAxes.length) * 100)
+  // 7. Confiance (déjà calculé en 3b pour la pénalité)
 
   // 8. Conseil personnalisé intelligent — 15+ branches avec données spécifiques
   const avantages = points.filter(p => p.type === 'avantage')
@@ -1634,8 +1654,12 @@ export function genererSyntheseComparaison(
     const scoreMoyen = Math.round(resultats.reduce((s, r) => s + r.scoreGlobal, 0) / resultats.length)
 
     if (ecart >= 15) {
-      syntheseGlobale = `Un bien se démarque nettement : ${meilleur.scoreGlobal}/100 (${meilleur.verdict}) vs ${deuxieme.scoreGlobal}/100 pour le 2e.`
-      conseilGeneral = `Écart de ${ecart} points — le meilleur a un avantage significatif. Priorisez-le pour la visite.`
+      const confGap = Math.abs((meilleur.confiance ?? 100) - (deuxieme.confiance ?? 100))
+      const caveat = confGap > 30 ? ' (attention : niveaux de données très différents)' : ''
+      syntheseGlobale = `Un bien se démarque nettement : ${meilleur.scoreGlobal}/100 (${meilleur.verdict}) vs ${deuxieme.scoreGlobal}/100 pour le 2e.${caveat}`
+      conseilGeneral = confGap > 30
+        ? `Écart de ${ecart} points, mais le score du 1er repose sur moins de données. Demandez les informations manquantes avant de conclure.`
+        : `Écart de ${ecart} points — le meilleur a un avantage significatif. Priorisez-le pour la visite.`
     } else if (ecart >= 8) {
       syntheseGlobale = `Le meilleur obtient ${meilleur.scoreGlobal}/100 (${meilleur.verdict}), talonné par le 2e à ${deuxieme.scoreGlobal}/100.`
       conseilGeneral = 'Léger avantage pour le 1er, mais visitez les deux pour trancher sur le terrain.'
@@ -1669,24 +1693,27 @@ export const RADAR_AXES = [
  * Convertit un ScoreComparateurResult en données pour le RadarChart
  * Regroupe les 10 axes en 6 pour la lisibilité visuelle
  */
-export function scoreToRadarData(result: ScoreComparateurResult): Array<{ label: string; value: number }> {
+export function scoreToRadarData(result: ScoreComparateurResult): Array<{ label: string; value: number; disponible: boolean }> {
   const getAxe = (axe: AxeScoring) => result.axes.find(a => a.axe === axe)
+  const axeDispo = (axe: AxeScoring) => getAxe(axe)?.disponible ?? false
+  /** Score effectif : utilise le vrai score si dispo, sinon 0 pour les axes du radar */
+  const scoreOuAbsent = (axe: AxeScoring) => axeDispo(axe) ? (getAxe(axe)?.score ?? 50) : 0
 
   return [
-    { label: 'prix', value: getAxe('prixMarche')?.score ?? 50 },
-    { label: 'quartier', value: getAxe('emplacement')?.score ?? 50 },
-    { label: 'transports', value: getAxe('transports')?.score ?? 50 },
-    { label: 'energie', value: getAxe('energie')?.score ?? 50 },
+    { label: 'prix', value: scoreOuAbsent('prixMarche'), disponible: axeDispo('prixMarche') },
+    { label: 'quartier', value: scoreOuAbsent('emplacement'), disponible: axeDispo('emplacement') },
+    { label: 'transports', value: scoreOuAbsent('transports'), disponible: axeDispo('transports') },
+    { label: 'energie', value: scoreOuAbsent('energie'), disponible: axeDispo('energie') },
     { label: 'confort', value: moyennePonderee([
-      { score: getAxe('etatBien')?.score ?? 50, poids: 2 },
-      { score: getAxe('equipements')?.score ?? 50, poids: 1.5 },
-      { score: getAxe('surface')?.score ?? 50, poids: 1 },
-    ]) },
+      { score: getAxe('etatBien')?.score ?? 50, poids: axeDispo('etatBien') ? 2 : 0 },
+      { score: getAxe('equipements')?.score ?? 50, poids: axeDispo('equipements') ? 1.5 : 0 },
+      { score: getAxe('surface')?.score ?? 50, poids: axeDispo('surface') ? 1 : 0 },
+    ]), disponible: axeDispo('etatBien') || axeDispo('equipements') || axeDispo('surface') },
     { label: 'budget', value: moyennePonderee([
-      { score: getAxe('charges')?.score ?? 50, poids: 1 },
-      { score: getAxe('rendement')?.score ?? 50, poids: 0.5 },
-      { score: getAxe('plusValue')?.score ?? 50, poids: 0.5 },
-    ]) },
+      { score: getAxe('charges')?.score ?? 50, poids: axeDispo('charges') ? 1 : 0 },
+      { score: getAxe('rendement')?.score ?? 50, poids: axeDispo('rendement') ? 0.5 : 0 },
+      { score: getAxe('plusValue')?.score ?? 50, poids: axeDispo('plusValue') ? 0.5 : 0 },
+    ]), disponible: axeDispo('charges') || axeDispo('rendement') || axeDispo('plusValue') },
   ]
 }
 

@@ -25,22 +25,26 @@ const CATEGORIES = {
   commerce: {
     label: 'Commerces',
     poids: 20,
-    amenities: ['supermarket', 'bakery', 'pharmacy', 'bank', 'post_office', 'convenience']
+    // Restaurants/cafés = commerces de proximité (logique métier immobilier FR)
+    amenities: ['supermarket', 'bakery', 'bank', 'post_office', 'convenience', 'marketplace', 'restaurant', 'cafe']
   },
   education: {
     label: 'Éducation',
     poids: 20,
-    amenities: ['school', 'kindergarten', 'college', 'university', 'library']
+    // Crèche (childcare) ajoutée — critère majeur pour familles
+    amenities: ['school', 'kindergarten', 'college', 'university', 'library', 'childcare']
   },
   sante: {
     label: 'Santé',
     poids: 15,
-    amenities: ['hospital', 'clinic', 'doctors', 'dentist', 'pharmacy']
+    // Inclut amenity=* ET healthcare=* (doctor = healthcare:doctor, doctors = amenity:doctors)
+    amenities: ['hospital', 'clinic', 'doctors', 'doctor', 'dentist', 'pharmacy']
   },
   loisirs: {
-    label: 'Loisirs',
+    label: 'Loisirs & Culture',
     poids: 10,
-    amenities: ['cinema', 'theatre', 'restaurant', 'cafe', 'bar', 'sports_centre', 'gym']
+    // Restaurants/cafés déplacés vers commerce — ici uniquement culture/sport
+    amenities: ['cinema', 'theatre', 'bar', 'sports_centre', 'fitness_centre']
   },
   vert: {
     label: 'Espaces verts',
@@ -102,7 +106,11 @@ function determinerCategorie(amenity: string): string {
   }
   if (['park', 'garden', 'playground'].includes(amenity)) return 'vert'
   if (['station', 'halt', 'tram_stop', 'subway_entrance', 'bus_stop', 'rer_station', 'stop_position', 'platform', 'stop'].includes(amenity)) return 'transport'
-  if (['supermarket', 'bakery', 'convenience'].includes(amenity)) return 'commerce'
+  if (['supermarket', 'bakery', 'convenience', 'marketplace', 'restaurant', 'cafe'].includes(amenity)) return 'commerce'
+  // healthcare tags: doctor (sans s) = healthcare:doctor dans OSM
+  if (['doctor', 'doctors', 'dentist', 'clinic', 'hospital'].includes(amenity)) return 'sante'
+  if (['childcare'].includes(amenity)) return 'education'
+  if (['fitness_centre', 'sports_centre'].includes(amenity)) return 'loisirs'
   return 'loisirs'
 }
 
@@ -132,7 +140,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Vérifier le cache serveur (v2 : inclut rayon transport lourd dans la clé)
-    const cacheKey = `v21_${lat}_${lon}_${rayon}`
+    const cacheKey = `v22_${lat}_${lon}_${rayon}`
     const cached = quartierCache.get(cacheKey)
     if (cached) {
       return NextResponse.json(cached)
@@ -154,10 +162,15 @@ export async function GET(request: NextRequest) {
       (
         node["amenity"~"${allAmenities}"](around:${rayon},${lat},${lon});
         way["amenity"~"${allAmenities}"](around:${rayon},${lat},${lon});
-        node["leisure"~"park|garden|playground"](around:${rayon},${lat},${lon});
-        way["leisure"~"park|garden|playground"](around:${rayon},${lat},${lon});
+        node["healthcare"~"doctor|clinic|dentist|hospital|pharmacy"](around:${rayon},${lat},${lon});
+        way["healthcare"~"doctor|clinic|dentist|hospital|pharmacy"](around:${rayon},${lat},${lon});
+        node["leisure"~"park|garden|playground|fitness_centre|sports_centre"](around:${rayon},${lat},${lon});
+        way["leisure"~"park|garden|playground|fitness_centre|sports_centre"](around:${rayon},${lat},${lon});
         node["highway"="bus_stop"](around:${rayon},${lat},${lon});
         node["shop"~"supermarket|bakery|convenience"](around:${rayon},${lat},${lon});
+        node["amenity"="marketplace"](around:${rayon},${lat},${lon});
+        node["amenity"="childcare"](around:${rayon},${lat},${lon});
+        node["social_facility"="day_care"](around:${rayon},${lat},${lon});
         node["amenity"="bicycle_rental"](around:${rayon},${lat},${lon});
         node["railway"~"station|halt"](around:${rayon},${lat},${lon});
       );
@@ -309,7 +322,8 @@ export async function GET(request: NextRequest) {
         
         if (!poiLat || !poiLon) continue
         
-        const amenity = tags.amenity || tags.leisure || tags.railway || tags.highway || tags.shop || tags.public_transport
+        const amenity = tags.amenity || tags.healthcare || tags.leisure || tags.railway || tags.highway || tags.shop || tags.public_transport
+          || (tags.social_facility === 'day_care' ? 'childcare' : undefined)
         if (!amenity) continue
         
         // Ignorer les entrées de gare (ce sont des accès, pas des stations)
@@ -426,22 +440,57 @@ export async function GET(request: NextRequest) {
         pois.push({ type: enrichedType, nom, categorie, distance: Math.round(distance), lignes, operateur, couleur, originalType: amenity })
     }
 
+    // ── Post-traitement : dédupliquer les arrêts de bus proches (< 50m) ──
+    // Un même arrêt physique génère 2+ nœuds OSM (un par direction)
+    const busStops = pois.filter(p => p.type === 'bus_stop' && p.categorie === 'transport')
+    const removedBusIds = new Set<number>()
+    for (let i = 0; i < busStops.length; i++) {
+      if (removedBusIds.has(i)) continue
+      for (let j = i + 1; j < busStops.length; j++) {
+        if (removedBusIds.has(j)) continue
+        // Même arrêt si distance inter-nœuds < 50m (approximation via distance au centre)
+        const distDiff = Math.abs(busStops[i].distance - busStops[j].distance)
+        const sameName = busStops[i].nom && busStops[j].nom && busStops[i].nom === busStops[j].nom
+        if (sameName || distDiff < 50) {
+          // Fusionner les lignes dans le survivant
+          if (busStops[j].lignes) {
+            if (!busStops[i].lignes) busStops[i].lignes = []
+            for (const l of busStops[j].lignes) {
+              if (!busStops[i].lignes.includes(l)) busStops[i].lignes.push(l)
+            }
+          }
+          removedBusIds.add(j)
+        }
+      }
+    }
+    // Retirer les bus stops dédupliqués
+    const busStopsToRemove = new Set(removedBusIds)
+    const busStopIndices = busStops.map((_, idx) => idx)
+    const busStopsInPois = pois.filter(p => p.type === 'bus_stop' && p.categorie === 'transport')
+    for (let idx = busStopIndices.length - 1; idx >= 0; idx--) {
+      if (busStopsToRemove.has(idx)) {
+        const poiIdx = pois.indexOf(busStopsInPois[idx])
+        if (poiIdx >= 0) pois.splice(poiIdx, 1)
+      }
+    }
+
     // ── Post-traitement : reclassifier les subway_entrance proches d'une gare RER ──
     // Les entrées physiques (subway_entrance) d'une gare RER doivent être typées RER, pas métro
     const rerStations = pois.filter(p => p.type === 'rer_station' || p.type === 'station' || p.type === 'halt')
     for (const poi of pois) {
       if (poi.type === 'subway_entrance' && poi.categorie === 'transport') {
-        // Si une gare RER/station est à moins de 300m, c'est une entrée de cette gare
-        const nearbyRER = rerStations.find(s => {
-          if (s === poi) return false
-          const dist = Math.abs(s.distance - poi.distance) // approximation rapide
-          return dist < 400 // entrées de la même gare sont très proches
-        })
-        // Check more precisely: if a station with "RER" in operator/name is nearby
+        // Trouver une gare RER/station réellement proche (Haversine entre POIs)
+        // On utilise la distance au centre comme proxy max — deux POIs à d1 et d2 du centre
+        // sont au max à d1+d2 l'un de l'autre (inégalité triangulaire)
         const nearbyRERStation = rerStations.find(s => {
           if (s === poi) return false
           const op = (s.operateur || '').toUpperCase()
-          return (op.includes('RER') || op.includes('TRANSILIEN') || s.type === 'rer_station')
+          const isRERType = op.includes('RER') || op.includes('TRANSILIEN') || s.type === 'rer_station'
+          if (!isRERType) return false
+          // Distance max entre les 2 POIs ≤ d1 + d2 (inégalité triangulaire)
+          // Si la borne sup < 400m, ils sont certainement proches
+          const maxDist = Math.abs(s.distance - poi.distance)
+          return maxDist < 400
         })
         if (nearbyRERStation) {
           poi.type = 'rer_station'
@@ -471,6 +520,19 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // ── Poids de comptage par mode de transport (logique métier immobilier FR) ──
+    // Métro/RER = impact majeur sur la valeur (+5-15% prix), bus = marginal
+    const POIDS_COUNT_TRANSPORT: Record<string, number> = {
+      subway_entrance: 25,  // Métro = premium mobilité
+      rer_station: 25,      // RER = premium mobilité
+      station: 20,          // Gare Transilien/TER
+      halt: 20,             // Halte ferroviaire
+      train_station: 20,    // Gare grandes lignes
+      tram_stop: 18,        // Tramway = bonne desserte
+      bus_stop: 8,          // Bus = desserte de base
+      bicycle_rental: 5,    // Vélo en libre-service
+    }
+
     // Calculer les scores par catégorie
     const categories: { categorie: string; score: number; count: number }[] = []
     
@@ -479,11 +541,30 @@ export async function GET(request: NextRequest) {
       
       let score = 0
       if (poisCat.length > 0) {
-        const countScore = Math.min(poisCat.length * 15, 60)
-        const avgDistance = poisCat.reduce((sum, p) => sum + p.distance, 0) / poisCat.length
-        // Pour les transports, normaliser la distance avec le rayon élargi
-        const refRayon = catKey === 'transport' ? rayonTransportLourd : rayon
-        const proximityScore = Math.max(0, 40 * (1 - avgDistance / refRayon))
+        let countScore: number
+        let proximityScore: number
+
+        if (catKey === 'transport') {
+          // Score de comptage pondéré par mode (métro/RER vaut plus qu'un bus)
+          const weightedCount = poisCat.reduce((sum, p) => {
+            return sum + (POIDS_COUNT_TRANSPORT[p.type] ?? 10)
+          }, 0)
+          countScore = Math.min(weightedCount, 60)
+
+          // Score de proximité pondéré par mode
+          const withProx = poisCat.map(p => {
+            const maxDist = RAYON_PAR_MODE[p.type] ?? rayon
+            return Math.max(0, 1 - p.distance / maxDist)
+          })
+          proximityScore = withProx.length > 0
+            ? 40 * (withProx.reduce((s, v) => s + v, 0) / withProx.length)
+            : 0
+        } else {
+          // Catégories non-transport : comptage linéaire classique
+          countScore = Math.min(poisCat.length * 15, 60)
+          const avgDistance = poisCat.reduce((sum, p) => sum + p.distance, 0) / poisCat.length
+          proximityScore = Math.max(0, 40 * (1 - avgDistance / rayon))
+        }
         score = Math.round(Math.min(100, countScore + proximityScore))
       }
       

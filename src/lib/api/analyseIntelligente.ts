@@ -213,8 +213,10 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
 async function analyserMarche(bien: BienAnalyse): Promise<AnalyseMarche> {
   try {
     // Appeler la route API interne
-    const surfaceMin = Math.max(10, bien.surface - 20)
-    const surfaceMax = bien.surface + 20
+    // Fourchette de surface proportionnelle : ±30% avec plancher 15 m²
+    const margin = Math.max(15, Math.round(bien.surface * 0.3))
+    const surfaceMin = Math.max(9, bien.surface - margin)
+    const surfaceMax = bien.surface + margin
     
     const params = new URLSearchParams({
       code_postal: bien.codePostal,
@@ -232,8 +234,15 @@ async function analyserMarche(bien: BienAnalyse): Promise<AnalyseMarche> {
     
     const stats = result.data
     
-    // Calculer l'écart au marché
-    const ecart = Math.round(((bien.prixM2 - stats.prixM2Median) / stats.prixM2Median) * 100)
+    // Calculer l'écart au marché (par m²)
+    const ecartPrixM2 = Math.round(((bien.prixM2 - stats.prixM2Median) / stats.prixM2Median) * 100)
+    // Écart sur le prix total (diffère du m² si la surface est atypique)
+    const ecartPrix = stats.prixMedian
+      ? Math.round(((bien.prix - stats.prixMedian) / stats.prixMedian) * 100)
+      : ecartPrixM2 // fallback quand prixMedian indisponible
+    
+    // Le verdict est basé sur l'écart au m² (plus fiable)
+    const ecart = ecartPrixM2
     
     // Déterminer le verdict
     let verdict: AnalyseMarche['verdict']
@@ -261,13 +270,17 @@ async function analyserMarche(bien: BienAnalyse): Promise<AnalyseMarche> {
     if (Math.abs(ecart) > 50) {
       avertissement = `Écart important (${Math.abs(ecart)}%) - vérifiez que le type de bien et la localisation sont corrects`
     }
+    // Propager l'avertissement de la source DVF (ex. "toutes surfaces confondues")
+    if (stats.avertissement && !avertissement) {
+      avertissement = stats.avertissement as string
+    }
     
     return {
       success: true,
       prixMedianMarche: stats.prixMedian,
       prixM2MedianMarche: stats.prixM2Median,
-      ecartPrix: ecart,
-      ecartPrixM2: ecart,
+      ecartPrix,
+      ecartPrixM2,
       nbTransactions: stats.nbTransactions,
       evolution12Mois: stats.evolution12Mois ?? undefined,
       verdict,
@@ -434,7 +447,9 @@ function calculerScoreGlobal(
   const negatifs: string[] = []
   const vigilance: string[] = []
   
-  let score = 50 // Base
+  // Score pondéré : chaque axe contribue de 0 à son poids max (40/30/30)
+  // Les bonus/malus du bien (DPE, équipements, étage) s'appliquent APRÈS normalisation
+  let score = 0
   let poids = 0
   
   // === MARCHÉ (40% du score) ===
@@ -454,10 +469,11 @@ function calculerScoreGlobal(
         vigilance.push(`📊 Prix légèrement élevé (+${marche.ecartPrixM2?.toFixed(0)}%)`)
         break
       case 'cher':
-        score += 5
+        score += 8
         negatifs.push(`⚠️ Prix au-dessus du marché (+${marche.ecartPrixM2?.toFixed(0)}%)`)
         break
       case 'tres_cher':
+        score += 0
         negatifs.push(`🚨 Prix très élevé (+${marche.ecartPrixM2?.toFixed(0)}%)`)
         break
     }
@@ -529,14 +545,17 @@ function calculerScoreGlobal(
     }
   }
   
-  // === CARACTÉRISTIQUES DU BIEN ===
+  // === CARACTÉRISTIQUES DU BIEN (bonus/malus appliqués après normalisation) ===
+  let bonusPoints = 0
+  
   // DPE
   if (bien.dpe) {
     if (['A', 'B', 'C'].includes(bien.dpe)) {
       positifs.push(`🌱 Bon DPE (${bien.dpe})`)
+      bonusPoints += 5
     } else if (['F', 'G'].includes(bien.dpe)) {
       negatifs.push(`⚡ Passoire énergétique (DPE ${bien.dpe})`)
-      score -= 10
+      bonusPoints -= 10
     }
   }
   
@@ -549,16 +568,28 @@ function calculerScoreGlobal(
   
   if (equipements.length >= 2) {
     positifs.push(`✨ Bien équipé (${equipements.join(', ')})`)
+    bonusPoints += 3
   }
   
   // Étage sans ascenseur
   if (bien.etage && bien.etage >= 4 && !bien.hasAscenseur) {
     negatifs.push(`🚶 Étage ${bien.etage} sans ascenseur`)
-    score -= 5
+    bonusPoints -= 5
   }
   
-  // Normaliser le score si on a des données
-  let scoreGlobal = poids > 0 ? Math.round((score / poids) * 100) : 50
+  // Normaliser le score : ratio pondéré (0-100) + bonus/malus du bien
+  // Si aucun axe disponible → score neutre 50
+  let scoreGlobal = poids > 0
+    ? Math.round((score / poids) * 100 + bonusPoints)
+    : 50
+  
+  // Pénalité de confiance : si moins de 2 sources dispo, atténuer vers 50
+  const nbSourcesDisponibles = [marche.success, risques.success, quartier.success].filter(Boolean).length
+  if (nbSourcesDisponibles < 2) {
+    const facteur = 0.5 + (nbSourcesDisponibles / 6) // 1 source → 0.67, 0 source → 0.5
+    scoreGlobal = Math.round(50 + (scoreGlobal - 50) * facteur)
+  }
+  
   scoreGlobal = Math.max(0, Math.min(100, scoreGlobal))
   
   // Recommandation

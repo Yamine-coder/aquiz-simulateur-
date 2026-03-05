@@ -79,16 +79,16 @@ const services = [
     icon: Shield,
     title: 'Conseil en acquisition',
     description:
-      'Un accompagnement personnalisé à chaque étape de votre projet. Analyse de faisabilité, stratégie d\'achat et sécurisation de votre premier achat immobilier.',
-    features: ['Analyse de faisabilité', 'Stratégie d\'achat', 'Négociation prix', 'Suivi jusqu\'à la signature'],
+      'Un accompagnement personnalisé à chaque étape de votre projet.',
+    features: ['Analyse de faisabilité', 'Définition de la stratégie d\'achat', 'Positionnement prix', 'Suivi juridique jusqu\'à la remise des clés'],
     image: '/images/hall-maison.jpg',
   },
   {
     icon: Search,
     title: 'Chasse immobilière',
     description:
-      'Recherche et identification du bien idéal grâce à un réseau exclusif de biens off-market et des outils de sourcing performants.',
-    features: ['Biens off-market', 'Sourcing ciblé', 'Visites sélectionnées', 'Rapport détaillé'],
+      'Recherche et identification du bien idéal correspondant à vos attentes et vos critères grâce à des outils de sourcing performants et un réseau exclusif.',
+    features: ['Sourcing ciblé', 'Visites présélectionnées', 'Rapport détaillé', 'Biens off-market'],
     image: '/images/salon-renovation.jpg',
   },
   {
@@ -96,7 +96,7 @@ const services = [
     title: 'Solutions de financement',
     description:
       'Mise en relation avec nos courtiers partenaires pour des solutions de financement adaptées à votre profil et votre projet.',
-    features: ['Courtiers partenaires', 'Meilleurs taux', 'PTZ & aides', 'Montage dossier'],
+    features: ['Frais de courtage réduits', 'Comparaison des meilleurs taux', 'Étude des dispositifs d\'aides et prêts', 'Validation complète du dossier avant signature'],
     image: '/images/sejour-idf.jpg',
   },
 ]
@@ -127,10 +127,10 @@ export function ServicesSection() {
             return (
               <StaggerItem key={service.title}>
                 <div
-                  className="group relative bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
+                  className="group relative bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-500 h-full flex flex-col"
                 >
                   {/* Image */}
-                  <div className="relative h-44 sm:h-52 overflow-hidden">
+                  <div className="relative h-44 sm:h-52 overflow-hidden shrink-0">
                     <Image
                       src={service.image}
                       alt={service.title}
@@ -147,23 +147,23 @@ export function ServicesSection() {
                     </div>
                   </div>
 
-                  <div className="p-6">
+                  <div className="p-6 flex flex-col flex-1">
                     <h3 className="text-lg font-bold text-aquiz-black mb-2">
                       {service.title}
                     </h3>
 
-                    <p className="text-sm text-aquiz-gray leading-relaxed mb-5">
+                    <p className="text-sm text-aquiz-gray leading-relaxed mb-5 min-h-[3.5rem]">
                       {service.description}
                     </p>
 
                     {/* Features */}
-                    <ul className="space-y-2.5 mb-6">
+                    <ul className="space-y-2.5 mb-6 flex-1">
                       {service.features.map((f) => (
-                        <li key={f} className="flex items-center gap-2.5 text-sm text-aquiz-black/80">
-                          <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                        <li key={f} className="flex items-start gap-2.5 text-sm text-aquiz-black/80">
+                          <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0 mt-0.5">
                             <CheckCircle className="w-3.5 h-3.5 text-aquiz-green" />
                           </div>
-                          {f}
+                          <span>{f}</span>
                         </li>
                       ))}
                     </ul>
@@ -174,7 +174,7 @@ export function ServicesSection() {
                         const el = document.getElementById('contact')
                         if (el) el.scrollIntoView({ behavior: 'smooth' })
                       }}
-                      className="inline-flex items-center gap-2 text-sm font-semibold text-aquiz-green hover:gap-3 transition-all"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-aquiz-green hover:gap-3 transition-all mt-auto"
                     >
                       Nous contacter
                       <ArrowRight className="w-4 h-4" />
@@ -1059,48 +1059,49 @@ const testimonials = [
 
 export function TestimonialsSection() {
   return (
-    <section className="py-12 sm:py-16 md:py-20 bg-aquiz-gray-lightest scroll-mt-18 md:scroll-mt-20" id="temoignages">
+    <section className="py-16 sm:py-24 md:py-32 bg-aquiz-gray-lightest scroll-mt-18 md:scroll-mt-20" id="temoignages">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Header compact + note globale */}
-        <FadeIn className="mb-10">
-          <div>
-            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-medium mb-3">
-              <Star className="w-3.5 h-3.5" />
-              Avis clients
-            </span>
-            <h2 className="text-2xl md:text-3xl font-bold text-aquiz-black">
-              Ils nous font <span className="text-aquiz-green">confiance</span>
-            </h2>
-          </div>
+        {/* Header — aligné DA (Process / Tarifs) */}
+        <FadeIn className="text-center mb-16">
+          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-aquiz-green/10 text-aquiz-green text-sm font-medium mb-4">
+            <Star className="w-4 h-4 fill-aquiz-green" />
+            Avis clients
+          </span>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-aquiz-black mb-4">
+            Ils nous font <span className="text-aquiz-green">confiance</span>
+          </h2>
+          <p className="text-base sm:text-lg text-aquiz-gray max-w-2xl mx-auto">
+            Découvrez les retours de nos clients accompagnés dans leur projet immobilier.
+          </p>
         </FadeIn>
 
         {/* Cards */}
-        <StaggerContainer className="grid md:grid-cols-3 gap-4" staggerDelay={0.1}>
+        <StaggerContainer className="grid md:grid-cols-3 gap-5 lg:gap-6" staggerDelay={0.1}>
           {testimonials.map((t) => (
             <StaggerItem key={t.name}>
-              <article className="relative bg-white rounded-2xl p-5 h-full border border-aquiz-gray-lighter/40 hover:border-aquiz-green/30 hover:shadow-md transition-all duration-300">
+              <article className="group relative bg-white rounded-2xl p-6 lg:p-7 h-full flex flex-col border border-aquiz-gray-lighter hover:border-aquiz-green/40 hover:shadow-lg transition-all duration-300">
                 {/* Top: stars + quote icon */}
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex gap-0.5">
                     {Array.from({ length: t.rating }).map((_, i) => (
-                      <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
                     ))}
                   </div>
-                  <Quote className="w-5 h-5 text-aquiz-green/15" />
+                  <Quote className="w-6 h-6 text-aquiz-green/15 group-hover:text-aquiz-green/30 transition-colors duration-300" />
                 </div>
 
-                <blockquote className="text-[13px] text-aquiz-black/65 leading-relaxed mb-4">
+                <blockquote className="text-sm text-aquiz-gray leading-relaxed flex-1 mb-5">
                   &ldquo;{t.quote}&rdquo;
                 </blockquote>
 
-                <div className="flex items-center gap-2.5 pt-3 border-t border-aquiz-gray-lighter/40">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${t.avatarBg}`}>
+                <div className="flex items-center gap-3 pt-4 border-t border-aquiz-gray-lighter">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${t.avatarBg}`}>
                     {t.name.charAt(0)}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-aquiz-black">{t.name}</p>
-                    <p className="text-[11px] text-aquiz-gray">{t.role}</p>
+                    <p className="text-sm font-semibold text-aquiz-black">{t.name}</p>
+                    <p className="text-xs text-aquiz-gray">{t.role}</p>
                   </div>
                 </div>
               </article>

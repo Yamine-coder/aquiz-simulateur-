@@ -21,6 +21,7 @@ import {
     Zap
 } from 'lucide-react'
 import Image from 'next/image'
+import { EditableCell } from './EditableCell'
 
 /** Score Pro result type (subset needed for mobile) */
 interface ScoreProResult {
@@ -154,6 +155,38 @@ export function VueMobileAccordeon({
                         <span className="text-aquiz-gray text-xs">Prix/m²</span>
                         <div className="font-medium">{annonce.prixM2.toLocaleString('fr-FR')} €</div>
                       </div>
+                      {/* Charges — éditable si manquant */}
+                      <div>
+                        <span className="text-aquiz-gray text-xs">Charges / mois</span>
+                        <div className="font-medium">
+                          <EditableCell
+                            annonceId={annonce.id}
+                            field="chargesMensuelles"
+                            fieldType="number"
+                            rawValue={annonce.chargesMensuelles}
+                            suffix="€/mois"
+                            placeholder="Ex: 150"
+                          >
+                            <span>{annonce.chargesMensuelles != null ? `${annonce.chargesMensuelles} €/mois` : '—'}</span>
+                          </EditableCell>
+                        </div>
+                      </div>
+                      {/* Taxe foncière — éditable si manquant */}
+                      <div>
+                        <span className="text-aquiz-gray text-xs">Taxe foncière / an</span>
+                        <div className="font-medium">
+                          <EditableCell
+                            annonceId={annonce.id}
+                            field="taxeFonciere"
+                            fieldType="number"
+                            rawValue={annonce.taxeFonciere}
+                            suffix="€/an"
+                            placeholder="Ex: 1200"
+                          >
+                            <span>{annonce.taxeFonciere != null ? `${annonce.taxeFonciere} €/an` : '—'}</span>
+                          </EditableCell>
+                        </div>
+                      </div>
                       {mensualiteParams && (
                         <div className="col-span-2">
                           <span className="text-aquiz-gray text-xs">Mensualité estimée</span>
@@ -219,16 +252,50 @@ export function VueMobileAccordeon({
                         <div className="font-medium">{annonce.chambres}ch</div>
                         <span className="text-[10px] text-aquiz-gray">Chambres</span>
                       </div>
-                      {annonce.anneeConstruction && (
-                        <div className="text-center">
-                          <div className="font-medium">{annonce.anneeConstruction}</div>
-                          <span className="text-[10px] text-aquiz-gray">Construction</span>
+                      {/* Année — éditable */}
+                      <div className="text-center">
+                        <div className="font-medium">
+                          <EditableCell
+                            annonceId={annonce.id}
+                            field="anneeConstruction"
+                            fieldType="number"
+                            rawValue={annonce.anneeConstruction}
+                            placeholder="Ex: 1985"
+                          >
+                            <span>{annonce.anneeConstruction}</span>
+                          </EditableCell>
                         </div>
-                      )}
-                      {annonce.orientation && (
+                        <span className="text-[10px] text-aquiz-gray">Construction</span>
+                      </div>
+                      {/* Orientation — éditable */}
+                      <div className="text-center">
+                        <div className="font-medium">
+                          <EditableCell
+                            annonceId={annonce.id}
+                            field="orientation"
+                            fieldType="orientation"
+                            rawValue={annonce.orientation}
+                          >
+                            <span>{annonce.orientation}</span>
+                          </EditableCell>
+                        </div>
+                        <span className="text-[10px] text-aquiz-gray">Orientation</span>
+                      </div>
+                      {/* Étage — éditable */}
+                      {annonce.type === 'appartement' && (
                         <div className="text-center">
-                          <div className="font-medium">{annonce.orientation}</div>
-                          <span className="text-[10px] text-aquiz-gray">Orientation</span>
+                          <div className="font-medium">
+                            <EditableCell
+                              annonceId={annonce.id}
+                              field="etage"
+                              fieldType="number"
+                              rawValue={annonce.etage}
+                              placeholder="Ex: 3"
+                            >
+                              <span>{annonce.etage === 0 ? 'RDC' : `${annonce.etage}e`}</span>
+                            </EditableCell>
+                          </div>
+                          <span className="text-[10px] text-aquiz-gray">Étage</span>
                         </div>
                       )}
                     </div>
@@ -241,9 +308,28 @@ export function VueMobileAccordeon({
                         <Zap className="w-3.5 h-3.5" />
                         Énergie
                       </div>
-                      <Badge className={`${COULEURS_DPE[annonce.dpe]} text-white`}>
-                        DPE {annonce.dpe}
-                      </Badge>
+                      <div className="flex gap-1.5">
+                        <EditableCell
+                          annonceId={annonce.id}
+                          field="dpe"
+                          fieldType="dpe"
+                          rawValue={annonce.dpe}
+                        >
+                          <Badge className={`${COULEURS_DPE[annonce.dpe]} text-white`}>
+                            DPE {annonce.dpe}
+                          </Badge>
+                        </EditableCell>
+                        <EditableCell
+                          annonceId={annonce.id}
+                          field="ges"
+                          fieldType="dpe"
+                          rawValue={annonce.ges}
+                        >
+                          <Badge variant="outline" className="text-xs">
+                            GES {annonce.ges || '?'}
+                          </Badge>
+                        </EditableCell>
+                      </div>
                     </div>
                     <div className="flex-1 bg-aquiz-gray-lightest/50 rounded-lg p-3">
                       <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
@@ -251,22 +337,40 @@ export function VueMobileAccordeon({
                         Équipements
                       </div>
                       <div className="flex flex-wrap gap-1">
-                        {annonce.balconTerrasse && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0">Balcon</Badge>
-                        )}
-                        {annonce.parking && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0">Parking</Badge>
-                        )}
-                        {annonce.cave && (
-                          <Badge variant="outline" className="text-[9px] px-1.5 py-0">Cave</Badge>
-                        )}
-                        {!annonce.balconTerrasse && !annonce.parking && !annonce.cave && (
-                          <span className="text-[10px] text-aquiz-gray">Aucun</span>
-                        )}
+                        <EditableCell
+                          annonceId={annonce.id}
+                          field="balconTerrasse"
+                          fieldType="boolean"
+                          rawValue={annonce.balconTerrasse}
+                        >
+                          <Badge variant={annonce.balconTerrasse ? 'default' : 'outline'} className={`text-[9px] px-1.5 py-0 ${annonce.balconTerrasse ? '' : 'opacity-50'}`}>
+                            Balcon {annonce.balconTerrasse ? '✓' : '✗'}
+                          </Badge>
+                        </EditableCell>
+                        <EditableCell
+                          annonceId={annonce.id}
+                          field="parking"
+                          fieldType="boolean"
+                          rawValue={annonce.parking}
+                        >
+                          <Badge variant={annonce.parking ? 'default' : 'outline'} className={`text-[9px] px-1.5 py-0 ${annonce.parking ? '' : 'opacity-50'}`}>
+                            Parking {annonce.parking ? '✓' : '✗'}
+                          </Badge>
+                        </EditableCell>
+                        <EditableCell
+                          annonceId={annonce.id}
+                          field="cave"
+                          fieldType="boolean"
+                          rawValue={annonce.cave}
+                        >
+                          <Badge variant={annonce.cave ? 'default' : 'outline'} className={`text-[9px] px-1.5 py-0 ${annonce.cave ? '' : 'opacity-50'}`}>
+                            Cave {annonce.cave ? '✓' : '✗'}
+                          </Badge>
+                        </EditableCell>
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Actions */}
                   <div className="flex gap-2">
                     {annonce.url && (

@@ -544,7 +544,7 @@ describe('Indice de confiance', () => {
     const enrichi: DonneesEnrichiesScoring = {
       marche: { success: true, ecartPrixM2: -5, verdict: 'bon', prixM2MedianMarche: 4000 },
       risques: { success: true, scoreRisque: 80, verdict: 'sûr' },
-      quartier: { success: true, scoreQuartier: 70, transports: 8, commerces: 7, ecoles: 6, sante: 5, espaceVerts: 6 },
+      quartier: { success: true, scoreQuartier: 70, transports: 65, commerces: 70, ecoles: 60, sante: 55, espaceVerts: 60 },
     }
     const sansDonnees = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE)
     const avecDonnees = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
@@ -580,7 +580,7 @@ describe('Données enrichies', () => {
 
   it('un bon score transports booste l\'axe transports', () => {
     const enrichi: DonneesEnrichiesScoring = {
-      quartier: { success: true, scoreQuartier: 85, transports: 80, commerces: 8, ecoles: 7, sante: 6, espaceVerts: 7 },
+      quartier: { success: true, scoreQuartier: 85, transports: 80, commerces: 75, ecoles: 70, sante: 65, espaceVerts: 70 },
     }
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
     const axeT = result.axes.find(a => a.axe === 'transports')!
@@ -591,7 +591,7 @@ describe('Données enrichies', () => {
 
   it('un faible score transports pénalise l\'axe transports', () => {
     const enrichi: DonneesEnrichiesScoring = {
-      quartier: { success: true, scoreQuartier: 40, transports: 20, commerces: 5, ecoles: 3, sante: 2, espaceVerts: 4 },
+      quartier: { success: true, scoreQuartier: 40, transports: 20, commerces: 35, ecoles: 25, sante: 20, espaceVerts: 30 },
     }
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
     const axeT = result.axes.find(a => a.axe === 'transports')!
@@ -601,7 +601,7 @@ describe('Données enrichies', () => {
 
   it('un bon score quartier booste l\'emplacement', () => {
     const enrichi: DonneesEnrichiesScoring = {
-      quartier: { success: true, scoreQuartier: 85, transports: 9, commerces: 8, ecoles: 7, sante: 6, espaceVerts: 7 },
+      quartier: { success: true, scoreQuartier: 85, transports: 80, commerces: 75, ecoles: 70, sante: 65, espaceVerts: 70 },
     }
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
     const axeE = result.axes.find(a => a.axe === 'emplacement')!

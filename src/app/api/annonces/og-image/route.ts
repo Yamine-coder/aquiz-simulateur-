@@ -138,7 +138,7 @@ async function tryLeBonCoinImages(url: string): Promise<{ imageUrl: string; imag
         'Accept-Language': 'fr-FR,fr;q=0.9',
         'Referer': 'https://www.leboncoin.fr/',
         'Origin': 'https://www.leboncoin.fr',
-        'api_key': 'ba0c2dad52b3ec',
+        'api_key': process.env.LEBONCOIN_API_KEY || '',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-site',

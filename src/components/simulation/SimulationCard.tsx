@@ -54,7 +54,7 @@ const MODE_CONFIG = {
   },
   B: {
     title: 'Puis-je acheter ce bien ?',
-    subtitle: 'Puis-je acheter ce bien ?',
+    subtitle: 'Vérifiez la faisabilité de votre achat',
     icon: Home
   }
 }
