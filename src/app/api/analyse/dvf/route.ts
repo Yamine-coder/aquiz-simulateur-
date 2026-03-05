@@ -226,8 +226,8 @@ async function fetchFromCquest(codePostal: string, typeBien: string, surfaceMin?
       const il_y_a_12_mois = new Date()
       il_y_a_12_mois.setFullYear(il_y_a_12_mois.getFullYear() - 1)
       
-      const recentes = transactions.filter((t: { date: string }) => new Date(t.date) > il_y_a_12_mois)
-      const anciennes = transactions.filter((t: { date: string }) => new Date(t.date) <= il_y_a_12_mois)
+      const recentes = transactions.filter((t: { date?: string }) => t.date && new Date(t.date) > il_y_a_12_mois)
+      const anciennes = transactions.filter((t: { date?: string }) => t.date && new Date(t.date) <= il_y_a_12_mois)
       
       if (recentes.length >= 3 && anciennes.length >= 3) {
         const moyenneRecente = recentes.reduce((a: number, t: { prixM2: number }) => a + t.prixM2, 0) / recentes.length
