@@ -51,7 +51,6 @@ import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState }
 import { useForm } from 'react-hook-form'
 
 const MiniCarteIDF = dynamic(() => import('@/components/carte/MiniCarteIDF'), { ssr: false })
-const ConseilsAvances = dynamic(() => import('@/components/conseils').then(m => ({ default: m.ConseilsAvances })), { ssr: false })
 const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
 
 const STATUTS_PROFESSIONNELS = [
@@ -1938,46 +1937,6 @@ function ModeAPageContent() {
                     </div>
                   </div>
 
-                  {/* CONSEILS AQUIZ AVANCÉS - Système professionnel — GATE EMAIL */}
-                  {!calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque' && (() => {
-                    const resultatsConseils = genererConseilsAvances({
-                      // Profil
-                      age,
-                      statutProfessionnel,
-                      situationFoyer,
-                      nombreEnfants,
-                      // Revenus & charges
-                      revenus: calculs.revenusMensuelsTotal,
-                      charges: calculs.chargesMensuellesTotal,
-                      // Projet
-                      apport,
-                      mensualiteMax,
-                      mensualiteRecommandee,
-                      dureeAns,
-                      tauxInteret,
-                      typeBien,
-                      // Résultats calculés
-                      prixAchat: calculs.prixAchatMax,
-                      capitalEmpruntable: calculs.capitalEmpruntable,
-                      tauxEndettement: calculs.tauxEndettementProjet,
-                      resteAVivre: calculs.resteAVivre,
-                      resteAVivreMin: calculs.resteAVivreMinTotal,
-                      niveauResteAVivre: calculs.niveauResteAVivre,
-                      scoreFaisabilite,
-                      // Géographie
-                      surfaceParis: calculs.surfaceParis,
-                      surfacePetiteCouronne: calculs.surfacePetiteCouronne,
-                      surfaceGrandeCouronne: calculs.surfaceGrandeCouronne
-                    })
-                    
-                    return (
-                      <ConseilsAvances 
-                        resultats={resultatsConseils}
-                        onContactConseiller={() => setShowContactModal(true)}
-                      />
-                    )
-                  })()}
-
                   {/* ALERTE SI PROBLÈME + CTA CONSEILLER */}
                   {(calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque') && (
                     <div className="p-4 bg-red-50 border border-red-200 rounded-xl" role="alert" aria-live="assertive">
@@ -2003,25 +1962,20 @@ function ModeAPageContent() {
                   )}
 
                   {/* CTA Bonus — Recevez votre étude personnalisée PDF par email */}
-                  <div id="pdf-gate" className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
-                    {/* Header */}
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                        <FileDown className="w-6 h-6 text-aquiz-green" />
+                  <div id="pdf-gate" className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-9 h-9 rounded-lg bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                        <FileDown className="w-4 h-4 text-aquiz-green" />
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-bold text-base text-aquiz-black">
-                          {pdfEmailSent ? 'Étude d\u2019achat téléchargée !' : 'Télécharger votre étude d\u2019achat'}
+                      <div>
+                        <h3 className="font-semibold text-sm text-aquiz-black">
+                          {pdfEmailSent ? 'Étude téléchargée !' : 'Recevez votre étude d\u2019achat'}
                         </h3>
-                        <p className="text-aquiz-gray text-xs mt-0.5">
-                          {pdfEmailSent
-                            ? 'Vous pouvez la re-télécharger à tout moment.'
-                            : '6 pages · Budget détaillé, analyse IA, coûts cachés & parcours d\u2019achat'}
-                        </p>
+                        {pdfEmailSent && (
+                          <p className="text-[10px] sm:text-xs text-aquiz-gray">Re-téléchargez quand vous voulez.</p>
+                        )}
                       </div>
                     </div>
-
-                    {/* Action */}
                     {pdfEmailSent ? (
                       <button
                         type="button"
@@ -2030,32 +1984,32 @@ function ModeAPageContent() {
                           setPdfGenerating(true)
                           try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfGenerating(false) }
                         }}
-                        className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                        className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
                       >
-                        {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
-                        {pdfGenerating ? 'Génération…' : 'Re-télécharger mon étude'}
+                        {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                        {pdfGenerating ? 'Génération…' : 'Télécharger à nouveau'}
                       </button>
                     ) : (
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
+                      <div className="space-y-2.5">
+                        <div className="relative">
                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
                           <input
                             type="email"
                             value={pdfEmailValue}
                             onChange={(e) => setPdfEmailValue(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                            placeholder="Votre email"
-                            className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                            placeholder="votre@email.com"
+                            className="w-full h-11 pl-9 pr-3 rounded-lg bg-white text-aquiz-black placeholder:text-aquiz-gray/40 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-1 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
                           />
                         </div>
                         <button
                           type="button"
                           disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
                           onClick={handleSendPdfEmail}
-                          className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
+                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                         >
                           {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                          {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
+                          {pdfEmailLoading ? 'Analyse…' : 'Recevoir mon étude'}
                         </button>
                       </div>
                     )}

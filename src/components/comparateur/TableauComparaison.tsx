@@ -36,7 +36,6 @@ import {
     Loader2,
     MapPin,
     Minus,
-    Sparkles,
     Trash2,
     TrendingUp,
     X,
@@ -45,7 +44,6 @@ import {
 import Image from 'next/image'
 import { useEffect, useMemo, useRef } from 'react'
 import { EditableCell, type EditableFieldType } from './EditableCell'
-import { MiniRadar } from './MiniRadar'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
 
 /** Couleur du score */
@@ -355,7 +353,7 @@ export function TableauComparaison({
                         {isRecommande && (
                           <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
                             <Badge className="bg-aquiz-green text-white text-[10px] shadow-md whitespace-nowrap px-2.5 py-1">
-                              <Sparkles className="w-3 h-3 mr-1" />
+                              <Check className="w-3 h-3 mr-1" />
                           Recommandé
                         </Badge>
                       </div>
@@ -404,42 +402,74 @@ export function TableauComparaison({
                           const sp = getScorePro(annonce.id)
                           if (!sp) return null
                           const radarColor = sp.scoreGlobal >= 75 ? '#22c55e' : sp.scoreGlobal >= 60 ? '#84cc16' : sp.scoreGlobal >= 45 ? '#f59e0b' : '#ef4444'
+                          // Circular score ring params
+                          const ringSize = 44
+                          const ringStroke = 3.5
+                          const ringR = (ringSize - ringStroke) / 2
+                          const ringCirc = 2 * Math.PI * ringR
+                          const ringOffset = ringCirc * (1 - sp.scoreGlobal / 100)
                           return (
                             <Popover>
                               <PopoverTrigger asChild>
                                 <button className="flex items-center gap-2.5 mt-2.5 px-2.5 py-2 rounded-xl border border-aquiz-gray-lighter/60 bg-white hover:border-aquiz-green/40 hover:shadow-md shadow-sm cursor-pointer transition-all duration-200 group w-full">
-                                  <MiniRadar
-                                    axes={sp.axes.map(a => ({ score: a.score }))}
-                                    size={48}
-                                    color={radarColor}
-                                  />
+                                  {/* Circular score ring */}
+                                  <div className="relative shrink-0" style={{ width: ringSize, height: ringSize }}>
+                                    <svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`}>
+                                      <circle cx={ringSize/2} cy={ringSize/2} r={ringR} fill="none" stroke="#f3f4f6" strokeWidth={ringStroke} />
+                                      <circle
+                                        cx={ringSize/2} cy={ringSize/2} r={ringR}
+                                        fill="none" stroke={radarColor} strokeWidth={ringStroke}
+                                        strokeLinecap="round"
+                                        strokeDasharray={ringCirc} strokeDashoffset={ringOffset}
+                                        transform={`rotate(-90 ${ringSize/2} ${ringSize/2})`}
+                                      />
+                                    </svg>
+                                    <span className={`absolute inset-0 flex items-center justify-center text-xs font-extrabold ${getScoreColor(sp.scoreGlobal)}`}>
+                                      {sp.scoreGlobal}
+                                    </span>
+                                  </div>
                                   <div className="text-left flex-1 min-w-0">
-                                    <div className={`text-base font-extrabold leading-tight ${getScoreColor(sp.scoreGlobal)}`}>
-                                      {sp.scoreGlobal}<span className="text-[10px] font-normal text-aquiz-gray">/100</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Sparkles className="w-2.5 h-2.5 text-aquiz-green shrink-0" />
+                                    <div className="text-[10px] uppercase tracking-wider font-bold text-aquiz-gray leading-none">Score AQUIZ</div>
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <Info className="w-2.5 h-2.5 text-aquiz-green shrink-0" />
                                       <span className="text-[10px] font-semibold text-aquiz-green group-hover:underline leading-none">Voir le détail</span>
                                     </div>
                                   </div>
                                   <ChevronDown className="w-3.5 h-3.5 text-aquiz-gray-light group-hover:text-aquiz-green transition-colors shrink-0" />
                                 </button>
                               </PopoverTrigger>
-                              <PopoverContent side="bottom" align="center" className="z-40 w-80 p-0 rounded-2xl shadow-2xl border border-aquiz-gray-lighter/40">
+                              <PopoverContent side="bottom" avoidCollisions collisionPadding={{ top: 80, bottom: 16, left: 16, right: 16 }} align="center" className="z-50 w-80 p-0 rounded-2xl shadow-2xl border border-aquiz-gray-lighter/40">
                                 {/* Header du popover */}
                                 <div className="px-4 py-3.5 border-b border-aquiz-gray-lightest/80 bg-linear-to-br from-white to-aquiz-gray-lightest/30 rounded-t-2xl">
                                   <div className="flex items-center gap-3">
-                                    <MiniRadar
-                                      axes={sp.axes.map(a => ({ score: a.score }))}
-                                      size={64}
-                                      color={radarColor}
-                                    />
+                                    {/* Circular score ring (same as card) */}
+                                    {(() => {
+                                      const popRingSize = 56
+                                      const popRingStroke = 4
+                                      const popRingR = (popRingSize - popRingStroke) / 2
+                                      const popRingCirc = 2 * Math.PI * popRingR
+                                      const popRingOffset = popRingCirc * (1 - sp.scoreGlobal / 100)
+                                      return (
+                                        <div className="relative shrink-0" style={{ width: popRingSize, height: popRingSize }}>
+                                          <svg width={popRingSize} height={popRingSize} viewBox={`0 0 ${popRingSize} ${popRingSize}`}>
+                                            <circle cx={popRingSize/2} cy={popRingSize/2} r={popRingR} fill="none" stroke="#f3f4f6" strokeWidth={popRingStroke} />
+                                            <circle
+                                              cx={popRingSize/2} cy={popRingSize/2} r={popRingR}
+                                              fill="none" stroke={radarColor} strokeWidth={popRingStroke}
+                                              strokeLinecap="round"
+                                              strokeDasharray={popRingCirc} strokeDashoffset={popRingOffset}
+                                              transform={`rotate(-90 ${popRingSize/2} ${popRingSize/2})`}
+                                            />
+                                          </svg>
+                                          <span className={`absolute inset-0 flex items-center justify-center text-sm font-extrabold ${getScoreColor(sp.scoreGlobal)}`}>
+                                            {sp.scoreGlobal}
+                                          </span>
+                                        </div>
+                                      )
+                                    })()}
                                     <div>
                                       <div className="text-[10px] uppercase tracking-wider font-bold text-aquiz-gray mb-0.5">Score AQUIZ</div>
-                                      <div className={`text-2xl font-extrabold leading-none ${getScoreColor(sp.scoreGlobal)}`}>
-                                        {sp.scoreGlobal}<span className="text-sm font-normal text-aquiz-gray">/100</span>
-                                      </div>
-                                      <div className="text-[11px] text-aquiz-gray mt-1">{sp.verdict}</div>
+                                      <div className="text-[11px] text-aquiz-gray mt-0.5">{sp.verdict}</div>
                                     </div>
                                   </div>
                                 </div>

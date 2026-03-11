@@ -1076,25 +1076,20 @@ export default function ComparateurPage() {
                         {scoresForEmail.length > 0 && (() => {
                           return (
                           <div id="pdf-gate" className="mt-6 sm:mt-8">
-                            <div className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
-                              {/* Header */}
-                              <div className="flex items-start gap-4 mb-4">
-                                <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                                  <FileDown className="w-6 h-6 text-aquiz-green" />
+                            <div className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-9 h-9 rounded-lg bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                                  <FileDown className="w-4 h-4 text-aquiz-green" />
                                 </div>
-                                <div className="flex-1">
-                                  <h3 className="font-bold text-base text-aquiz-black">
-                                    {pdfEmailSent ? 'Comparatif téléchargé !' : 'Télécharger le comparatif complet'}
+                                <div>
+                                  <h3 className="font-semibold text-sm text-aquiz-black">
+                                    {pdfEmailSent ? 'Comparatif téléchargé !' : 'Recevez votre comparatif'}
                                   </h3>
-                                  <p className="text-aquiz-gray text-xs mt-0.5">
-                                    {pdfEmailSent
-                                      ? 'Vous pouvez le re-télécharger à tout moment.'
-                                      : `${annoncesSelectionnees.length + 2} pages · Classement, scoring 10 axes, marché, risques & conseils personnalisés`}
-                                  </p>
+                                  {pdfEmailSent && (
+                                    <p className="text-[10px] sm:text-xs text-aquiz-gray">Re-téléchargez quand vous voulez.</p>
+                                  )}
                                 </div>
                               </div>
-
-                              {/* Action */}
                               {pdfEmailSent ? (
                                 <button
                                   type="button"
@@ -1103,37 +1098,35 @@ export default function ComparateurPage() {
                                     setPdfLoading(true)
                                     try { await generateComparateurPDF() } finally { setPdfLoading(false) }
                                   }}
-                                  className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                                  className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                 >
-                                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
-                                  {pdfLoading ? 'Génération…' : 'Re-télécharger mon comparatif'}
+                                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                                  {pdfLoading ? 'Génération…' : 'Télécharger à nouveau'}
                                 </button>
                               ) : (
-                                <div className="flex gap-2">
-                                  <div className="relative flex-1">
+                                <div className="space-y-2.5">
+                                  <div className="relative">
                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
                                     <input
                                       type="email"
                                       value={pdfEmailValue}
                                       onChange={e => setPdfEmailValue(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                                      placeholder="Votre email"
-                                      className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                                      placeholder="votre@email.com"
+                                      className="w-full h-11 pl-9 pr-3 rounded-lg bg-white text-aquiz-black placeholder:text-aquiz-gray/40 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-1 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
                                     />
                                   </div>
                                   <button
                                     type="button"
                                     disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
                                     onClick={handleSendPdfEmail}
-                                    className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
+                                    className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                                   >
                                     {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                    {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
+                                    {pdfEmailLoading ? 'Analyse…' : 'Recevoir mon étude'}
                                   </button>
                                 </div>
                               )}
-
-
                             </div>
                           </div>
                           )

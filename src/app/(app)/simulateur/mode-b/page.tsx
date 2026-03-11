@@ -36,7 +36,6 @@ import {
     Mail,
     MapPin,
     Phone,
-    PiggyBank,
     TrendingUp
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -1411,53 +1410,32 @@ export default function ModeBPage() {
 
               {/* Répartition du coût total */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-3">
+                <div className="px-4 sm:px-5 py-3 sm:py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-2 sm:gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h3>
                 </div>
-              <div className="p-4 sm:p-5">
-                {/* Barre de répartition horizontale minimaliste */}
-                <div className="h-3 rounded-full overflow-hidden flex bg-aquiz-gray-lighter">
-                  {calculs.repartitionCout.map((item, i) => (
-                    <div
-                      key={i}
-                      className="h-full"
-                      style={{
-                        width: `${calculs.totalProjet > 0 ? (item.value / calculs.totalProjet) * 100 : 0}%`,
-                        backgroundColor: item.color
-                      }}
-                    />
-                  ))}
-                </div>
-                {/* Légende simple */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-5">
-                  {calculs.repartitionCout.map((item, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div 
-                        className="w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <div className="flex-1">
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-xs text-aquiz-gray">{item.label}</span>
-                          <span className="text-xs text-aquiz-gray ml-2">
-                            {calculs.totalProjet > 0 ? ((item.value / calculs.totalProjet) * 100).toFixed(0) : 0}%
-                          </span>
+                <div className="divide-y divide-aquiz-gray-lighter">
+                  {calculs.repartitionCout.map((item, i) => {
+                    const pct = calculs.totalProjet > 0 ? (item.value / calculs.totalProjet) * 100 : 0
+                    return (
+                      <div key={i} className="px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-3">
+                        <span className="text-sm text-aquiz-gray w-28 sm:w-36 shrink-0">{item.label}</span>
+                        <div className="flex-1 h-2 rounded-full bg-aquiz-gray-lighter/50 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: item.color }} />
                         </div>
-                        <p className="text-sm font-semibold text-aquiz-black">
-                          {formatMontant(item.value)} €
-                        </p>
+                        <span className="text-sm font-medium text-aquiz-black tabular-nums shrink-0">{formatMontant(item.value)} €</span>
+                        <span className="text-[10px] text-aquiz-gray/70 tabular-nums w-6 text-right shrink-0">{pct.toFixed(0)}%</span>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
-                {/* Total */}
-                <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-aquiz-gray-lighter flex justify-between items-center">
-                  <span className="text-xs sm:text-sm text-aquiz-gray">Total sur {dureeAns} ans</span>
-                  <span className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(Math.round(calculs.totalProjet))} €</span>
+                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-aquiz-green rounded-b-xl">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white/70">Total sur {dureeAns} ans</span>
+                    <span className="text-xl sm:text-2xl font-bold text-white">{formatMontant(Math.round(calculs.totalProjet))} €</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
               {/* GRAPHIQUE : Mensualité selon durée */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
@@ -1511,73 +1489,6 @@ export default function ModeBPage() {
                 </div>
               </div>
             </div>
-
-              {/* Mensualité détaillée */}
-              <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-gray-lighter flex items-center gap-2 sm:gap-3">
-                  <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">4</div>
-                  <h3 className="font-semibold text-aquiz-black text-sm">Mensualité</h3>
-                </div>
-              <div className="p-4 sm:p-5">
-                <div className="flex items-end justify-between mb-3 sm:mb-4">
-                  <div>
-                    <p className="text-2xl sm:text-3xl font-bold text-aquiz-black">{formatMontant(Math.round(calculs.mensualiteTotal))} €</p>
-                    <p className="text-[10px] sm:text-xs text-aquiz-gray">par mois pendant {dureeAns} ans</p>
-                  </div>
-                  <div className="text-right text-xs sm:text-sm">
-                    <p className="text-aquiz-gray">Crédit : <span className="text-aquiz-black font-medium">{formatMontant(Math.round(calculs.mensualiteCredit))} €</span></p>
-                    <p className="text-aquiz-gray">Assurance : <span className="text-aquiz-black font-medium">{formatMontant(Math.round(calculs.mensualiteAssurance))} €</span></p>
-                  </div>
-                </div>
-                {/* Barre de progression visuelle */}
-                <div className="h-2 bg-aquiz-gray-lighter rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-aquiz-green rounded-full"
-                    style={{ width: `${calculs.mensualiteTotal > 0 ? (calculs.mensualiteCredit / calculs.mensualiteTotal) * 100 : 0}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1 text-xs text-aquiz-gray">
-                  <span>Crédit ({calculs.mensualiteTotal > 0 ? ((calculs.mensualiteCredit / calculs.mensualiteTotal) * 100).toFixed(0) : 0}%)</span>
-                  <span>Assurance ({calculs.mensualiteTotal > 0 ? ((calculs.mensualiteAssurance / calculs.mensualiteTotal) * 100).toFixed(0) : 0}%)</span>
-                </div>
-              </div>
-            </div>
-
-              {/* Apport - indicateur simple */}
-              <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-gray-lighter flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <PiggyBank className="w-4 h-4 text-aquiz-green" />
-                    <h3 className="font-semibold text-aquiz-black text-sm">Apport recommandé</h3>
-                  </div>
-                  {apport > 0 && (
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      calculs.apportSuffisant 
-                        ? 'bg-aquiz-green/10 text-aquiz-green' 
-                        : 'bg-aquiz-gray-lighter text-aquiz-gray'
-                    }`}>
-                      {calculs.apportSuffisant ? '✓ Suffisant' : 'À compléter'}
-                    </span>
-                  )}
-                </div>
-                <div className="p-4 sm:p-5">
-                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                    <div className="text-center p-2.5 sm:p-3 bg-aquiz-gray-lightest rounded-lg">
-                      <p className="text-[10px] sm:text-xs text-aquiz-gray mb-1">Minimum (10%)</p>
-                      <p className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportMinimum10)} €</p>
-                    </div>
-                    <div className="text-center p-2.5 sm:p-3 bg-aquiz-gray-lightest rounded-lg">
-                      <p className="text-[10px] sm:text-xs text-aquiz-gray mb-1">Idéal (20%)</p>
-                      <p className="text-base sm:text-lg font-bold text-aquiz-black">{formatMontant(calculs.apportIdeal20)} €</p>
-                    </div>
-                  </div>
-                  {apport > 0 && (
-                    <p className="mt-3 text-sm text-aquiz-gray text-center">
-                      Votre apport : <span className="font-semibold text-aquiz-black">{formatMontant(apport)} €</span> ({prixBien > 0 ? ((apport / prixBien) * 100).toFixed(0) : 0}%)
-                    </p>
-                  )}
-                </div>
-              </div>
 
               {/* Comparatif durées - compact */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
@@ -1735,25 +1646,20 @@ export default function ModeBPage() {
 
               {/* CTA Bonus — Recevez votre étude personnalisée PDF (email capture) */}
               <div id="pdf-gate" className="mt-4 sm:mt-6">
-                <div className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
-                  {/* Header */}
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                      <FileDown className="w-6 h-6 text-aquiz-green" />
+                <div className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-9 h-9 rounded-lg bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                      <FileDown className="w-4 h-4 text-aquiz-green" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-base text-aquiz-black">
-                        {pdfEmailSent ? 'Étude de faisabilité téléchargée !' : 'Télécharger votre étude de faisabilité'}
+                    <div>
+                      <h3 className="font-semibold text-sm text-aquiz-black">
+                        {pdfEmailSent ? 'Étude téléchargée !' : 'Recevez votre étude de faisabilité'}
                       </h3>
-                      <p className="text-aquiz-gray text-xs mt-0.5">
-                        {pdfEmailSent
-                          ? 'Vous pouvez la re-télécharger à tout moment.'
-                          : '6 pages · Faisabilité, revenus requis, scores quartier & analyse IA'}
-                      </p>
+                      {pdfEmailSent && (
+                        <p className="text-[10px] sm:text-xs text-aquiz-gray">Re-téléchargez quand vous voulez.</p>
+                      )}
                     </div>
                   </div>
-
-                  {/* Action */}
                   {pdfEmailSent ? (
                     <button
                       type="button"
@@ -1762,32 +1668,32 @@ export default function ModeBPage() {
                         setPdfLoading(true)
                         try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
                       }}
-                      className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                      className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
                     >
-                      {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
-                      {pdfLoading ? 'Génération…' : 'Re-télécharger mon étude'}
+                      {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                      {pdfLoading ? 'Génération…' : 'Télécharger à nouveau'}
                     </button>
                   ) : (
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
+                    <div className="space-y-2.5">
+                      <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
                         <input
                           type="email"
                           value={pdfEmailValue}
                           onChange={e => setPdfEmailValue(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                          placeholder="Votre email"
-                          className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                          placeholder="votre@email.com"
+                          className="w-full h-11 pl-9 pr-3 rounded-lg bg-white text-aquiz-black placeholder:text-aquiz-gray/40 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-1 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
                         />
                       </div>
                       <button
                         type="button"
                         disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
                         onClick={handleSendPdfEmail}
-                        className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
+                        className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                        {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
+                        {pdfEmailLoading ? 'Analyse…' : 'Recevoir mon étude'}
                       </button>
                     </div>
                   )}

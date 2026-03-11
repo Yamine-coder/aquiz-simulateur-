@@ -4,7 +4,7 @@
  * Généré avec @react-pdf/renderer
  */
 import type { DonneesQuartier, SyntheseIA } from '@/lib/pdf/enrichirPourPDF'
-import { Document, Image, Link, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
+import { Document, Image, Link, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ───
 interface SimulationDuree {
@@ -711,6 +711,109 @@ function genererConseilsModeB(props: SimulationPDFModeBProps): string[] {
   return conseils.slice(0, 6)
 }
 
+// ─── Analyse experte AQUIZ (résumé qualitatif Mode B) ───
+interface AnalyseExperteResult {
+  lectureImmo: string
+  lectureFinanciere: string
+  vigilance: string[]
+  avisExpert: string
+}
+
+function genererAnalyseExperte(props: SimulationPDFModeBProps): AnalyseExperteResult {
+  const { prixBien, typeBien, typeLogement, nomCommune,
+    apport, dureeAns, mensualiteTotal,
+    apportSuffisant, apportMinimum10, apportIdeal20, totalProjet,
+    infoLocalisation, quartier } = props
+
+  const prixM2 = infoLocalisation?.prixLocalM2
+  const surfEst = infoLocalisation?.surfaceEstimee
+  const prixM2Bien = surfEst && surfEst > 0 ? Math.round(prixBien / surfEst) : null
+  const ecartPrix = prixM2 && prixM2Bien ? Math.round(((prixM2Bien / prixM2) - 1) * 100) : null
+  const scoreQ = quartier?.scoreGlobal ? quartier.scoreGlobal / 10 : null
+
+  // ── Lecture immobilière ──
+  const immoLines: string[] = []
+
+  // Positionnement prix
+  if (prixM2 && prixM2Bien && surfEst) {
+    if (ecartPrix !== null && ecartPrix > 10) {
+      immoLines.push(`À ${fmt(prixM2Bien)} EUR/m² pour ${surfEst} m² estimés, ce ${typeLogement} se positionne ${ecartPrix}% au-dessus du prix médian du secteur (${fmt(prixM2)} EUR/m²). Ce niveau de prix mérite d'être questionné : état du bien, étage, exposition ou prestations peuvent justifier cet écart — mais une marge de négociation est probable.`)
+    } else if (ecartPrix !== null && ecartPrix < -10) {
+      immoLines.push(`À ${fmt(prixM2Bien)} EUR/m², ce ${typeLogement} se positionne ${Math.abs(ecartPrix)}% en dessous du prix médian local (${fmt(prixM2)} EUR/m²). Un prix attractif qui peut signaler une opportunité, mais aussi des travaux à prévoir, une copropriété fragile ou un emplacement moins porteur au sein de la commune.`)
+    } else if (ecartPrix !== null) {
+      immoLines.push(`À ${fmt(prixM2Bien)} EUR/m² pour ~${surfEst} m², ce ${typeLogement} est aligné avec le marché local (${fmt(prixM2)} EUR/m² médian). Le positionnement prix est cohérent — la pertinence de l'achat dépendra surtout de l'état du bien et de la qualité de l'adresse.`)
+    }
+  } else {
+    immoLines.push(`Ce ${typeLogement} ${typeBien} affiché à ${fmt(prixBien)} EUR${nomCommune ? ` à ${nomCommune}` : ''} nécessite une vérification du prix au m² par rapport au marché local pour valider sa cohérence.`)
+  }
+
+  // Quartier
+  if (scoreQ !== null) {
+    if (scoreQ >= 7) {
+      immoLines.push(`Le quartier obtient un score de ${scoreQ.toFixed(1)}/10, ce qui traduit un environnement bien équipé en transports, commerces et services. C'est un critère favorable pour la qualité de vie et la revente.`)
+    } else if (scoreQ >= 4) {
+      immoLines.push(`Le quartier affiche un score de ${scoreQ.toFixed(1)}/10. L'environnement est correct mais présente des lacunes sur certains critères${quartier && quartier.sante / 10 < 4 ? ' (santé)' : ''}${quartier && quartier.espaceVerts / 10 < 4 ? ' (espaces verts)' : ''}. À mettre en perspective avec vos priorités quotidiennes.`)
+    } else {
+      immoLines.push(`Le quartier obtient un score de ${scoreQ.toFixed(1)}/10, ce qui signale un environnement peu équipé. La desserte, les commerces et les services de proximité sont limités — un point à intégrer dans votre réflexion.`)
+    }
+  }
+
+  // Type bien
+  if (typeBien === 'ancien') {
+    immoLines.push(`Bien ancien : les frais de notaire sont plus élevés (~7-8%) et un budget travaux éventuel est à anticiper. En contrepartie, l'ancien offre souvent de meilleures surfaces et localisations à budget équivalent.`)
+  } else {
+    immoLines.push(`Bien neuf : frais de notaire réduits (~2-3%), garanties constructeur et normes énergétiques actuelles. Vérifiez l'éligibilité au PTZ qui pourrait réduire significativement le coût du financement.`)
+  }
+
+  // ── Lecture financière ──
+  const finaLines: string[] = []
+  if (apportSuffisant) {
+    finaLines.push(`Le projet est compatible avec les critères bancaires actuels (norme HCSF 35%). La mensualité de ${fmt(mensualiteTotal)} EUR sur ${dureeAns} ans reste dans les ratios acceptés.`)
+  } else {
+    finaLines.push(`En l'état, le projet dépasse le seuil d'endettement réglementaire (norme HCSF 35%). La mensualité de ${fmt(mensualiteTotal)} EUR sur ${dureeAns} ans nécessite un ajustement : apport supplémentaire, allongement de durée ou révision du budget.`)
+  }
+
+  const ratioApport = prixBien > 0 ? Math.round((apport / prixBien) * 100) : 0
+  if (ratioApport >= 20) {
+    finaLines.push(`L'apport de ${fmt(apport)} EUR (~${ratioApport}% du prix) est solide. C'est un levier de négociation pour obtenir de meilleures conditions bancaires.`)
+  } else if (ratioApport >= 10) {
+    finaLines.push(`L'apport de ${fmt(apport)} EUR (~${ratioApport}%) couvre les frais annexes. Pour améliorer les conditions de taux, viser 20% (${fmt(apportIdeal20)} EUR) serait un atout.`)
+  } else {
+    finaLines.push(`L'apport de ${fmt(apport)} EUR (~${ratioApport}%) est en dessous du minimum recommandé (10%, soit ${fmt(apportMinimum10)} EUR). Les banques seront plus exigeantes sur le reste du dossier.`)
+  }
+
+  // ── Points de vigilance ──
+  const vigil: string[] = []
+  if (ecartPrix !== null && ecartPrix > 10) vigil.push('Prix au-dessus du marché — vérifier les justifications (état, prestations, étage)')
+  if (ecartPrix !== null && ecartPrix < -10) vigil.push('Prix bas par rapport au marché — contrôler l\'état du bien, les charges et la copropriété')
+  if (typeBien === 'ancien') vigil.push('Demander les diagnostics obligatoires (DPE, amiante, plomb) et le carnet d\'entretien')
+  if (quartier?.qualiteAir !== null && quartier?.qualiteAir !== undefined && quartier.qualiteAir < 5) vigil.push('Qualité de l\'air dégradée sur le secteur — un critère de plus en plus regardé à la revente')
+  if (quartier?.niveauVie !== null && quartier?.niveauVie !== undefined && quartier.niveauVie < 4) vigil.push('Niveau de vie du quartier modeste — peut impacter la valorisation à long terme')
+  if (quartier?.risques !== null && quartier?.risques !== undefined && quartier.risques < 5) vigil.push('Risques naturels ou industriels identifiés sur la zone — consulter le rapport Géorisques')
+  if (!apportSuffisant) vigil.push('Endettement au-dessus de 35% — priorité : augmenter l\'apport ou revoir le budget')
+  if (dureeAns >= 25) vigil.push(`Durée longue (${dureeAns} ans) — le coût total des intérêts sera significatif`)
+  if (infoLocalisation?.ptzEligible) vigil.push('Zone éligible au PTZ — à intégrer dans le plan de financement')
+
+  // ── Avis d'expert ──
+  let avis = ''
+  if (apportSuffisant && scoreQ !== null && scoreQ >= 6 && (ecartPrix === null || Math.abs(ecartPrix) <= 10)) {
+    avis = `Le projet paraît cohérent : le prix est en ligne avec le marché, le quartier est correctement équipé et le financement est soutenable. Le principal sujet ici n'est pas le financement mais la qualité intrinsèque du bien — état réel, charges de copropriété, performance énergétique. Un accompagnement sur la visite et la négociation permettrait de sécuriser l'opération.`
+  } else if (apportSuffisant && ecartPrix !== null && ecartPrix > 10) {
+    avis = `Le financement est soutenable, mais le prix affiché mérite d'être challengé. À ce niveau, un arbitrage sur la négociation ou la recherche de biens mieux positionnés dans le même secteur pourrait améliorer significativement la qualité du projet.`
+  } else if (!apportSuffisant) {
+    avis = `Le projet est ambitieux par rapport au profil financier actuel. Avant de poursuivre, il serait pertinent d'explorer les options : renforcer l'apport, ajuster le budget cible ou étudier les dispositifs d'aide au financement disponibles sur cette zone.`
+  } else {
+    avis = `Le projet est réaliste dans ses grandes lignes. La pertinence de l'achat dépendra surtout de la visite, de l'état réel du bien et de la dynamique du marché local. Ne pas hésiter à comparer avec d'autres biens similaires pour affiner le positionnement.`
+  }
+
+  return {
+    lectureImmo: immoLines.join(' '),
+    lectureFinanciere: finaLines.join(' '),
+    vigilance: vigil.slice(0, 5),
+    avisExpert: avis,
+  }
+}
+
 // ─── Document ───
 export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
   const {
@@ -750,10 +853,11 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             <Text style={s.headerSubText}>Puis-je acheter ce bien ? • {dateStr}</Text>
           </View>
           <View style={s.headerRight}>
-            <View style={s.heroBadge}>
-              <Text style={s.heroBadgeLabel}>PRIX DU BIEN</Text>
-              <Text style={s.heroBadgeValue}>{fmt(prixBien)} EUR</Text>
-            </View>
+            <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
+              <View style={[s.ctaBtn, { paddingHorizontal: 10, paddingVertical: 6 }]}>
+                <Text style={[s.ctaBtnText, { fontSize: 7 }]}>Prendre rendez-vous</Text>
+              </View>
+            </Link>
           </View>
         </View>
         <View style={s.headerAccent} />
@@ -761,16 +865,16 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
         <View style={s.content}>
           {/* Hero card — Revenus minimums */}
           <View style={s.heroCard}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={s.heroLabel}>REVENUS MENSUELS NETS REQUIS (MIN.)</Text>
-              <Text style={s.heroValue}>{fmt(revenusMinimums33)} EUR /mois</Text>
+              <Text style={s.heroValue}>{fmt(revenusMinimums35)} EUR /mois</Text>
               <Text style={s.heroSub}>
-                Pour respecter le taux d&apos;endettement de 33% (norme HCSF)
+                Pour respecter le taux d&apos;endettement de 35% (norme HCSF)
               </Text>
             </View>
             <View style={s.heroBadge}>
-              <Text style={s.heroBadgeLabel}>SEUIL 35%</Text>
-              <Text style={s.heroBadgeValue}>{fmt(revenusMinimums35)} EUR</Text>
+              <Text style={s.heroBadgeLabel}>PRIX DU BIEN</Text>
+              <Text style={s.heroBadgeValue}>{fmt(prixBien)} EUR</Text>
             </View>
           </View>
 
@@ -816,7 +920,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             <View style={s.halfColumn}>
               <SectionTitle title="DÉTAIL DU FINANCEMENT" />
               <View style={s.dataCard}>
-                <DataRow label="Frais de notaire" value={`${fmt(fraisNotaire)} EUR`} />
+                <DataRow label="Frais de notaire" value={`~ ${fmt(fraisNotaire)} EUR`} />
                 <DataRow label="Frais annexes" value={`${fmt(fraisAnnexes)} EUR`} />
                 <DataRow label="Coût total acquisition" value={`${fmt(coutTotal)} EUR`} />
                 <DataRow label="Apport déduit" value={`- ${fmt(apport)} EUR`} />
@@ -846,9 +950,9 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                   <BudgetBar key={item.label} label={item.label} value={item.value} pct={pct} color={item.color} />
                 )
               })}
-              <View style={s.budgetTotal}>
-                <Text style={s.budgetTotalLabel}>COÛT TOTAL DU PROJET</Text>
-                <Text style={s.budgetTotalLabel}>{fmt(totalProjet)} EUR</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.sectionBg, borderRadius: 4, paddingVertical: 8, paddingHorizontal: 10, marginTop: 8 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>COÛT TOTAL DU PROJET</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.green }}>{fmt(totalProjet)} EUR</Text>
               </View>
             </View>
           </View>
@@ -874,26 +978,6 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </View>
           </View>
 
-          {/* Verdict de faisabilité */}
-          <View style={{ marginTop: 14, borderRadius: 6, borderWidth: 1, borderColor: apportSuffisant ? '#bbf7d0' : '#fed7aa', backgroundColor: apportSuffisant ? '#f0fdf4' : '#fffbeb', paddingVertical: 10, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: apportSuffisant ? C.green : C.orange, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.white }}>
-                {apportSuffisant ? 'OK' : '!'}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: apportSuffisant ? C.greenDark : C.orange }}>
-                {apportSuffisant
-                  ? 'Projet réalisable'
-                  : 'Projet à consolider'}
-              </Text>
-              <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, lineHeight: 1.4 }}>
-                {apportSuffisant
-                  ? `Avec un apport de ${fmt(apport)} EUR et une mensualité de ${fmt(mensualiteTotal)} EUR/mois sur ${dureeAns} ans, ce projet est dans les normes bancaires. Un conseiller AQUIZ peut optimiser votre taux et réduire le coût total.`
-                  : `Votre apport de ${fmt(apport)} EUR est en dessous du minimum conseillé (${fmt(apportMinimum10)} EUR). Les banques pourraient demander des garanties supplémentaires. Un conseiller AQUIZ peut identifier des solutions adaptées.`}
-              </Text>
-            </View>
-          </View>
         </View>
 
         <Footer logoUrl={logoUrl} />
@@ -904,11 +988,6 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
         <Footer logoUrl={logoUrl} />
 
         <View style={s.content}>
-          {/* Titre de section */}
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
-            <Text style={s.pageTitle}>ANALYSE COMPLÈTE</Text>
-            <Text style={s.pageSub}>Comparaison, quartier, IA & accompagnement</Text>
-          </View>
 
           {/* ═══ 1. Tableau comparatif durées ═══ */}
           <View style={{ marginTop: 8 }}>
@@ -995,207 +1074,231 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </View>
           )}
 
-          {/* ═══ 3. Qualité du quartier ═══ */}
-          {quartier && quartier.scoreGlobal > 0 && (
+          {/* ═══ 3. Chiffres clés du quartier ═══ */}
+          {quartier && (
             <View style={{ marginTop: 14 }}>
-              <SectionTitle title={`QUALITÉ DU QUARTIER — ${nomCommune || codePostal}`} />
+              <SectionTitle title={`CHIFFRES CLÉS DU QUARTIER — ${nomCommune || codePostal}`} />
 
-              {/* ── Score global + synthese ── */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 8 }}>
-                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: quartier.scoreGlobal / 10 >= 7 ? C.greenLight : quartier.scoreGlobal / 10 >= 4 ? C.orangeLight : '#fee2e2', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: quartier.scoreGlobal / 10 >= 7 ? C.green : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
-                  <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: quartier.scoreGlobal / 10 >= 7 ? C.greenDark : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
-                    {(quartier.scoreGlobal / 10).toFixed(1)}
-                  </Text>
-                  <Text style={{ fontSize: 5, color: C.grayLight }}>/10</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                    Score global : {(quartier.scoreGlobal / 10).toFixed(1)}/10
-                  </Text>
-                  <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, lineHeight: 1.3 }}>
-                    {quartier.scoreGlobal / 10 >= 7 ? 'Quartier bien desservi avec de bons équipements.' : quartier.scoreGlobal / 10 >= 4 ? 'Quartier correct, quelques points à vérifier.' : 'Quartier peu équipé, vigilance recommandée.'}
-                  </Text>
-                  {quartier.counts && (
-                    <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 3 }}>
-                      {quartier.counts.transport + quartier.counts.commerce + quartier.counts.education + quartier.counts.sante + quartier.counts.vert + quartier.counts.loisirs} équipements recensés dans un rayon de 800m (source : OpenStreetMap)
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              {/* ── Détail des scores — barres horizontales ── */}
-              <View style={{ borderWidth: 0.5, borderColor: C.grayBorder, borderRadius: 4, overflow: 'hidden' }}>
+              {/* ── Grille catégories — cards info ── */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 }}>
                 {[
-                  { label: 'Transports', score: quartier.transports / 10, icon: 'Métro, bus, tramway', count: quartier.counts?.transport },
-                  { label: 'Commerces', score: quartier.commerces / 10, icon: 'Supermarchés, boulangeries', count: quartier.counts?.commerce },
-                  { label: 'Écoles', score: quartier.ecoles / 10, icon: 'Écoles, collèges, lycées', count: quartier.counts?.education },
-                  { label: 'Santé', score: quartier.sante / 10, icon: 'Médecins, pharmacies', count: quartier.counts?.sante },
-                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, icon: 'Parcs, jardins', count: quartier.counts?.vert },
-                  ...(quartier.niveauVie != null ? [{ label: 'Niveau de vie', score: quartier.niveauVie, icon: quartier.revenuMedian ? `${fmt(Math.round(quartier.revenuMedian / 12))} €/mois médian` : 'Source INSEE', count: undefined as number | undefined }] : []),
-                  ...(quartier.qualiteAir != null ? [{ label: 'Qualité air', score: quartier.qualiteAir, icon: quartier.qualiteAirLabel || 'Indice ATMO', count: undefined as number | undefined }] : []),
-                ].map((item, idx) => (
-                  <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? C.white : C.grayBg, borderBottomWidth: 0.3, borderBottomColor: C.grayBorder }}>
-                    <View style={{ width: 65 }}>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{item.label}</Text>
-                    </View>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={{ flex: 1, height: 6, backgroundColor: '#e6e6e6', borderRadius: 3 }}>
-                        <View style={{ height: 6, borderRadius: 3, width: `${item.score * 10}%`, backgroundColor: item.score >= 7 ? C.green : item.score >= 4 ? C.orange : C.red }} />
+                  { label: 'Transports', count: quartier.counts?.transport, color: C.blue, desc: 'Métro, RER, tram, train' },
+                  { label: 'Commerces', count: quartier.counts?.commerce, color: C.orange, desc: 'Supermarchés, boulangeries' },
+                  { label: 'Écoles', count: quartier.counts?.education, color: C.green, desc: 'Écoles, crèches, lycées' },
+                  { label: 'Santé', count: quartier.counts?.sante, color: C.red, desc: 'Médecins, pharmacies' },
+                  { label: 'Espaces verts', count: quartier.counts?.vert, color: C.green, desc: 'Parcs, jardins' },
+                  { label: 'Loisirs', count: quartier.counts?.loisirs, color: C.greenDark, desc: 'Sports, culture' },
+                ].map((cat, idx) => {
+                  const isTransportCat = cat.label === 'Transports'
+                  return (
+                  <View key={idx} style={{
+                    width: '48.5%' as unknown as number,
+                    borderWidth: 1,
+                    borderColor: C.grayBorder,
+                    borderRadius: 5,
+                    overflow: 'hidden',
+                    backgroundColor: C.white,
+                  }}>
+                    {/* Color bar top */}
+                    <View style={{ height: 3, backgroundColor: cat.color }} />
+                    <View style={{ padding: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{cat.label}</Text>
+                        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: cat.color }}>
+                          {cat.count != null ? cat.count : '—'}
+                        </Text>
                       </View>
-                      <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', width: 30, textAlign: 'right', color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }}>
-                        {item.score.toFixed(1)}/10
+                      <Text style={{ fontSize: 5.5, color: C.gray }}>
+                        {cat.count != null && cat.count > 0 ? `${cat.count} trouvé${cat.count > 1 ? 's' : ''} · ${cat.desc}` : cat.desc}
                       </Text>
-                    </View>
-                    <View style={{ width: 80, alignItems: 'flex-end' }}>
-                      {item.count != null && item.count > 0 ? (
-                        <Text style={{ fontSize: 5.5, color: C.gray }}>{item.count} trouvé{item.count > 1 ? 's' : ''}</Text>
-                      ) : (
-                        <Text style={{ fontSize: 5, color: C.grayLight }}>{item.icon}</Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-
-              {/* ── Transports proches (Carte réaliste + légende) ── */}
-              {quartier.transportsProches && quartier.transportsProches.length > 0 && (() => {
-                const filtered = quartier.transportsProches.filter(tp => {
-                  const isGenericName = /^(Gare|Station|Arrêt|Transport)$/i.test(tp.nom.trim())
-                  return !isGenericName
-                })
-                if (filtered.length === 0) return null
-
-                return (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.sectionBg, marginBottom: 6 }}>Transports à proximité</Text>
-
-                    {/* Liste compacte des transports */}
-                    <View style={{ gap: 3 }}>
-                      {filtered.map((tp, idx) => {
-                        const lignes = cleanTransportLines(tp.typeTransport, tp.lignes)
+                      {/* Transport lines inline */}
+                      {isTransportCat && (() => {
+                        const transportLinesMap: Record<string, string[]> = {}
+                        if (quartier.transportsProches) {
+                          for (const tp of quartier.transportsProches) {
+                            if (!tp.lignes || tp.lignes.length === 0) continue
+                            if (tp.typeTransport === 'bus' || tp.typeTransport === 'velo') continue
+                            const cleaned = cleanTransportLines(tp.typeTransport, tp.lignes)
+                            if (cleaned.length > 0) {
+                              if (!transportLinesMap[tp.typeTransport]) transportLinesMap[tp.typeTransport] = []
+                              for (const l of cleaned) {
+                                if (!transportLinesMap[tp.typeTransport].includes(l)) transportLinesMap[tp.typeTransport].push(l)
+                              }
+                            }
+                          }
+                        }
+                        if (Object.keys(transportLinesMap).length === 0) return null
                         return (
-                          <View key={`${tp.nom}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 4, backgroundColor: idx % 2 === 0 ? '#F8FAFC' : C.white, borderRadius: 3 }}>
-                            {/* Logo transport */}
-                            {tp.typeTransport === 'metro' && <LogoMetro />}
-                            {tp.typeTransport === 'rer' && <LogoRER />}
-                            {tp.typeTransport === 'train' && <LogoTrain />}
-                            {tp.typeTransport === 'tram' && <TransportBadge label="Tram" color="#000000" />}
-                            {tp.typeTransport === 'bus' && <TransportBadge label="Bus" color="#1D9448" />}
-                            {tp.typeTransport === 'velo' && <TransportBadge label="Vélib'" color="#7AB648" />}
-                            {/* Pastilles lignes */}
-                            {lignes.length > 0 && lignes.slice(0, 4).map(l => (
-                              <PastilleLigne key={l} ligne={l} type={tp.typeTransport} />
-                            ))}
-                            {/* Nom */}
-                            <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.black, flex: 1 }}>{tp.nom}</Text>
-                            {/* Icône marche + temps */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                              {/* Lucide Footprints icon */}
-                              <Svg viewBox="0 0 24 24" width={8} height={8}>
-                                <Path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-                                <Path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-                                <Path d="M16 17h4" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" />
-                                <Path d="M4 13h4" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" />
-                              </Svg>
-                              <Text style={{ fontSize: 5.5, color: '#64748B', fontFamily: 'Helvetica-Bold' }}>{tp.walkMin} min</Text>
-                            </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
+                            {transportLinesMap['metro'] && transportLinesMap['metro'].length > 0 && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                                <View style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFF', marginTop: -0.5 }}>M</Text>
+                                </View>
+                                {transportLinesMap['metro'].map(l => {
+                                  const bg = METRO_LINE_COLORS[l] || '#888'
+                                  const tc = DARK_TEXT_LINES.has(l) ? '#000' : '#FFF'
+                                  return <View key={`m-${l}`} style={{ width: l.length > 2 ? 14 : 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: l.length > 2 ? 4 : 5.5, fontFamily: 'Helvetica-Bold', color: tc }}>{l}</Text></View>
+                                })}
+                              </View>
+                            )}
+                            {transportLinesMap['rer'] && transportLinesMap['rer'].length > 0 && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                                <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFF' }}>
+                                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF', letterSpacing: 0.3 }}>RER</Text>
+                                </View>
+                                {transportLinesMap['rer'].map(l => {
+                                  const bg = RER_LINE_COLORS[l] || '#888'
+                                  return <View key={`r-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>
+                                })}
+                              </View>
+                            )}
+                            {transportLinesMap['train'] && transportLinesMap['train'].length > 0 && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                                <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#1D4A8C', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Train</Text>
+                                </View>
+                                {transportLinesMap['train'].map(l => {
+                                  const bg = TRANSILIEN_COLORS[l] || '#888'
+                                  const tc = DARK_TEXT_LINES.has(l) ? '#000' : '#FFF'
+                                  return <View key={`t-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: tc }}>{l}</Text></View>
+                                })}
+                              </View>
+                            )}
+                            {transportLinesMap['tram'] && transportLinesMap['tram'].length > 0 && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                                <View style={{ paddingHorizontal: 3, height: 11, borderRadius: 2, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Tram</Text>
+                                </View>
+                                {transportLinesMap['tram'].map(l => <View key={`tr-${l}`} style={{ paddingHorizontal: 2, height: 11, borderRadius: 5.5, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>)}
+                              </View>
+                            )}
                           </View>
                         )
-                      })}
+                      })()}
                     </View>
                   </View>
-                )
-              })()}
+                  )
+                })}
+              </View>
 
-              {/* ── Synthèse texte ── */}
-              {quartier.synthese && (
-                <View style={{ backgroundColor: C.grayBg, borderRadius: 3, padding: 6, marginTop: 6, borderLeftWidth: 2, borderLeftColor: C.green }}>
-                  <Text style={{ fontSize: 6.5, color: C.gray, lineHeight: 1.4 }}>
-                    {quartier.synthese}
-                  </Text>
+              {/* ── Enrichissements optionnels (niveau de vie, qualité air) ── */}
+              {(quartier.niveauVie != null || quartier.qualiteAir != null || quartier.revenuMedian != null) && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                  {quartier.revenuMedian != null && (
+                    <View style={{
+                      width: '48.5%' as unknown as number,
+                      borderWidth: 1, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
+                    }}>
+                      <View style={{ height: 3, backgroundColor: C.orange }} />
+                      <View style={{ padding: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Revenu médian</Text>
+                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.orange }}>
+                            {fmt(Math.round(quartier.revenuMedian / 12))} EUR
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 5.5, color: C.gray }}>Par mois · Source INSEE</Text>
+                      </View>
+                    </View>
+                  )}
+                  {quartier.qualiteAir != null && (
+                    <View style={{
+                      width: '48.5%' as unknown as number,
+                      borderWidth: 1, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
+                    }}>
+                      <View style={{ height: 3, backgroundColor: quartier.qualiteAir >= 7 ? C.green : quartier.qualiteAir >= 4 ? C.orange : C.red }} />
+                      <View style={{ padding: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Qualité de l'air</Text>
+                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: quartier.qualiteAir >= 7 ? C.greenDark : quartier.qualiteAir >= 4 ? C.orange : C.red }}>
+                            {quartier.qualiteAirLabel || (quartier.qualiteAir >= 7 ? 'Bon' : quartier.qualiteAir >= 4 ? 'Moyen' : 'Mauvais')}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 5.5, color: C.gray }}>Indice ATMO</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
+
             </View>
           )}
 
-          {/* ═══ 4. Synthèse IA ═══ */}
-          {syntheseIA && (
-            <View style={s.iaCard} wrap={false}>
-              <View style={s.iaBadge}>
-                <View style={s.iaBadgeIcon}>
-                  <Text style={s.iaBadgeText}>IA</Text>
-                </View>
-                <Text style={[s.iaBadgeText, { color: C.green, fontWeight: 'bold', marginLeft: 4 }]}>Analyse personnalisée AQUIZ</Text>
+          {/* ═══ 5. Accompagnement AQUIZ ═══ */}
+          <View style={{
+            backgroundColor: C.white,
+            borderRadius: 6,
+            borderWidth: 1.5,
+            borderColor: C.green,
+            padding: 14,
+            marginTop: 14,
+          }} wrap={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <View style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: C.green,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
               </View>
-              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
-              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
-                <View style={s.iaEconomie}>
-                  <Text style={s.iaEconomieValue}>
-                    Jusqu&apos;à {fmt(syntheseIA.economieEstimee)} EUR
-                  </Text>
-                  <Text style={s.iaEconomieLabel}>
-                    d&apos;économie potentielle avec un accompagnement optimisé
-                  </Text>
-                </View>
-              )}
-              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
-              {/* Mention source IA AQUIZ */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, paddingTop: 6, borderTopWidth: 0.5, borderTopColor: '#bbf7d0' }}>
-                <View style={{ backgroundColor: C.green, borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1.5 }}>
-                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.white }}>
-                    IA AQUIZ
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 5.5, color: C.grayLight, lineHeight: 1.4 }}>
-                  Analyse g{'\u00e9'}n{'\u00e9'}r{'\u00e9'}e par l&apos;IA AQUIZ {'\u00e0'} partir de vos donn{'\u00e9'}es de simulation et des prix du march{'\u00e9'} local.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* ═══ 5. Conseils personnalisés ═══ */}
-          <View style={{ marginTop: 14 }} wrap={false}>
-            <SectionTitle title="CONSEILS PERSONNALISÉS" />
-            <View style={s.conseilCard}>
-              {conseils.map((conseil, idx) => (
-                <Text key={idx} style={s.conseilItem}>
-                  {idx + 1}. {conseil}
-                </Text>
-              ))}
-            </View>
-          </View>
-
-          {/* ═══ 6. Résumé ═══ */}
-          <View style={{ marginTop: 14, backgroundColor: C.grayBg, borderRadius: 6, paddingVertical: 10, paddingHorizontal: 12 }} wrap={false}>
-            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
-              EN RÉSUMÉ
-            </Text>
-            <Text style={{ fontSize: 6.5, color: C.gray, lineHeight: 1.5 }}>
-              Pour acheter ce {typeLogement} {typeBien} à {fmt(prixBien)} EUR
-              {nomCommune ? ` à ${nomCommune}` : ''}, vous devez disposer de revenus nets mensuels
-              d&apos;au moins {fmt(revenusMinimums33)} EUR (norme HCSF 33%) avec un apport
-              de {fmt(apport)} EUR sur {dureeAns} ans à {tauxInteret}%. Votre mensualité
-              sera de {fmt(mensualiteTotal)} EUR (crédit + assurance) pour un coût total
-              de projet de {fmt(totalProjet)} EUR.
-            </Text>
-            <Text style={{ fontSize: 6.5, color: apportSuffisant ? C.greenDark : C.orange, fontFamily: 'Helvetica-Bold', marginTop: 4 }}>
-              {apportSuffisant
-                ? 'Verdict : Ce projet est réalisable dans les normes bancaires actuelles.'
-                : 'Verdict : Ce projet nécessite un ajustement (apport ou durée) pour être accepté par les banques.'}
-            </Text>
-          </View>
-
-          {/* ═══ 7. CTA final ═══ */}
-          <View style={s.ctaCard} wrap={false}>
-            <View>
-              <Text style={s.ctaTitle}>Prêt à concrétiser cet achat ?</Text>
-              <Text style={s.ctaSub}>
-                Un conseiller AQUIZ analyse votre dossier, négocie votre taux et vous accompagne jusqu&apos;à la signature.
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                ACCOMPAGNEMENT AQUIZ
               </Text>
             </View>
+
+            <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.6, marginBottom: 10 }}>
+              Pour aller plus loin sur ce bien, un expert AQUIZ peut :
+            </Text>
+
+            {[
+              `Vérifier la cohérence du prix affiché avec le marché${nomCommune ? ` à ${nomCommune}` : ''} et identifier la marge de négociation`,
+              'Analyser les diagnostics obligatoires (DPE, amiante, plomb) et les éventuels travaux à prévoir',
+              `Structurer le meilleur plan de financement pour ce ${typeLogement} (taux, durée, assurance, garanties)`,
+              infoLocalisation?.ptzEligible ? 'Activer les dispositifs d\'aide disponibles sur cette zone (PTZ, Action Logement, PAS)' : 'Rechercher les dispositifs d\'aide applicables à votre situation (PTZ, PAS, Action Logement)',
+              'Accompagner la visite, le compromis et chaque étape jusqu\'à la remise des clés',
+            ].map((item, idx) => (
+              <View key={idx} style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 6,
+                marginBottom: 5,
+                paddingLeft: 4,
+              }}>
+                <View style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 2.5,
+                  backgroundColor: C.green,
+                  marginTop: 3,
+                  flexShrink: 0,
+                }} />
+                <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.5, flex: 1 }}>
+                  {item}
+                </Text>
+              </View>
+            ))}
+
+            <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
+              Sécurisez votre achat : un expert AQUIZ vous aide à transformer cette étude en projet concret.
+            </Text>
+
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
-              <View style={s.ctaBtn}>
-                <Text style={s.ctaBtnText}>Prendre rendez-vous</Text>
+              <View style={{
+                backgroundColor: C.green,
+                borderRadius: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                alignSelf: 'center',
+                alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                  Prendre rendez-vous
+                </Text>
               </View>
             </Link>
           </View>
