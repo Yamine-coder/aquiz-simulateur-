@@ -2003,87 +2003,62 @@ function ModeAPageContent() {
                   )}
 
                   {/* CTA Bonus — Recevez votre étude personnalisée PDF par email */}
-                  <div id="pdf-gate" className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                    <div className="px-5 py-5">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                          <FileDown className="w-5 h-5 text-aquiz-green" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-sm text-aquiz-black">
-                            {pdfEmailSent ? 'Étude personnalisée téléchargée !' : 'Votre étude complète en PDF'}
-                          </h3>
-                          <p className="text-aquiz-gray text-xs">
-                            {pdfEmailSent ? 'Vous pouvez la re-télécharger à tout moment.' : 'Tout ce qu\'il faut pour passer à l\'action — en un seul document.'}
-                          </p>
-                        </div>
+                  <div id="pdf-gate" className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
+                    {/* Header */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                        <FileDown className="w-6 h-6 text-aquiz-green" />
                       </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-base text-aquiz-black">
+                          {pdfEmailSent ? 'Étude d\u2019achat téléchargée !' : 'Télécharger votre étude d\u2019achat'}
+                        </h3>
+                        <p className="text-aquiz-gray text-xs mt-0.5">
+                          {pdfEmailSent
+                            ? 'Vous pouvez la re-télécharger à tout moment.'
+                            : '6 pages · Budget détaillé, analyse IA, coûts cachés & parcours d\u2019achat'}
+                        </p>
+                      </div>
+                    </div>
 
-                      {!pdfEmailSent && (
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
-                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Budget détaillé + frais</span>
-                          </div>
-                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
-                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Analyse IA personnalisée</span>
-                          </div>
-                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
-                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Coûts cachés à anticiper</span>
-                          </div>
-                          <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
-                            <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                            <span className="text-[11px] text-aquiz-black/80">Parcours d'achat complet</span>
-                          </div>
+                    {/* Action */}
+                    {pdfEmailSent ? (
+                      <button
+                        type="button"
+                        disabled={pdfGenerating}
+                        onClick={async () => {
+                          setPdfGenerating(true)
+                          try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfGenerating(false) }
+                        }}
+                        className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                      >
+                        {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
+                        {pdfGenerating ? 'Génération…' : 'Re-télécharger mon étude'}
+                      </button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                          <input
+                            type="email"
+                            value={pdfEmailValue}
+                            onChange={(e) => setPdfEmailValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                            placeholder="Votre email"
+                            className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                          />
                         </div>
-                      )}
-
-                      {pdfEmailSent ? (
                         <button
                           type="button"
-                          onClick={async () => {
-                            setPdfGenerating(true)
-                            try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfGenerating(false) }
-                          }}
-                          disabled={pdfGenerating}
-                          className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                          disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
+                          onClick={handleSendPdfEmail}
+                          className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
                         >
-                          {pdfGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                          {pdfGenerating ? 'Génération…' : 'Re-télécharger mon étude'}
+                          {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                          {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
                         </button>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex gap-2">
-                            <div className="flex-1 relative">
-                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
-                              <input
-                                type="email"
-                                value={pdfEmailValue}
-                                onChange={(e) => setPdfEmailValue(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                                placeholder="Votre email"
-                                className="w-full pl-10 pr-4 py-3 text-sm border border-aquiz-gray-lighter rounded-xl focus:outline-none focus:ring-2 focus:ring-aquiz-green/30 bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleSendPdfEmail}
-                              disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
-                              className="px-5 py-3 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-50 text-white font-bold rounded-xl transition-all text-sm shrink-0 flex items-center gap-2"
-                            >
-                              {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                              {pdfEmailLoading ? 'Analyse en cours…' : 'Recevoir'}
-                            </button>
-                          </div>
-                          <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
-                            <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
-                            <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* CTA Accompagnement projet — masqué sur mobile (le bottom bar a "Conseiller") */}

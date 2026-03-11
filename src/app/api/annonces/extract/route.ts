@@ -23,22 +23,28 @@ import {
     getCachedResult,
     getRandomUserAgent,
     isBlockedResponse,
+    isDomainCircuitOpen,
     protectedFetch,
     randomDelay,
+    recordDomainFailure,
+    recordDomainSuccess,
     recordRequest,
     setCachedResult,
     waitForDomainThrottle,
 } from '@/lib/scraping/antiBlock'
+import { completerDonnees } from '@/lib/scraping/completerDonnees'
 import {
     detecterSource,
     extractFromHTML,
+    parseNextData,
 } from '@/lib/scraping/extracteur'
 import { compterChampsExtraits, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import { tryPlaywrightChrome } from '@/lib/scraping/playwrightScraper'
 import { NextRequest, NextResponse } from 'next/server'
+import dns from 'node:dns/promises'
 
 /** Seuil minimum de champs extraits pour considérer l'extraction réussie */
-const MIN_FIELDS = 2
+const MIN_FIELDS = 3
 
 /** Résultat d'extraction structuré (avant conversion en NextResponse) */
 interface ExtractionResponse {
@@ -53,8 +59,8 @@ interface ExtractionResponse {
 /** Sites pour lesquels ScrapingBee doit activer premium_proxy (DataDome/Cloudflare) */
 const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouestfrance', 'figaro']
 
-/** Sites protégés par anti-bot lourd (DataDome, Cloudflare) → Playwright en priorité */
-const SITES_CHROME_FIRST = ['logic-immo']
+/** Sites protégés par anti-bot lourd (DataDome, Cloudflare) ou SPA → Playwright en priorité */
+const SITES_CHROME_FIRST = ['logic-immo', 'foncia', 'nexity']
 export async function POST(request: NextRequest) {
   // ── Global cascade timeout (55s — under Vercel's 60s Pro limit) ──
   const GLOBAL_TIMEOUT_MS = 55_000
@@ -140,6 +146,52 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
         { status: 400 }
       )
     }
+
+    // ── Protection SSRF : résolution DNS pour bloquer le rebinding ──
+    try {
+      const addresses = await dns.resolve4(hostname)
+      const isPrivateIP = addresses.some(ip =>
+        ip.startsWith('127.') ||
+        ip.startsWith('10.') ||
+        ip.startsWith('0.') ||
+        ip.startsWith('169.254.') ||
+        ip.startsWith('192.168.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+      )
+      if (isPrivateIP) {
+        return NextResponse.json(
+          { success: false, error: 'URL non autorisée' },
+          { status: 400 }
+        )
+      }
+    } catch {
+      // DNS resolution failed — log warning but allow through (might be IPv6-only or transient)
+      // The hostname string check above already blocks obvious private names
+      console.warn(`⚠️ DNS resolution failed for ${hostname} — allowing through with caution`)
+    }
+
+    // ── Détection page de recherche (pas une annonce individuelle) ──
+    const pathLower = parsedUrl.pathname.toLowerCase()
+    const searchParams = parsedUrl.search.toLowerCase()
+    const isSearchPage = (
+      pathLower.includes('/recherche') ||
+      pathLower.includes('/search') ||
+      pathLower.includes('/list.htm') ||
+      pathLower.includes('/annonces/') && !pathLower.match(/\/\d{5,}/) ||
+      searchParams.includes('idtypebien=') ||
+      searchParams.includes('tri=') && searchParams.includes('localities=') ||
+      searchParams.includes('category=') && searchParams.includes('locations=')
+    )
+    if (isSearchPage) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cette URL est une page de recherche, pas une annonce individuelle.',
+          hint: 'Ouvrez une annonce spécifique et copiez son URL (ex: seloger.com/annonces/.../12345.htm)',
+        },
+        { status: 400 }
+      )
+    }
     
     // Détecter la source
     const source = detecterSource(url)
@@ -165,6 +217,24 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     let triedChrome = false
     
     // ═══════════════════════════════════════════════════════
+    // FAST-FAIL : Sites DataDome impossible à scraper côté serveur
+    // selogerneuf.com utilise DataDome avec vérification IP côté CDN.
+    // Aucune méthode serveur (fetch, Playwright, Jina, ScrapingBee) ne fonctionne.
+    // → Répondre immédiatement en mode assistant (coller le texte) en <1s
+    //   au lieu de gaspiller 26s sur la cascade complète.
+    // ═══════════════════════════════════════════════════════
+    if (url.includes('selogerneuf.com')) {
+      console.log(`🏗️ SeLoger Neuf: fast-fail → mode assistant pour ${url.substring(0, 80)}`)
+      return NextResponse.json({
+        success: false,
+        error: 'SeLoger Neuf bloque l\'extraction automatique (protection DataDome).',
+        hint: 'Copiez le texte de la page depuis votre navigateur',
+        protectedSite: true,
+        autoFallback: true,
+      }, { status: 502 })
+    }
+    
+    // ═══════════════════════════════════════════════════════
     // NIVEAU 1 : APIs internes (GRATUIT, JSON, le plus fiable)
     // Chaque grand site FR a une API propriétaire qu'on appelle directement
     // → Bypass total des protections anti-bot
@@ -184,6 +254,12 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     if (!extractionResult && source === 'orpi') {
       extractionResult = await tryOrpiAPI(url)
     }
+    if (!extractionResult && source === 'century21') {
+      extractionResult = await tryCentury21(url)
+    }
+    if (!extractionResult && (source === 'guyhoquet' || source === 'stephaneplaza')) {
+      extractionResult = await tryAgenceHTML(url, source)
+    }
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 1.5 : Chrome stealth (pour sites très protégés sans API)
@@ -194,15 +270,20 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       triedChrome = true
     }
     
+    // SeLoger Neuf fast-fail en amont (L225-235) → pas besoin de retry Chrome ici
+    
     // ── Délai aléatoire entre stratégies ──
     if (!extractionResult) await randomDelay(500, 1500)
+    
+    // ── Circuit breaker : si ce domaine bloque trop, on skip les fetch directs ──
+    const circuitOpen = isDomainCircuitOpen(url)
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 2 : Fetch direct + parsing HTML/JSON-LD/meta
     // Fonctionne pour tout site sans protection anti-bot :
     // Century21, ParuVendu, agences indépendantes, etc.
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult) {
+    if (!extractionResult && !circuitOpen) {
       extractionResult = await tryDirectFetch(url, source)
     }
     
@@ -250,15 +331,27 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // ===== TOUT A ÉCHOUÉ =====
     if (!extractionResult) {
       recordRequest(url, 'blocked')
+      recordDomainFailure(url)
       
       const HEAVILY_PROTECTED = ['pap', 'logic-immo', 'ouestfrance', 'figaro']
-      const isHeavilyProtected = source !== null && HEAVILY_PROTECTED.includes(source)
+      const isSeLogerNeuf = url.includes('selogerneuf.com')
+      const isHeavilyProtected = isSeLogerNeuf || (source !== null && HEAVILY_PROTECTED.includes(source))
       
       const siteNames: Record<string, string> = {
         'logic-immo': 'Logic-Immo', pap: 'PAP.fr',
-        ouestfrance: 'Ouest-France Immo', figaro: 'Figaro Immo'
+        ouestfrance: 'Ouest-France Immo', figaro: 'Figaro Immo',
+        seloger: 'SeLoger', leboncoin: 'LeBonCoin', bienici: "Bien'ici",
+        laforet: 'Laforêt', orpi: 'Orpi', century21: 'Century 21',
+        guyhoquet: 'Guy Hoquet', stephaneplaza: 'Stéphane Plaza',
+        iad: 'IAD France', capifrance: 'Capifrance', safti: 'Safti',
+        optimhome: 'OptimHome',
+        paruvendu: 'ParuVendu', superimmo: 'SuperImmo',
+        avendrealouer: 'AVendreALouer', greenacres: 'Green-Acres',
+        meilleursagents: 'MeilleursAgents', hosman: 'Hosman',
+        nexity: 'Nexity', bouygues: 'Bouygues Immobilier',
+        kaufman: 'Kaufman & Broad', foncia: 'Foncia',
       }
-      const siteName = (source && siteNames[source]) || 'Ce site'
+      const siteName = isSeLogerNeuf ? 'SeLoger Neuf' : (source && siteNames[source]) || 'Ce site'
       
       return NextResponse.json({
         success: false,
@@ -281,6 +374,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     // ===== STOCKER EN CACHE + STATS =====
     recordRequest(url, 'success')
+    recordDomainSuccess(url)
     setCachedResult(
       url,
       extractionResult.data,
@@ -490,11 +584,24 @@ function parseBienIciData(json: Record<string, unknown>, url: string): Extractio
   if (!data.chargesMensuelles) {
     const charges = json.charges || json.monthlyCharges
     if (typeof charges === 'number' && charges > 0) {
-      data.chargesMensuelles = charges > 500 ? Math.round(charges / 12) : Math.round(charges)
+      // Seuil 1200€ : à Paris charges mensuelles > 500€ sont courantes
+      data.chargesMensuelles = charges > 1200 ? Math.round(charges / 12) : Math.round(charges)
     }
   }
   if (typeof json.description === 'string') data.description = (json.description as string).substring(0, 1000)
   if (typeof json.title === 'string') data.titre = json.title
+  
+  // Coordonnées GPS (Bien'ici fournit blurredCoordinates ou district)
+  const coords = json.blurredCoordinates || json.coordinates || json.position || json.district
+  if (coords && typeof coords === 'object') {
+    const c = coords as Record<string, unknown>
+    const lat = c.lat ?? c.latitude
+    const lng = c.lng ?? c.longitude ?? c.lon
+    if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
+      data.latitude = lat
+      data.longitude = lng
+    }
+  }
   
   // Compléter avec le parsing texte de la description (taxe foncière, orientation, DPE, etc.)
   if (data.description) {
@@ -587,15 +694,197 @@ function extractRealEstateFromJson(obj: unknown, depth = 0): Record<string, unkn
 }
 
 // ─────────────────────────────────────
+// LeBonCoin : fonctions partagées (factorisées) pour parser les données API
+// ─────────────────────────────────────
+
+/**
+ * Parse les attributs LeBonCoin (surface, pièces, DPE, etc.)
+ * Factorisation du switch/case utilisé par tryLeBonCoinAPI et tryLeBonCoinFallback.
+ */
+function parseLeBonCoinAttributes(data: Record<string, unknown>, attributes: Array<Record<string, unknown>>): void {
+  for (const attr of attributes) {
+    const key = String(attr.key || '').toLowerCase()
+    const value = String(attr.value ?? '')
+    const valueLabel = String(attr.value_label ?? '')
+    if (!key) continue
+
+    switch (key) {
+      case 'real_estate_type':
+        if (/maison|villa|pavillon/i.test(valueLabel)) data.type = 'maison'
+        else data.type = 'appartement'
+        break
+      case 'square':
+        { const s = parseFloat(value); if (s >= 9 && s <= 2000) data.surface = s; }
+        break
+      case 'rooms':
+        { const r = parseInt(value); if (r >= 1 && r <= 20) data.pieces = r; }
+        break
+      case 'bedrooms':
+        { const b = parseInt(value); if (b >= 0 && b <= 20) data.chambres = b; }
+        break
+      case 'nb_bathrooms':
+      case 'nb_shower_room':
+        { const sdb = parseInt(value)
+          if (sdb >= 1 && sdb <= 10) {
+            data.nbSallesBains = ((data.nbSallesBains as number) || 0) + sdb
+          }
+        }
+        break
+      case 'energy_rate':
+        if (/^[a-g]$/i.test(valueLabel)) data.dpe = valueLabel.toUpperCase()
+        else if (/^[a-g]$/i.test(value)) data.dpe = value.toUpperCase()
+        break
+      case 'ges':
+        if (/^[a-g]$/i.test(valueLabel)) data.ges = valueLabel.toUpperCase()
+        else if (/^[a-g]$/i.test(value)) data.ges = value.toUpperCase()
+        break
+      case 'property_tax':
+        { const tax = parseFloat(value); if (tax > 0 && tax < 20000) data.taxeFonciere = Math.round(tax); }
+        break
+      case 'charges':
+      case 'monthly_charges':
+        { const ch = parseFloat(value)
+          if (ch > 0 && ch < 50000) data.chargesMensuelles = ch > 1200 ? Math.round(ch / 12) : Math.round(ch)
+        }
+        break
+      case 'floor_number':
+        { const fl = parseInt(value); if (fl >= 0 && fl <= 50) data.etage = fl; }
+        break
+      case 'nb_floors_building':
+        { const nf = parseInt(value); if (nf >= 1 && nf <= 60) data.etagesTotal = nf; }
+        break
+      case 'elevator':
+        if (value === '1' || /oui/i.test(valueLabel)) data.ascenseur = true
+        break
+      case 'outside_access':
+        if (/balcon|terrasse|loggia|jardin/i.test(valueLabel)) data.balconTerrasse = true
+        break
+      case 'nb_parking':
+        { const np = parseInt(value); if (np >= 1) data.parking = true; }
+        break
+      case 'cellar':
+        if (value === '1' || /oui/i.test(valueLabel)) data.cave = true
+        break
+      case 'exposure':
+      case 'orientation':
+        if (!data.orientation && valueLabel && valueLabel !== 'undefined') {
+          data.orientation = valueLabel.substring(0, 30)
+        }
+        break
+      case 'construction_year':
+      case 'year_of_construction':
+        if (!data.anneeConstruction) {
+          const yr = parseInt(value)
+          if (yr >= 1800 && yr <= 2030) data.anneeConstruction = yr
+        }
+        break
+      default:
+        break
+    }
+  }
+}
+
+/**
+ * Parse les données de base d'une réponse JSON LeBonCoin.
+ * Retourne un objet data partiellement rempli (titre, description, prix, images, location, attributes).
+ */
+function parseLeBonCoinBaseData(json: Record<string, unknown>, url: string): Record<string, unknown> {
+  const data: Record<string, unknown> = { url }
+
+  // Titre & description
+  data.titre = json.subject as string || undefined
+  data.description = (json.body as string || '').replace(/\\n/g, '\n').substring(0, 1000)
+
+  // Prix (format: [595000])
+  const priceArr = json.price as number[] | undefined
+  if (Array.isArray(priceArr) && priceArr.length > 0) {
+    data.prix = priceArr[0]
+  }
+
+  // Images
+  const images = json.images as Record<string, unknown> | undefined
+  if (images) {
+    const urls = (images.urls as string[]) || []
+    if (urls.length > 0) {
+      data.imageUrl = urls[0]
+      data.images = urls.slice(0, 20)
+    }
+  }
+
+  // Location
+  const loc = json.location as Record<string, unknown> | undefined
+  if (loc) {
+    data.ville = loc.city_label
+      ? String(loc.city_label).replace(/\s*\d{5}\s*$/, '').trim()
+      : loc.city || undefined
+    data.codePostal = loc.zipcode ? String(loc.zipcode) : undefined
+    if (typeof loc.department_name === 'string') data.departement = loc.department_name
+    if (typeof loc.address === 'string' && (loc.address as string).length >= 3) {
+      data.adresse = loc.address
+    }
+    if (typeof loc.lat === 'number' && typeof loc.lng === 'number' && loc.lat !== 0 && loc.lng !== 0) {
+      data.latitude = loc.lat as number
+      data.longitude = loc.lng as number
+    }
+  }
+
+  // Attributes
+  const attributes = json.attributes as Array<Record<string, unknown>> | undefined
+  if (Array.isArray(attributes)) {
+    parseLeBonCoinAttributes(data, attributes)
+  }
+
+  // Année construction depuis description
+  if (!data.anneeConstruction && data.description) {
+    const desc = data.description as string
+    const yearMatch = desc.match(/(?:construite?|construction|bâtie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:19|20)\d{2})/i) ||
+                      desc.match(/(?:immeuble|résidence|copropriété|programme)\s+(?:de|du)\s+((?:19|20)\d{2})/i) ||
+                      desc.match(/livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i) ||
+                      desc.match(/datant\s+(?:de\s+)?((?:19|20)\d{2})/i) ||
+                      desc.match(/(?:normes?\s+)?(?:BBC|RT)\s*(?:20\d{2})\b[^.]*?((?:19|20)\d{2})/i) ||
+                      desc.match(/(?:année\s*(?:de\s*)?construction)\s*:?\s*((?:18|19|20)\d{2})/i)
+    if (yearMatch) {
+      const year = parseInt(yearMatch[1])
+      if (year >= 1800 && year <= 2030) data.anneeConstruction = year
+    }
+  }
+
+  // Enrichir avec parsing texte description
+  if (data.description) {
+    const textData = parseTexteAnnonce(data.description as string)
+    const textRecord = textData as unknown as Record<string, unknown>
+    for (const [key, value] of Object.entries(textRecord)) {
+      if (value === undefined || value === null || value === 'NC') continue
+      if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+        data[key] = value
+      }
+    }
+  }
+
+  if (!data.dpe) data.dpe = 'NC'
+
+  completerDonnees(data)
+
+  return data
+}
+
+/**
+ * Compte les champs significatifs extraits d'un objet data LeBonCoin.
+ */
+function countLeBonCoinFields(data: Record<string, unknown>): number {
+  return Object.keys(data).filter(k =>
+    k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+  ).length
+}
+
+// ─────────────────────────────────────
 // Stratégie LeBonCoin : API interne (gratuit, rapide, données complètes)
 // L'API /finder/classified/<id> retourne le JSON complet de l'annonce
 // avec prix, surface, pièces, DPE, GES, chambres, SDB, taxe foncière, etc.
 // ─────────────────────────────────────
 async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> {
   try {
-    // Extraire l'ID de l'annonce depuis l'URL
-    // Formats: /ad/ventes_immobilieres/3131701667, /ad/3131701667, etc.
-    const idMatch = url.match(/\/(\d{8,12})(?:\?|$|#)/) || url.match(/\/(\d{8,12})/)
+    const idMatch = url.match(/\/(\d{8,12})(?:[/?#]|$)/) || url.match(/\/(\d{8,12})/)
     if (!idMatch) {
       console.warn('LeBonCoin API: impossible d\'extraire l\'ID depuis', url)
       return null
@@ -603,18 +892,19 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
     const adId = idMatch[1]
     
     await waitForDomainThrottle(`https://api.leboncoin.fr/`)
-    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
-      headers: {
+    const lbcHeaders: Record<string, string> = {
         'User-Agent': getRandomUserAgent(),
         'Accept': 'application/json',
         'Accept-Language': 'fr-FR,fr;q=0.9',
         'Referer': 'https://www.leboncoin.fr/',
         'Origin': 'https://www.leboncoin.fr',
-        'api_key': process.env.LEBONCOIN_API_KEY || '',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-site',
-      },
+    }
+    if (process.env.LEBONCOIN_API_KEY) lbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
+    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
+      headers: lbcHeaders,
       signal: AbortSignal.timeout(10000),
     })
     
@@ -625,184 +915,13 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
     
     const json = await response.json() as Record<string, unknown>
     
-    // Vérifier que c'est bien une annonce (pas un captcha redirect)
     if (!json.list_id && !json.subject) {
       console.warn('LeBonCoin API: réponse captcha ou invalide')
       return null
     }
     
-    const data: Record<string, unknown> = { url }
-    
-    // ── Données de base ──
-    data.titre = json.subject as string || undefined
-    data.description = (json.body as string || '')
-      .replace(/\\n/g, '\n')
-      .substring(0, 1000)
-    
-    // Prix (format: [595000])
-    const priceArr = json.price as number[] | undefined
-    if (Array.isArray(priceArr) && priceArr.length > 0) {
-      data.prix = priceArr[0]
-    }
-    
-    // Images
-    const images = json.images as Record<string, unknown> | undefined
-    if (images) {
-      const urls = (images.urls as string[]) || []
-      if (urls.length > 0) {
-        data.imageUrl = urls[0]
-        data.images = urls.slice(0, 20)
-      }
-    }
-    
-    // Location
-    const loc = json.location as Record<string, unknown> | undefined
-    if (loc) {
-      data.ville = loc.city_label
-        ? String(loc.city_label).replace(/\s*\d{5}\s*$/, '').trim()
-        : loc.city || undefined
-      data.codePostal = loc.zipcode ? String(loc.zipcode) : undefined
-      // Adresse (LeBonCoin peut fournir l'adresse dans location)
-      if (typeof loc.address === 'string' && (loc.address as string).length >= 3) {
-        data.adresse = loc.address
-      }
-      // Coordonnées GPS (précises au quartier/rue)
-      if (typeof loc.lat === 'number' && typeof loc.lng === 'number' && loc.lat !== 0 && loc.lng !== 0) {
-        data.latitude = loc.lat as number
-        data.longitude = loc.lng as number
-      }
-    }
-    
-    // ── Attributes (le plus important — contient tout) ──
-    const attributes = json.attributes as Array<Record<string, unknown>> | undefined
-    if (attributes && Array.isArray(attributes)) {
-      for (const attr of attributes) {
-        const key = String(attr.key || '').toLowerCase()
-        const value = String(attr.value ?? '')
-        const valueLabel = String(attr.value_label ?? '')
-        
-        switch (key) {
-          case 'real_estate_type':
-            if (/maison|villa|pavillon/i.test(valueLabel)) data.type = 'maison'
-            else data.type = 'appartement'
-            break
-          case 'square':
-            { const s = parseFloat(value); if (s >= 9 && s <= 2000) data.surface = s; }
-            break
-          case 'rooms':
-            { const r = parseInt(value); if (r >= 1 && r <= 20) data.pieces = r; }
-            break
-          case 'bedrooms':
-            { const b = parseInt(value); if (b >= 0 && b <= 20) data.chambres = b; }
-            break
-          case 'nb_bathrooms':
-          case 'nb_shower_room':
-            { const sdb = parseInt(value)
-              if (sdb >= 1 && sdb <= 10) {
-                data.nbSallesBains = ((data.nbSallesBains as number) || 0) + sdb
-              }
-            }
-            break
-          case 'energy_rate':
-            if (/^[a-g]$/i.test(valueLabel)) data.dpe = valueLabel.toUpperCase()
-            else if (/^[a-g]$/i.test(value)) data.dpe = value.toUpperCase()
-            break
-          case 'ges':
-            if (/^[a-g]$/i.test(valueLabel)) data.ges = valueLabel.toUpperCase()
-            else if (/^[a-g]$/i.test(value)) data.ges = value.toUpperCase()
-            break
-          case 'property_tax':
-            { const tax = parseFloat(value); if (tax > 0 && tax < 20000) data.taxeFonciere = Math.round(tax); }
-            break
-          case 'charges':
-          case 'monthly_charges':
-            { const ch = parseFloat(value)
-              if (ch > 0 && ch < 50000) data.chargesMensuelles = ch > 500 ? Math.round(ch / 12) : Math.round(ch)
-            }
-            break
-          case 'floor_number':
-            { const fl = parseInt(value); if (fl >= 0 && fl <= 50) data.etage = fl; }
-            break
-          case 'nb_floors_building':
-            { const nf = parseInt(value); if (nf >= 1 && nf <= 60) data.etagesTotal = nf; }
-            break
-          case 'elevator':
-            if (value === '1' || /oui/i.test(valueLabel)) data.ascenseur = true
-            break
-          case 'outside_access':
-            if (/balcon|terrasse|loggia|jardin/i.test(valueLabel)) data.balconTerrasse = true
-            break
-          case 'nb_parking':
-            { const np = parseInt(value); if (np >= 1) data.parking = true; }
-            break
-          case 'cellar':
-            if (value === '1' || /oui/i.test(valueLabel)) data.cave = true
-            break
-          case 'specificities':
-            // Ex: "Plusieurs toilettes", "Piscine", "Vue mer"
-            break
-          case 'immo_sell_type':
-            // "old" = ancien, "new" = neuf
-            break
-          case 'exposure':
-          case 'orientation':
-            if (!data.orientation && valueLabel && valueLabel !== 'undefined') {
-              data.orientation = valueLabel.substring(0, 30)
-            }
-            break
-          case 'construction_year':
-          case 'year_of_construction':
-            if (!data.anneeConstruction) {
-              const yr = parseInt(value)
-              if (yr >= 1800 && yr <= 2030) data.anneeConstruction = yr
-            }
-            break
-          case 'estimated_notary_fees':
-          case 'estimated_total_property_price':
-          case 'price_per_square_meter':
-            // Infos complémentaires intéressantes mais pas mappées directement
-            break
-          default:
-            break
-        }
-      }
-    }
-    
-    // Extraire année construction depuis la description
-    if (!data.anneeConstruction && data.description) {
-      const desc = data.description as string
-      const yearMatch = desc.match(/(?:construite?|construction|bâtie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:19|20)\d{2})/i) ||
-                        desc.match(/(?:immeuble|résidence|copropriété|programme)\s+(?:de|du)\s+((?:19|20)\d{2})/i) ||
-                        desc.match(/livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i) ||
-                        desc.match(/datant\s+(?:de\s+)?((?:19|20)\d{2})/i) ||
-                        desc.match(/(?:normes?\s+)?(?:BBC|RT)\s*(?:20\d{2})\b[^.]*?((?:19|20)\d{2})/i) ||
-                        desc.match(/(?:année\s*(?:de\s*)?construction)\s*:?\s*((?:18|19|20)\d{2})/i)
-      if (yearMatch) {
-        const year = parseInt(yearMatch[1])
-        if (year >= 1800 && year <= 2030) data.anneeConstruction = year
-      }
-    }
-    
-    // Compléter avec le parsing texte de la description (tous les champs manquants)
-    if (data.description) {
-      const textData = parseTexteAnnonce(data.description as string)
-      const textRecord = textData as unknown as Record<string, unknown>
-      for (const [key, value] of Object.entries(textRecord)) {
-        if (value === undefined || value === null || value === 'NC') continue
-        if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
-          data[key] = value
-        }
-      }
-    }
-    
-    if (!data.dpe) data.dpe = 'NC'
-    
-    // Compléter les données manquantes
-    completerDonnees(data)
-    
-    const fieldsCount = Object.keys(data).filter(k =>
-      k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
-    ).length
+    const data = parseLeBonCoinBaseData(json, url)
+    const fieldsCount = countLeBonCoinFields(data)
     
     return {
       success: true,
@@ -814,7 +933,6 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
     }
   } catch (err) {
     console.warn('LeBonCoin API échoué:', err)
-    // Fallback : tenter l'endpoint alternatif
     return await tryLeBonCoinFallback(url)
   }
 }
@@ -826,16 +944,15 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
  */
 async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | null> {
   try {
-    const idMatch = url.match(/\/(\d{8,12})(?:\?|$|#)/) || url.match(/\/(\d{8,12})/)
+    const idMatch = url.match(/\/(\d{8,12})(?:[/?#]|$)/) || url.match(/\/(\d{8,12})/)
     if (!idMatch) return null
     const adId = idMatch[1]
 
-    await randomDelay(1500, 3500) // Pause plus longue avant retry
+    await randomDelay(1500, 3500)
     await waitForDomainThrottle('https://api.leboncoin.fr/')
 
     console.log(`🔄 LeBonCoin fallback: retry pour ${adId}`)
 
-    // Endpoint alternatif 1 : /api/adfinder/v1/
     const altEndpoints = [
       `https://api.leboncoin.fr/api/adfinder/v1/classified/${adId}`,
       `https://api.leboncoin.fr/finder/classified/${adId}`,
@@ -843,16 +960,16 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
 
     for (const endpoint of altEndpoints) {
       try {
-        const ua = getRandomUserAgent()
-        const response = await fetch(endpoint, {
-          headers: {
-            'User-Agent': ua,
+        const fbHeaders: Record<string, string> = {
+            'User-Agent': getRandomUserAgent(),
             'Accept': 'application/json',
             'Accept-Language': 'fr-FR,fr;q=0.9',
             'Referer': 'https://www.leboncoin.fr/',
             'Origin': 'https://www.leboncoin.fr',
-            'api_key': process.env.LEBONCOIN_API_KEY || '',
-          },
+        }
+        if (process.env.LEBONCOIN_API_KEY) fbHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
+        const response = await fetch(endpoint, {
+          headers: fbHeaders,
           signal: AbortSignal.timeout(10000),
         })
 
@@ -860,115 +977,9 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
           const json = await response.json() as Record<string, unknown>
           if (json.list_id || json.subject) {
             console.log(`✅ LeBonCoin fallback réussi via ${new URL(endpoint).pathname}`)
-            // Re-parse avec la même logique que tryLeBonCoinAPI
-            // On utilise tryLeBonCoinAPI qui re-fera le fetch — mais l'API a déjà répondu
-            // Donc on fait un mini-parse ici
-            const data: Record<string, unknown> = { url }
-            data.titre = json.subject as string || undefined
-            data.description = (json.body as string || '').replace(/\\n/g, '\n').substring(0, 1000)
-
-            const priceArr = json.price as number[] | undefined
-            if (Array.isArray(priceArr) && priceArr.length > 0) data.prix = priceArr[0]
-
-            const images = json.images as Record<string, unknown> | undefined
-            if (images) {
-              const urls = (images.urls as string[]) || []
-              if (urls.length > 0) {
-                data.imageUrl = urls[0]
-                data.images = urls.slice(0, 20)
-              }
-            }
-
-            // Location
-            const location = json.location as Record<string, unknown> | undefined
-            if (location) {
-              data.ville = location.city as string || undefined
-              data.codePostal = location.zipcode as string || undefined
-              data.departement = location.department_name as string || undefined
-              // Coordonnées GPS
-              if (typeof location.lat === 'number' && typeof location.lng === 'number' && location.lat !== 0 && location.lng !== 0) {
-                data.latitude = location.lat as number
-                data.longitude = location.lng as number
-              }
-            }
-
-            // Attributs immobiliers (parsing complet — identique au parser principal)
-            const attrs = json.attributes as Array<Record<string, unknown>> | undefined
-            if (Array.isArray(attrs)) {
-              for (const attr of attrs) {
-                const key = String(attr.key || '').toLowerCase()
-                const val = String(attr.value ?? '')
-                const valLabel = String(attr.value_label ?? '')
-                if (!key || !val) continue
-                switch (key) {
-                  case 'real_estate_type':
-                    if (/maison|villa|pavillon/i.test(valLabel)) data.type = 'maison'
-                    else data.type = 'appartement'
-                    break
-                  case 'square': { const s = parseFloat(val); if (s >= 9 && s <= 2000) data.surface = s; } break
-                  case 'rooms': { const r = parseInt(val); if (r >= 1 && r <= 20) data.pieces = r; } break
-                  case 'bedrooms': { const b = parseInt(val); if (b >= 0 && b <= 20) data.chambres = b; } break
-                  case 'nb_bathrooms':
-                  case 'nb_shower_room': {
-                    const sdb = parseInt(val)
-                    if (sdb >= 1 && sdb <= 10) data.nbSallesBains = ((data.nbSallesBains as number) || 0) + sdb
-                  } break
-                  case 'energy_rate':
-                    if (/^[a-g]$/i.test(valLabel)) data.dpe = valLabel.toUpperCase()
-                    else if (/^[a-g]$/i.test(val)) data.dpe = val.toUpperCase()
-                    break
-                  case 'ges':
-                    if (/^[a-g]$/i.test(valLabel)) data.ges = valLabel.toUpperCase()
-                    else if (/^[a-g]$/i.test(val)) data.ges = val.toUpperCase()
-                    break
-                  case 'property_tax': { const tax = parseFloat(val); if (tax > 0 && tax < 20000) data.taxeFonciere = Math.round(tax); } break
-                  case 'charges':
-                  case 'monthly_charges': {
-                    const ch = parseFloat(val)
-                    if (ch > 0 && ch < 50000) data.chargesMensuelles = ch > 500 ? Math.round(ch / 12) : Math.round(ch)
-                  } break
-                  case 'floor_number': { const fl = parseInt(val); if (fl >= 0 && fl <= 50) data.etage = fl; } break
-                  case 'nb_floors_building': { const nf = parseInt(val); if (nf >= 1 && nf <= 60) data.etagesTotal = nf; } break
-                  case 'elevator':
-                    if (val === '1' || /oui/i.test(valLabel)) data.ascenseur = true
-                    break
-                  case 'outside_access':
-                    if (/balcon|terrasse|loggia|jardin/i.test(valLabel)) data.balconTerrasse = true
-                    break
-                  case 'nb_parking': { const np = parseInt(val); if (np >= 1) data.parking = true; } break
-                  case 'cellar':
-                    if (val === '1' || /oui/i.test(valLabel)) data.cave = true
-                    break
-                  case 'exposure':
-                  case 'orientation':
-                    if (!data.orientation && valLabel && valLabel !== 'undefined') data.orientation = valLabel.substring(0, 30)
-                    break
-                  case 'construction_year':
-                  case 'year_of_construction': {
-                    const yr = parseInt(val)
-                    if (yr >= 1800 && yr <= 2030) data.anneeConstruction = yr
-                  } break
-                  default: break
-                }
-              }
-            }
-
-            // Enrichir avec le parsing texte de la description
-            if (data.description) {
-              const textData = parseTexteAnnonce(data.description as string)
-              const textRecord = textData as unknown as Record<string, unknown>
-              for (const [key, value] of Object.entries(textRecord)) {
-                if (value === undefined || value === null || value === 'NC') continue
-                if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
-                  data[key] = value
-                }
-              }
-            }
-
-            completerDonnees(data)
-            const fieldsCount = Object.keys(data).filter(k =>
-              k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
-            ).length
+            
+            const data = parseLeBonCoinBaseData(json, url)
+            const fieldsCount = countLeBonCoinFields(data)
 
             return {
               success: true,
@@ -987,7 +998,8 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
 
     console.warn('LeBonCoin: tous les fallbacks API échoués')
     return null
-  } catch {
+  } catch (error) {
+    console.warn('LeBonCoin API error:', error instanceof Error ? error.message : 'unknown')
     return null
   }
 }
@@ -1000,13 +1012,16 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
 async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
   try {
     // Extraire l'ID de l'annonce depuis l'URL
-    // Format: /annonces/achat/appartement/paris-17eme-75/.../260515181.htm
-    const idMatch = url.match(/\/(\d{6,12})\.htm/) || url.match(/\/(\d{6,12})(?:\?|$|#)/)
+    // Formats: .../260515181.htm  |  .../238947597/  |  .../238947597#
+    const idMatch = url.match(/\/(\d{6,12})\.htm/) || url.match(/\/(\d{6,12})(?:[\/?#]|$)/)
     if (!idMatch) {
       console.warn('SeLoger API: impossible d\'extraire l\'ID depuis', url)
       return null
     }
     const adId = idMatch[1]
+
+    // Détecter si c'est un programme neuf (selogerneuf.com ou /neuf/programme/ dans l'URL)
+    const isNeuf = url.includes('selogerneuf.com') || url.includes('/neuf/programme/')
 
     // ── Rotation de User-Agents d'app mobile SeLoger ──
     const SELOGER_APP_UAS = [
@@ -1018,17 +1033,29 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
       'SeLoger/12.3.1 (iPhone; iOS 17.5; Scale/3.0)',
     ]
     const appUA = SELOGER_APP_UAS[Math.floor(Math.random() * SELOGER_APP_UAS.length)]
+    const baseHeaders = {
+      'User-Agent': appUA,
+      'Accept': 'application/json',
+      'Accept-Language': 'fr-FR',
+      'Accept-Encoding': 'gzip, deflate, br',
+    }
 
     await waitForDomainThrottle(`https://api-seloger.svc.groupe-seloger.com/`)
+
+    // ── Pour les programmes neufs : l'API mobile SeLoger n'a PAS ces données ──
+    // DataDome sur selogerneuf.com vérifie les IPs contre les registres Google/Bing,
+    // donc fake Googlebot UA échoue aussi. On retourne null immédiatement et on
+    // laisse la cascade (Chrome stealth → Jina → Google Cache) prendre le relais.
+    if (isNeuf) {
+      console.log(`🏗️ SeLoger Neuf: programme ${adId} — skip API, cascade générique`)
+      return null
+    }
+
+    // ── Endpoint listings classique (SeLoger, pas SeLoger Neuf) ──
     const response = await fetch(
       `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`,
       {
-        headers: {
-          'User-Agent': appUA,
-          'Accept': 'application/json',
-          'Accept-Language': 'fr-FR',
-          'Accept-Encoding': 'gzip, deflate, br',
-        },
+        headers: baseHeaders,
         signal: AbortSignal.timeout(12000),
       }
     )
@@ -1062,9 +1089,10 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
  */
 async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | null> {
   try {
-    const idMatch = url.match(/\/(\d{6,12})\.htm/) || url.match(/\/(\d{6,12})(?:\?|$|#)/)
+    const idMatch = url.match(/\/(\d{6,12})\.htm/) || url.match(/\/(\d{6,12})(?:[/?#]|$)/)
     if (!idMatch) return null
     const adId = idMatch[1]
+    const isNeuf = url.includes('selogerneuf.com') || url.includes('/neuf/programme/')
 
     // Strategy A : User-Agent Android SeLoger (différent pipeline anti-bot côté serveur)
     const ANDROID_UAS = [
@@ -1077,7 +1105,13 @@ async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | 
     await randomDelay(1000, 3000) // Attendre un peu avant de retenter
     await waitForDomainThrottle('https://api-seloger.svc.groupe-seloger.com/')
 
-    console.log(`🔄 SeLoger fallback: retry avec UA Android pour ${adId}`)
+    console.log(`🔄 SeLoger fallback: retry avec UA Android pour ${adId}${isNeuf ? ' (programme neuf)' : ''}`)
+
+    // Pour les programmes neufs, l'API mobile SeLoger n'a PAS les données — skip directement
+    if (isNeuf) {
+      console.log('🔄 SeLoger Neuf: skip fallback API (pas de données programme sur cette API)')
+      return null
+    }
 
     const response = await fetch(
       `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`,
@@ -1124,7 +1158,8 @@ async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | 
 
     console.warn('SeLoger: tous les fallbacks API échoués, cascade générique prendra le relais')
     return null
-  } catch {
+  } catch (error) {
+    console.warn('SeLoger API error:', error instanceof Error ? error.message : 'unknown')
     return null
   }
 }
@@ -1166,6 +1201,11 @@ function parseSeLogerData(json: Record<string, unknown>, url: string): Extractio
   if (typeof json.city === 'string') data.ville = json.city
   if (typeof json.zipCode === 'string') data.codePostal = json.zipCode
   else if (typeof json.zipCode === 'number') data.codePostal = String(json.zipCode)
+  // Adresse (SeLoger peut fournir streetName, address, ou dans location)
+  const slAddress = json.address ?? json.streetName ?? json.street
+  if (typeof slAddress === 'string' && (slAddress as string).length >= 3) {
+    data.adresse = (slAddress as string).substring(0, 100)
+  }
 
   // ── DPE / GES ──
   const energy = json.energy as Record<string, unknown> | undefined
@@ -1364,6 +1404,171 @@ function parseSeLogerData(json: Record<string, unknown>, url: string): Extractio
   }
 }
 
+/**
+ * Parse les données JSON d'un programme neuf SeLoger
+ * Les programmes ont une structure différente des listings classiques :
+ * - programName au lieu de title
+ * - priceMin/priceMax au lieu de price
+ * - lots[] avec les typologies disponibles
+ * - promoterName au lieu de professionals
+ */
+function parseSeLogerProgramData(json: Record<string, unknown>, url: string): ExtractionResponse | null {
+  const data: Record<string, unknown> = { url }
+
+  // ── Titre (programName > name > title) ──
+  data.titre = (json.programName ?? json.name ?? json.title) as string | undefined
+
+  // ── Prix (priceMin, priceMax, ou price direct) ──
+  if (typeof json.priceMin === 'number' && json.priceMin > 0) {
+    data.prix = json.priceMin
+    if (typeof json.priceMax === 'number' && json.priceMax > json.priceMin) {
+      data.prixMax = json.priceMax
+      data.titre = `${data.titre || 'Programme neuf'} — à partir de ${json.priceMin.toLocaleString('fr-FR')} €`
+    }
+  } else if (typeof json.price === 'number' && json.price > 0) {
+    data.prix = json.price
+  }
+  // Fallback: chercher dans lots[]
+  if (!data.prix) {
+    const lots = json.lots as Array<Record<string, unknown>> | undefined
+    if (Array.isArray(lots) && lots.length > 0) {
+      const prices = lots
+        .map(l => l.price as number || l.priceMin as number)
+        .filter(p => typeof p === 'number' && p > 0)
+        .sort((a, b) => a - b)
+      if (prices.length > 0) {
+        data.prix = prices[0]
+        if (prices.length > 1) data.prixMax = prices[prices.length - 1]
+      }
+    }
+  }
+
+  // ── Localisation ──
+  if (typeof json.city === 'string') data.ville = json.city
+  if (typeof json.zipCode === 'string') data.codePostal = json.zipCode
+  else if (typeof json.zipCode === 'number') data.codePostal = String(json.zipCode)
+  const addr = json.address ?? json.streetName
+  if (typeof addr === 'string' && (addr as string).length >= 3) {
+    data.adresse = (addr as string).substring(0, 100)
+  }
+
+  // ── Surface (du programme ou du premier lot) ──
+  if (typeof json.livingArea === 'number' && json.livingArea > 0) {
+    data.surface = json.livingArea
+  } else {
+    const lots = json.lots as Array<Record<string, unknown>> | undefined
+    if (Array.isArray(lots) && lots.length > 0) {
+      const areas = lots.map(l => l.livingArea as number).filter(a => typeof a === 'number' && a > 0)
+      if (areas.length > 0) data.surface = Math.min(...areas)
+    }
+  }
+
+  // ── Pièces / Chambres ──
+  if (typeof json.rooms === 'number' && json.rooms > 0) data.pieces = json.rooms
+  if (typeof json.bedrooms === 'number' && json.bedrooms >= 0) data.chambres = json.bedrooms
+
+  // ── Type de bien (programmes neufs = souvent appartements) ──
+  const realtyType = json.realtyType as number | undefined
+  if (realtyType === 1) data.type = 'appartement'
+  else if (realtyType === 2) data.type = 'maison'
+  else data.type = 'appartement'
+
+  // ── DPE / GES ──
+  const energy = json.energy as Record<string, unknown> | undefined
+  if (energy && typeof energy.grade === 'string' && /^[A-G]$/i.test(energy.grade)) {
+    data.dpe = energy.grade.toUpperCase()
+  }
+  const ghg = json.greenhouseGas as Record<string, unknown> | undefined
+  if (ghg && typeof ghg.grade === 'string' && /^[A-G]$/i.test(ghg.grade)) {
+    data.ges = ghg.grade.toUpperCase()
+  }
+  // Programme neuf : DPE souvent A ou B, parfois indiqué dans labels
+  if (!data.dpe) {
+    const labels = json.labels as string[] | undefined
+    if (Array.isArray(labels)) {
+      for (const label of labels) {
+        const dpeMatch = String(label).match(/DPE\s*[:\s]*([A-G])/i)
+        if (dpeMatch) { data.dpe = dpeMatch[1].toUpperCase(); break }
+      }
+    }
+  }
+
+  // ── Description ──
+  if (typeof json.description === 'string') {
+    data.description = (json.description as string).substring(0, 1000)
+  } else if (typeof json.marketing === 'object' && json.marketing !== null) {
+    const mkt = json.marketing as Record<string, unknown>
+    if (typeof mkt.description === 'string') {
+      data.description = (mkt.description as string).substring(0, 1000)
+    }
+  }
+
+  // ── Photos ──
+  const photos = (json.photos ?? json.images ?? json.medias) as string[] | Array<Record<string, unknown>> | undefined
+  if (Array.isArray(photos) && photos.length > 0) {
+    const validPhotos = photos
+      .map(p => typeof p === 'string' ? p : (p as Record<string, unknown>)?.url as string)
+      .filter(p => typeof p === 'string' && p.startsWith('http'))
+    if (validPhotos.length > 0) {
+      data.imageUrl = validPhotos[0]
+      data.images = validPhotos.slice(0, 20)
+    }
+  }
+
+  // ── Promoteur ──
+  if (typeof json.promoterName === 'string') {
+    data.agence = json.promoterName
+  } else {
+    const pros = json.professionals as Array<Record<string, unknown>> | undefined
+    if (Array.isArray(pros) && pros.length > 0 && typeof pros[0].name === 'string') {
+      data.agence = pros[0].name
+    }
+  }
+
+  // ── Coordonnées GPS ──
+  const coords = json.coordinates as Record<string, unknown> | undefined
+  if (coords) {
+    if (typeof coords.latitude === 'number') data.latitude = coords.latitude
+    if (typeof coords.longitude === 'number') data.longitude = coords.longitude
+  }
+
+  // ── Date de livraison (spécifique programmes neufs) ──
+  const deliveryDate = json.deliveryDate ?? json.estimatedDelivery
+  if (typeof deliveryDate === 'string') {
+    data.dateLivraison = deliveryDate
+  }
+
+  // ── Extraire détails depuis la description ──
+  if (data.description) {
+    const textData = parseTexteAnnonce(data.description as string)
+    const textRecord = textData as unknown as Record<string, unknown>
+    for (const [key, value] of Object.entries(textRecord)) {
+      if (value === undefined || value === null || value === 'NC') continue
+      if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+        data[key] = value
+      }
+    }
+  }
+
+  // Vérification minimum
+  if (!data.prix && !data.surface && !data.titre) return null
+
+  completerDonnees(data)
+
+  const fieldsCount = Object.keys(data).filter(k =>
+    k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+  ).length
+
+  return {
+    success: true,
+    source: 'seloger',
+    data,
+    fieldsExtracted: fieldsCount,
+    method: 'seloger-neuf-api',
+    message: `${fieldsCount} données extraites depuis SeLoger Neuf (API programme)`
+  }
+}
+
 // ─────────────────────────────────────
 // Stratégie Laforêt : API REST ouverte (GRATUIT, aucune auth)
 // GET https://www.laforet.com/api/immo/properties/{immo_id}
@@ -1452,8 +1657,11 @@ async function tryLaforetHTMLFallback(url: string): Promise<ExtractionResponse |
     const data = extractFromHTML(html, url)
     if (!data) return null
 
+    const rawCount = Object.values(data).filter(v => v !== null && v !== undefined && v !== '').length
+    if (rawCount < 3) return null
+
+    completerDonnees(data)
     const fieldsCount = Object.values(data).filter(v => v !== null && v !== undefined && v !== '').length
-    if (fieldsCount < 3) return null
 
     console.log(`🏠 Laforêt HTML: ${fieldsCount} champs extraits`)
     return {
@@ -1464,7 +1672,8 @@ async function tryLaforetHTMLFallback(url: string): Promise<ExtractionResponse |
       method: 'laforet-html',
       message: `${fieldsCount} données extraites depuis Laforêt (HTML)`
     }
-  } catch {
+  } catch (error) {
+    console.warn('Laforêt HTML extraction error:', error instanceof Error ? error.message : 'unknown')
     return null
   }
 }
@@ -1484,22 +1693,31 @@ function parseLaforetData(json: Record<string, unknown>, url: string): Extractio
     const pieces = j.rooms ?? j.nb_rooms ?? j.nbRooms ?? null
     const chambres = j.bedrooms ?? j.nb_bedrooms ?? j.nbBedrooms ?? null
     const salleDeBain = j.bathrooms ?? j.nb_bathrooms ?? null
+    const titre = j.title ?? j.name ?? j.label ?? j.ad_title ?? null
 
     // Localisation
-    const ville = j.city ?? j.location?.city ?? j.commune ?? null
-    const codePostal = j.zipcode ?? j.postal_code ?? j.location?.zipcode ?? null
-    const adresse = j.address ?? j.location?.address ?? null
-    const departement = j.department ?? null
+    // L'API Laforêt retourne city/postcode à null au top-level,
+    // mais les vraies données sont dans le sous-objet "address"
+    const addressObj = (typeof j.address === 'object' && j.address !== null) ? j.address : null
+    const ville = j.city ?? j.location?.city ?? j.commune ?? addressObj?.city ?? null
+    const codePostal = j.zipcode ?? j.postal_code ?? j.location?.zipcode ?? addressObj?.postcode ?? null
+    const adresse = (typeof j.address === 'string' ? j.address : null) ?? j.location?.address ?? null
+    const departement = j.department ?? addressObj?.department_code ?? null
+
+    // Coordonnées GPS (Laforêt fournit lat/lng dans location ou directement)
+    const lat = j.latitude ?? j.lat ?? j.location?.latitude ?? j.location?.lat ?? j.coordinates?.lat ?? null
+    const lng = j.longitude ?? j.lng ?? j.location?.longitude ?? j.location?.lng ?? j.coordinates?.lng ?? null
 
     // DPE / GES
-    const dpe = j.dpe_level ?? j.energy_class ?? j.dpe?.level ?? j.dpeLevel ?? null
+    // L'API Laforêt retourne { dpe: { value: 199, letter: "E" }, ges: { value: 34, letter: "D" } }
+    const dpe = j.dpe_level ?? j.energy_class ?? j.dpe?.letter ?? j.dpe?.level ?? j.dpeLevel ?? null
     const dpeValeur = j.dpe_value ?? j.dpe?.value ?? j.energy_value ?? null
-    const ges = j.ges_level ?? j.greenhouse_gas_class ?? j.ges?.level ?? j.gesLevel ?? null
+    const ges = j.ges_level ?? j.greenhouse_gas_class ?? j.ges?.letter ?? j.ges?.level ?? j.gesLevel ?? null
     const gesValeur = j.ges_value ?? j.ges?.value ?? null
 
     // Détails
     const etage = j.floor ?? j.level ?? null
-    const etagesTotal = j.total_floors ?? j.nb_floors ?? j.floors_number ?? null
+    const etagesTotal = j.total_floors ?? j.nb_floors ?? j.floors_number ?? j.floors ?? null
     const anneeConstruction = j.year_of_construction ?? j.construction_year ?? j.yearBuilt ?? null
     const charges = j.charges ?? j.monthly_charges ?? null
     const taxeFonciere = j.property_tax ?? j.taxe_fonciere ?? null
@@ -1584,6 +1802,7 @@ function parseLaforetData(json: Record<string, unknown>, url: string): Extractio
     if (anneeConstruction) data.anneeConstruction = Number(anneeConstruction)
     if (charges) data.chargesMensuelles = Number(charges)
     if (taxeFonciere) data.taxeFonciere = Number(taxeFonciere)
+    if (titre) data.titre = String(titre)
     if (description) data.description = String(description)
     if (photos.length > 0) {
       data.imageUrl = photos[0]
@@ -1598,6 +1817,11 @@ function parseLaforetData(json: Record<string, unknown>, url: string): Extractio
     if (chauffage) data.chauffage = String(chauffage)
     if (cuisine) data.cuisine = String(cuisine)
     if (orientation) data.orientation = String(orientation)
+    // Coordonnées GPS
+    if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
+      data.latitude = lat
+      data.longitude = lng
+    }
     data.url = url
 
     /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -1632,6 +1856,342 @@ function parseLaforetData(json: Record<string, unknown>, url: string): Extractio
     }
   } catch (error) {
     console.warn('Laforêt parse error:', error instanceof Error ? error.message : error)
+    return null
+  }
+}
+
+// ─────────────────────────────────────
+// Stratégie Century21 : fetch HTML + __NEXT_DATA__ / JSON-LD (GRATUIT)
+// Century21.fr utilise Next.js → __NEXT_DATA__ contient toutes les données
+// URL type : https://www.century21.fr/trouver_logement/detail/XXXXXXX/
+// ─────────────────────────────────────
+async function tryCentury21(url: string): Promise<ExtractionResponse | null> {
+  try {
+    await waitForDomainThrottle('century21.fr')
+    console.log(`🏠 Century21: tentative fetch HTML + __NEXT_DATA__`)
+
+    const response = await protectedFetch(url, {
+      timeoutMs: 15000,
+      throttle: true,
+    })
+
+    if (!response) {
+      console.warn('Century21: pas de réponse')
+      recordDomainFailure(url)
+      return null
+    }
+
+    const html = await response.text()
+    if (!html || html.length < 500) return null
+
+    if (isBlockedResponse(html)) {
+      console.warn('Century21: réponse bloquée')
+      recordDomainFailure(url)
+      return null
+    }
+    recordDomainSuccess(url)
+
+    const data: Record<string, unknown> = { url }
+
+    // ── 1) Essayer __NEXT_DATA__ (le plus riche) ──
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json">\s*({[\s\S]*?})\s*<\/script>/i)
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1])
+        const props = nextData?.props?.pageProps
+
+        // Century21 stocke les données du bien dans pageProps.property ou pageProps.ad
+        const property = props?.property || props?.ad || props?.listing || props?.annonce || null
+
+        if (property) {
+          console.log('Century21: __NEXT_DATA__ trouvé avec property')
+
+          if (property.title || property.titre) data.titre = String(property.title || property.titre)
+          if (property.description) data.description = String(property.description).substring(0, 1000)
+          if (property.price || property.prix) data.prix = Number(property.price || property.prix)
+          if (property.surface || property.area) data.surface = Number(property.surface || property.area)
+          if (property.rooms || property.nbRooms || property.pieces) data.pieces = Number(property.rooms || property.nbRooms || property.pieces)
+          if (property.bedrooms || property.nbBedrooms || property.chambres) data.chambres = Number(property.bedrooms || property.nbBedrooms || property.chambres)
+          if (property.type) {
+            data.type = /maison|villa|pavillon/i.test(String(property.type)) ? 'maison' : 'appartement'
+          }
+
+          // DPE / GES
+          if (property.dpeValue || property.energyConsumption || property.dpe) {
+            const dpeVal = String(property.dpeValue || property.energyConsumption || property.dpe).toUpperCase()
+            if (/^[A-G]$/.test(dpeVal)) data.dpe = dpeVal
+          }
+          if (property.gesValue || property.greenhouseGas || property.ges) {
+            const gesVal = String(property.gesValue || property.greenhouseGas || property.ges).toUpperCase()
+            if (/^[A-G]$/.test(gesVal)) data.ges = gesVal
+          }
+
+          // Localisation
+          if (property.city || property.ville) data.ville = String(property.city || property.ville)
+          if (property.zipCode || property.postalCode || property.codePostal) {
+            data.codePostal = String(property.zipCode || property.postalCode || property.codePostal)
+          }
+          if (property.address || property.adresse) data.adresse = String(property.address || property.adresse)
+
+          // GPS
+          if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
+            data.latitude = property.latitude
+            data.longitude = property.longitude
+          } else if (typeof property.lat === 'number' && typeof property.lng === 'number') {
+            data.latitude = property.lat
+            data.longitude = property.lng
+          }
+
+          // Images
+          const imgs = property.images || property.photos || property.medias
+          if (Array.isArray(imgs) && imgs.length > 0) {
+            const imageUrls = imgs.map((img: unknown) => {
+              if (typeof img === 'string') return img
+              if (typeof img === 'object' && img !== null) {
+                const imgObj = img as Record<string, unknown>
+                return imgObj.url || imgObj.src || imgObj.path || imgObj.uri || null
+              }
+              return null
+            }).filter(Boolean) as string[]
+            if (imageUrls.length > 0) {
+              data.imageUrl = imageUrls[0]
+              data.images = imageUrls.slice(0, 20)
+            }
+          }
+
+          // Caractéristiques
+          if (property.floor !== undefined) data.etage = Number(property.floor)
+          if (property.nbFloors) data.etagesTotal = Number(property.nbFloors)
+          if (property.hasElevator || property.elevator) data.ascenseur = true
+          if (property.hasParking || property.parking) data.parking = true
+          if (property.hasBalcony || property.hasTerrace || property.balcony || property.terrace) data.balconTerrasse = true
+          if (property.hasCellar || property.cellar || property.cave) data.cave = true
+          if (property.constructionYear || property.yearOfConstruction) {
+            const yr = Number(property.constructionYear || property.yearOfConstruction)
+            if (yr >= 1800 && yr <= 2030) data.anneeConstruction = yr
+          }
+          if (property.charges || property.monthlyCharges) {
+            const ch = Number(property.charges || property.monthlyCharges)
+            if (ch > 0 && ch < 50000) data.chargesMensuelles = ch > 1200 ? Math.round(ch / 12) : Math.round(ch)
+          }
+          if (property.landTax || property.propertyTax || property.taxeFonciere) {
+            const tax = Number(property.landTax || property.propertyTax || property.taxeFonciere)
+            if (tax > 0 && tax < 20000) data.taxeFonciere = Math.round(tax)
+          }
+        }
+      } catch (e) {
+        console.warn('Century21: erreur parsing __NEXT_DATA__', e)
+      }
+    }
+
+    // ── 2) Compléter avec extractFromHTML (JSON-LD, meta, HTML sémantique) ──
+    const htmlData = extractFromHTML(html, url)
+    if (htmlData) {
+      const htmlRecord = htmlData as unknown as Record<string, unknown>
+      for (const [key, value] of Object.entries(htmlRecord)) {
+        if (value === undefined || value === null || value === 'NC') continue
+        if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+          data[key] = value
+        }
+      }
+    }
+
+    // ── 3) Enrichir avec parsing texte ──
+    if (data.description) {
+      const textData = parseTexteAnnonce(data.description as string)
+      const textRecord = textData as unknown as Record<string, unknown>
+      for (const [key, value] of Object.entries(textRecord)) {
+        if (value === undefined || value === null || value === 'NC') continue
+        if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+          data[key] = value
+        }
+      }
+    }
+
+    if (!data.dpe) data.dpe = 'NC'
+    completerDonnees(data)
+
+    const fieldsCount = Object.keys(data).filter(k =>
+      k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+    ).length
+
+    if (fieldsCount < MIN_FIELDS) {
+      console.warn(`Century21: seulement ${fieldsCount} champ(s) — insuffisant`)
+      return null
+    }
+
+    return {
+      success: true,
+      source: 'century21',
+      data,
+      fieldsExtracted: fieldsCount,
+      method: 'century21-html',
+      message: `${fieldsCount} données extraites depuis Century21 (HTML + __NEXT_DATA__)`
+    }
+  } catch (err) {
+    console.warn('Century21 parser échoué:', err)
+    return null
+  }
+}
+
+// ─────────────────────────────────────
+// Stratégie agences HTML : Guy Hoquet, Stéphane Plaza, et similaires
+// Fetch HTML + extractFromHTML (JSON-LD / meta / __NEXT_DATA__)
+// Plus générique que Century21 car ces sites varient plus dans leur structure
+// ─────────────────────────────────────
+async function tryAgenceHTML(url: string, source: string): Promise<ExtractionResponse | null> {
+  try {
+    const hostname = new URL(url).hostname
+    await waitForDomainThrottle(hostname)
+    
+    const sourceLabel = source === 'guyhoquet' ? 'Guy Hoquet' : source === 'stephaneplaza' ? 'Stéphane Plaza' : source
+    console.log(`🏠 ${sourceLabel}: tentative fetch HTML`)
+
+    const response = await protectedFetch(url, {
+      timeoutMs: 15000,
+      throttle: true,
+    })
+
+    if (!response) {
+      console.warn(`${sourceLabel}: pas de réponse`)
+      recordDomainFailure(url)
+      return null
+    }
+
+    const html = await response.text()
+    if (!html || html.length < 500) return null
+
+    if (isBlockedResponse(html)) {
+      console.warn(`${sourceLabel}: réponse bloquée`)
+      recordDomainFailure(url)
+      return null
+    }
+    recordDomainSuccess(url)
+
+    const data: Record<string, unknown> = { url }
+
+    // ── 1) Essayer __NEXT_DATA__ (Guy Hoquet est un site Next.js) ──
+    const nextDataMatch = html.match(/<script\s+id="__NEXT_DATA__"\s+type="application\/json">\s*({[\s\S]*?})\s*<\/script>/i)
+    if (nextDataMatch) {
+      try {
+        const nextData = JSON.parse(nextDataMatch[1])
+        const props = nextData?.props?.pageProps
+
+        // Chercher récursivement un objet qui ressemble à une annonce immobilière
+        const property = props?.property || props?.ad || props?.listing || props?.annonce
+          || props?.data?.property || props?.data?.ad || null
+
+        if (property) {
+          console.log(`${sourceLabel}: __NEXT_DATA__ trouvé avec property`)
+          
+          if (property.title || property.titre || property.name) {
+            data.titre = String(property.title || property.titre || property.name)
+          }
+          if (property.description) data.description = String(property.description).substring(0, 1000)
+          if (property.price || property.prix) data.prix = Number(property.price || property.prix)
+          if (property.surface || property.area || property.livingArea) {
+            data.surface = Number(property.surface || property.area || property.livingArea)
+          }
+          if (property.rooms || property.nbRooms || property.pieces || property.numberOfRooms) {
+            data.pieces = Number(property.rooms || property.nbRooms || property.pieces || property.numberOfRooms)
+          }
+          if (property.bedrooms || property.nbBedrooms || property.chambres) {
+            data.chambres = Number(property.bedrooms || property.nbBedrooms || property.chambres)
+          }
+          if (property.type || property.propertyType) {
+            const t = String(property.type || property.propertyType)
+            data.type = /maison|villa|pavillon/i.test(t) ? 'maison' : 'appartement'
+          }
+
+          // DPE / GES
+          const dpeVal = String(property.dpeValue || property.energyConsumption || property.dpe || property.energyClass || '').toUpperCase()
+          if (/^[A-G]$/.test(dpeVal)) data.dpe = dpeVal
+          const gesVal = String(property.gesValue || property.greenhouseGas || property.ges || property.greenhouseClass || '').toUpperCase()
+          if (/^[A-G]$/.test(gesVal)) data.ges = gesVal
+
+          // Localisation
+          if (property.city || property.ville) data.ville = String(property.city || property.ville)
+          if (property.zipCode || property.postalCode || property.codePostal) {
+            data.codePostal = String(property.zipCode || property.postalCode || property.codePostal)
+          }
+
+          // GPS
+          if (typeof property.latitude === 'number' && typeof property.longitude === 'number') {
+            data.latitude = property.latitude
+            data.longitude = property.longitude
+          } else if (typeof property.lat === 'number' && typeof property.lng === 'number') {
+            data.latitude = property.lat
+            data.longitude = property.lng
+          }
+
+          // Images
+          const imgs = property.images || property.photos || property.medias || property.pictures
+          if (Array.isArray(imgs) && imgs.length > 0) {
+            const imageUrls = imgs.map((img: unknown) => {
+              if (typeof img === 'string') return img
+              if (typeof img === 'object' && img !== null) {
+                const imgObj = img as Record<string, unknown>
+                return imgObj.url || imgObj.src || imgObj.path || imgObj.uri || imgObj.original || null
+              }
+              return null
+            }).filter(Boolean) as string[]
+            if (imageUrls.length > 0) {
+              data.imageUrl = imageUrls[0]
+              data.images = imageUrls.slice(0, 20)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`${sourceLabel}: erreur parsing __NEXT_DATA__`, e)
+      }
+    }
+
+    // ── 2) Compléter avec extractFromHTML (JSON-LD, meta, HTML sémantique) ──
+    const htmlData = extractFromHTML(html, url)
+    if (htmlData) {
+      const htmlRecord = htmlData as unknown as Record<string, unknown>
+      for (const [key, value] of Object.entries(htmlRecord)) {
+        if (value === undefined || value === null || value === 'NC') continue
+        if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+          data[key] = value
+        }
+      }
+    }
+
+    // ── 3) Enrichir avec parsing texte ──
+    if (data.description) {
+      const textData = parseTexteAnnonce(data.description as string)
+      const textRecord = textData as unknown as Record<string, unknown>
+      for (const [key, value] of Object.entries(textRecord)) {
+        if (value === undefined || value === null || value === 'NC') continue
+        if (data[key] === undefined || data[key] === null || data[key] === 'NC') {
+          data[key] = value
+        }
+      }
+    }
+
+    if (!data.dpe) data.dpe = 'NC'
+    completerDonnees(data)
+
+    const fieldsCount = Object.keys(data).filter(k =>
+      k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
+    ).length
+
+    if (fieldsCount < MIN_FIELDS) {
+      console.warn(`${sourceLabel}: seulement ${fieldsCount} champ(s) — insuffisant`)
+      return null
+    }
+
+    return {
+      success: true,
+      source: source as ExtractionResponse['source'],
+      data,
+      fieldsExtracted: fieldsCount,
+      method: `${source}-html`,
+      message: `${fieldsCount} données extraites depuis ${sourceLabel} (HTML)`
+    }
+  } catch (err) {
+    console.warn(`Agence HTML parser échoué (${source}):`, err)
     return null
   }
 }
@@ -1716,8 +2276,11 @@ async function tryOrpiAPI(url: string): Promise<ExtractionResponse | null> {
     const data = extractFromHTML(html, url)
     if (!data) return null
 
+    const rawCount = Object.values(data).filter(v => v !== null && v !== undefined && v !== '').length
+    if (rawCount < 3) return null
+
+    completerDonnees(data)
     const fieldsCount = Object.values(data).filter(v => v !== null && v !== undefined && v !== '').length
-    if (fieldsCount < 3) return null
 
     console.log(`🏢 Orpi HTML fallback: ${fieldsCount} champs extraits`)
     return {
@@ -1790,6 +2353,20 @@ function parseOrpiData(json: Record<string, unknown>, url: string): ExtractionRe
 
     const description = j.longAd ?? j.description ?? j.text ?? j.shortAd ?? null
     const nomAgence = j.agency?.name ?? j.agencyName ?? j.agence ?? null
+    const titre = j.title ?? j.titre ?? j.shortAd ?? null
+
+    // Équipements (Orpi utilise hasXxx, xxx, ou des noms variés)
+    const hasAscenseur = j.hasElevator ?? j.elevator ?? j.ascenseur ?? j.hasLift ?? null
+    const hasBalcon = j.hasBalcony ?? j.balcony != null ? Number(j.balcony) > 0 : false
+    const hasTerrasse = j.hasTerrace ?? j.terrace != null ? Number(j.terrace) > 0 : false
+    const hasParking = j.hasParking ?? j.parking ?? j.hasGarage ?? j.garage ?? (typeof j.parkingPlacesQuantity === 'number' && j.parkingPlacesQuantity > 0) ?? null
+    const hasCave = j.hasCellar ?? j.cellar ?? j.cave ?? null
+    const orientation = j.orientation ?? j.exposure ?? null
+    const taxeFonciere = j.propertyTax ?? j.taxe_fonciere ?? j.property_tax ?? null
+
+    // Coordonnées GPS
+    const lat = j.latitude ?? j.lat ?? j.location?.latitude ?? j.location?.lat ?? j.geopoint?.lat ?? null
+    const lng = j.longitude ?? j.lng ?? j.location?.longitude ?? j.location?.lng ?? j.geopoint?.lng ?? null
 
     const data: Record<string, unknown> = {}
     if (prix) data.prix = Number(prix)
@@ -1816,11 +2393,24 @@ function parseOrpiData(json: Record<string, unknown>, url: string): ExtractionRe
     if (charges) data.chargesMensuelles = Number(charges)
     if (anneeConstruction) data.anneeConstruction = Number(anneeConstruction)
     if (description) data.description = String(description)
+    if (titre) data.titre = String(titre)
     if (photos.length > 0) {
       data.imageUrl = photos[0]
       data.images = photos.slice(0, 20)
     }
     if (nomAgence) data.agence = nomAgence
+    // Équipements
+    if (hasAscenseur != null && hasAscenseur !== false) data.ascenseur = Boolean(hasAscenseur)
+    if (hasBalcon || hasTerrasse) data.balconTerrasse = true
+    if (hasCave != null && hasCave !== false) data.cave = Boolean(hasCave)
+    if (hasParking != null && hasParking !== false) data.parking = Boolean(hasParking)
+    if (orientation && typeof orientation === 'string') data.orientation = String(orientation).substring(0, 30)
+    if (taxeFonciere != null) { const tf = Number(taxeFonciere); if (tf > 0 && tf < 20000) data.taxeFonciere = Math.round(tf) }
+    // Coordonnées GPS
+    if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
+      data.latitude = lat
+      data.longitude = lng
+    }
     data.url = url
 
     /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -1901,11 +2491,11 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
     
     if (!data.prix && !data.surface) return null
     
+    completerDonnees(data)
+    
     const fieldsCount = Object.keys(data).filter(k => 
       k !== 'url' && data[k] !== undefined && data[k] !== null && data[k] !== 'NC'
     ).length
-    
-    completerDonnees(data)
     
     return {
       success: true,
@@ -1923,11 +2513,51 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
 
 // ─────────────────────────────────────
 // Stratégie 1 : Jina AI Reader (JSON mode pour récupérer image + texte)
+// Pour les sites DataDome (selogerneuf.com), on tente aussi le mode HTML
+// car Jina utilise un vrai navigateur et peut contourner la protection.
 // ─────────────────────────────────────
 async function tryJinaReader(url: string, source: string | null): Promise<ExtractionResponse | null> {
   try {
     const jinaUrl = `https://r.jina.ai/${url}`
     const jinaApiKey = process.env.JINA_API_KEY
+    const isDataDomeSite = url.includes('selogerneuf.com') || url.includes('logic-immo.com') || url.includes('pap.fr')
+    
+    // ── Pour les sites DataDome : tenter d'abord le mode HTML ──
+    // Jina peut exécuter le JS et bypasser DataDome grâce à son infra navigateur.
+    // Le HTML complet permet d'extraire __NEXT_DATA__, JSON-LD, etc.
+    if (isDataDomeSite) {
+      try {
+        const htmlHeaders: Record<string, string> = {
+          'Accept': 'text/html',
+          'X-Return-Format': 'html',
+          'X-Wait-For-Selector': 'body',
+        }
+        if (jinaApiKey) {
+          htmlHeaders['Authorization'] = `Bearer ${jinaApiKey}`
+        }
+        const htmlResp = await fetch(jinaUrl, {
+          headers: htmlHeaders,
+          signal: AbortSignal.timeout(20000),
+        })
+        if (htmlResp.ok) {
+          const html = await htmlResp.text()
+          if (html.length > 500 && !isBlockedResponse(html)) {
+            // Parser __NEXT_DATA__ en priorité (sites Next.js comme selogerneuf.com)
+            const nextData = parseNextData(html) as Record<string, unknown>
+            const htmlData = extractFromHTML(html, url) || {} as Record<string, unknown>
+            const merged: Record<string, unknown> = { url, ...htmlData, ...nextData }
+            completerDonnees(merged)
+            const fc = Object.keys(merged).filter(k => k !== 'url' && merged[k] != null).length
+            if (fc >= MIN_FIELDS) {
+              console.log(`✅ Jina HTML: ${fc} champs extraits pour ${source || 'la page'} (DataDome bypass)`)
+              return { success: true, source: source || 'web', data: merged, fieldsExtracted: fc, method: 'jina-html', message: `${fc} données extraites via Jina HTML (DataDome bypass)` }
+            }
+          }
+        }
+      } catch { /* HTML mode échoué, on essaye le JSON classique */ }
+    }
+    
+    // ── Mode JSON standard (texte markdown + images) ──
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'X-Return-Format': 'json',
@@ -1947,11 +2577,10 @@ async function tryJinaReader(url: string, source: string | null): Promise<Extrac
     if (!texte || texte.length < 100) return null
     
     const data = parseTexteAnnonce(texte)
-    const count = compterChampsExtraits(data)
-    if (count < MIN_FIELDS) return null
-    
     const dataRecord = data as unknown as Record<string, unknown>
     completerDonnees(dataRecord)
+    const count = compterChampsExtraits(dataRecord)
+    if (count < MIN_FIELDS) return null
     
     // --- Récupération de l'image ---
     // 1. Image depuis Jina (premier élément d'images ou og:image)
@@ -2335,34 +2964,7 @@ async function tryArchiveOrg(url: string, source: string | null): Promise<Extrac
 // Helpers
 // ─────────────────────────────────────
 
-/** Complète les champs manquants avec des estimations raisonnables */
-function completerDonnees(data: Record<string, unknown>) {
-  if (!data.pieces && data.surface) {
-    data.pieces = Math.max(1, Math.round((data.surface as number) / 22))
-  }
-  if (!data.chambres && data.pieces) {
-    data.chambres = Math.max(0, (data.pieces as number) - 1)
-  }
-  if (!data.dpe) {
-    data.dpe = 'NC'
-  }
-  if (!data.type) {
-    data.type = 'appartement'
-  }
-  // Déduire le département depuis le code postal
-  if (data.codePostal && !data.departement) {
-    const cp = data.codePostal as string
-    if (cp.startsWith('97')) {
-      data.departement = cp.substring(0, 3) // DOM-TOM
-    } else if (cp.startsWith('20')) {
-      // Corse : 20000-20190 = 2A, 20200+ = 2B
-      const num = parseInt(cp)
-      data.departement = num < 20200 ? '2A' : '2B'
-    } else {
-      data.departement = cp.substring(0, 2)
-    }
-  }
-}
+// completerDonnees importé depuis @/lib/scraping/completerDonnees
 
 /**
  * Fallback : fetch léger de la page originale pour extraire og:image
@@ -2372,14 +2974,14 @@ async function fetchOgImage(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; AQUIZBot/1.0)',
-        'Accept': 'text/html',
-        'Range': 'bytes=0-51200', // Ne lire que les 50 premiers KB (contient le <head>)
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9',
       },
       signal: AbortSignal.timeout(5000),
     })
     
-    if (!response.ok && response.status !== 206) return null
+    if (!response.ok) return null
     
     const html = await response.text()
     

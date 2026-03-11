@@ -57,6 +57,8 @@ export interface DVFTransactionSlim {
   typeLocal: 'Appartement' | 'Maison'
   surface: number
   prixM2: number
+  /** Date de la mutation (format YYYY-MM-DD) */
+  dateMutation?: string
 }
 
 export interface DVFDepartementStats {
@@ -327,7 +329,8 @@ export async function fetchDVFDepartement(
       codePostal: m.code_postal,
       typeLocal: m.type_local as 'Appartement' | 'Maison',
       surface: m.surface_reelle_bati,
-      prixM2: Math.round(m.valeur_fonciere / m.surface_reelle_bati)
+      prixM2: Math.round(m.valeur_fonciere / m.surface_reelle_bati),
+      dateMutation: m.date_mutation,
     }))
     
     return {

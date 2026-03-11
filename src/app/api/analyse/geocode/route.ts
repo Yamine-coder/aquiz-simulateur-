@@ -4,9 +4,11 @@
  */
 
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
+import { ServerCache } from '@/lib/serverCache'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Route dynamique (appelée côté client)
+// Cache serveur borné — les géocodages ne changent quasiment jamais (TTL 24h, max 500 entrées)
+const geocodeCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 500 })
 
 export async function GET(request: NextRequest) {
   // ── Rate Limiting ─────────────────────────────────────
@@ -31,6 +33,13 @@ export async function GET(request: NextRequest) {
   
   try {
     const query = encodeURIComponent(`${adresse || ''} ${codePostal || ''}`.trim())
+
+    // Vérifier le cache serveur
+    const cacheKey = `geocode:${query}`
+    const cached = geocodeCache.get(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
     
     const response = await fetch(
       `https://api-adresse.data.gouv.fr/search/?q=${query}&limit=1`,
@@ -50,7 +59,7 @@ export async function GET(request: NextRequest) {
       const [lon, lat] = result.features[0].geometry.coordinates
       const properties = result.features[0].properties
       
-      return NextResponse.json({
+      const responseData = {
         success: true,
         data: {
           lat,
@@ -59,7 +68,10 @@ export async function GET(request: NextRequest) {
           city: properties.city,
           postcode: properties.postcode
         }
-      })
+      }
+
+      geocodeCache.set(cacheKey, responseData)
+      return NextResponse.json(responseData)
     }
     
     return NextResponse.json({

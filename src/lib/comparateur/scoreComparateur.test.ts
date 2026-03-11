@@ -236,9 +236,9 @@ describe('Score global', () => {
 // ============================================
 
 describe('Axes de scoring', () => {
-  it('retourne toujours 10 axes', () => {
+  it('retourne toujours 11 axes', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE)
-    expect(result.axes).toHaveLength(10)
+    expect(result.axes).toHaveLength(11)
   })
 
   it('chaque axe a un score entre 0 et 100', () => {
@@ -336,19 +336,24 @@ describe('Estimations financières', () => {
       const result = calculerScorePro(MAISON_PROVINCE_ANCIENNE, [MAISON_PROVINCE_ANCIENNE])
       const loyer = result.estimations.loyerMensuelEstime!
       const rendement = result.estimations.rendementBrut!
-      // Limoges 87 = villes moyennes 0.50%
-      expect(loyer).toBeGreaterThanOrEqual(800)
-      expect(loyer).toBeLessThanOrEqual(1100)
-      expect(rendement).toBeGreaterThanOrEqual(4)
+      // Limoges 87 = villes moyennes 0.50%, ajusté v2 : surface 120m²(-8%), maison(-5%), DPE F(-12%)
+      expect(loyer).toBeGreaterThanOrEqual(650)
+      expect(loyer).toBeLessThanOrEqual(900)
+      expect(rendement).toBeGreaterThanOrEqual(3)
     })
 
-    it('le loyer est toujours un entier positif', () => {
-      for (const annonce of ANNONCES_LISTE) {
+    it('le loyer est toujours un entier positif (sauf DPE G)', () => {
+      for (const annonce of ANNONCES_LISTE.filter(a => a.dpe !== 'G')) {
         const result = calculerScorePro(annonce, ANNONCES_LISTE)
         const loyer = result.estimations.loyerMensuelEstime!
         expect(loyer).toBeGreaterThan(0)
         expect(Number.isInteger(loyer)).toBe(true)
       }
+    })
+
+    it('le loyer DPE G est 0 (interdit à la location)', () => {
+      const result = calculerScorePro(PASSOIRE_ENERGETIQUE, ANNONCES_LISTE)
+      expect(result.estimations.loyerMensuelEstime).toBe(0)
     })
   })
 
@@ -360,11 +365,19 @@ describe('Estimations financières', () => {
       }
     })
 
-    it('le rendement est > 0%', () => {
-      for (const annonce of ANNONCES_LISTE) {
+    it('le rendement est > 0% (sauf DPE G)', () => {
+      for (const annonce of ANNONCES_LISTE.filter(a => a.dpe !== 'G')) {
         const result = calculerScorePro(annonce, ANNONCES_LISTE)
         expect(result.estimations.rendementBrut!).toBeGreaterThan(0)
       }
+    })
+
+    it('le rendement DPE G est 0 (interdit à la location)', () => {
+      const result = calculerScorePro(PASSOIRE_ENERGETIQUE, ANNONCES_LISTE)
+      expect(result.estimations.rendementBrut).toBe(0)
+      // Vérifier que l'axe rendement score 0
+      const axeRendement = result.axes.find(a => a.axe === 'rendement')
+      expect(axeRendement?.score).toBe(0)
     })
 
     it('le rendement Paris < rendement province (attendu inverse prix/loyer)', () => {
@@ -373,8 +386,8 @@ describe('Estimations financières', () => {
       expect(resultParis.estimations.rendementBrut!).toBeLessThan(resultProvince.estimations.rendementBrut!)
     })
 
-    it('le rendement est cohérent avec le loyer estimé', () => {
-      for (const annonce of ANNONCES_LISTE) {
+    it('le rendement est cohérent avec le loyer estimé (sauf DPE G)', () => {
+      for (const annonce of ANNONCES_LISTE.filter(a => a.dpe !== 'G')) {
         const result = calculerScorePro(annonce, ANNONCES_LISTE)
         const loyer = result.estimations.loyerMensuelEstime!
         const rendement = result.estimations.rendementBrut!
@@ -427,18 +440,18 @@ describe('Estimations financières', () => {
 
     it('un bien DPE F de 1965 → budget travaux conséquent', () => {
       const result = calculerScorePro(MAISON_PROVINCE_ANCIENNE, ANNONCES_LISTE)
-      // 1965 → coutM2 = 150 (pré-RT) + DPE F → +200 = 350 €/m² × 120m² = 42 000 €
+      // Config: 1965 → vétusté 200 €/m² (avant 1970) + DPE F 500 €/m² = 700 €/m² × 120m² = 84 000 €
       expect(result.estimations.budgetTravauxEstime).toBeDefined()
-      expect(result.estimations.budgetTravauxEstime!).toBeGreaterThanOrEqual(35000)
-      expect(result.estimations.budgetTravauxEstime!).toBeLessThanOrEqual(50000)
+      expect(result.estimations.budgetTravauxEstime!).toBeGreaterThanOrEqual(70000)
+      expect(result.estimations.budgetTravauxEstime!).toBeLessThanOrEqual(100000)
     })
 
     it('un bien DPE G de 1960 → gros travaux', () => {
       const result = calculerScorePro(PASSOIRE_ENERGETIQUE, ANNONCES_LISTE)
-      // 1960 → coutM2 = 150 (pré-75) + DPE G → +300 = 450 €/m² × 50m² = 22 500 €
+      // Config: 1960 → vétusté 200 €/m² (avant 1970) + DPE G 700 €/m² = 900 €/m² × 50m² = 45 000 €
       expect(result.estimations.budgetTravauxEstime).toBeDefined()
-      expect(result.estimations.budgetTravauxEstime!).toBeGreaterThanOrEqual(20000)
-      expect(result.estimations.budgetTravauxEstime!).toBeLessThanOrEqual(25000)
+      expect(result.estimations.budgetTravauxEstime!).toBeGreaterThanOrEqual(35000)
+      expect(result.estimations.budgetTravauxEstime!).toBeLessThanOrEqual(50000)
     })
 
     it('DPE NC sans année → fallback prudent > 0', () => {
@@ -606,7 +619,9 @@ describe('Données enrichies', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE, enrichi)
     const axeE = result.axes.find(a => a.axe === 'emplacement')!
     expect(axeE.disponible).toBe(true)
-    expect(axeE.score).toBeGreaterThanOrEqual(75)
+    // Emplacement now excludes transport sub-score to avoid double-counting
+    // commerces(75)*30 + ecoles(70)*25 + sante(65)*25 + espaceVerts(70)*20 = 70
+    expect(axeE.score).toBeGreaterThanOrEqual(65)
   })
 })
 
@@ -661,10 +676,10 @@ describe('Synthèse multi-annonces', () => {
 // ============================================
 
 describe('Radar chart data', () => {
-  it('retourne 6 axes pour le radar', () => {
+  it('retourne 7 axes pour le radar', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE)
     const radar = scoreToRadarData(result)
-    expect(radar).toHaveLength(6)
+    expect(radar).toHaveLength(7)
   })
 
   it('chaque valeur radar est entre 0 et 100', () => {
@@ -682,7 +697,7 @@ describe('Radar chart data', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, ANNONCES_LISTE)
     const radar = scoreToRadarData(result)
     const labels = radar.map(r => r.label)
-    expect(labels).toEqual(['prix', 'quartier', 'transports', 'energie', 'confort', 'budget'])
+    expect(labels).toEqual(['prix', 'quartier', 'transports', 'energie', 'risques', 'confort', 'budget'])
   })
 })
 
@@ -730,7 +745,7 @@ describe('Cas limites', () => {
   it('une seule annonce dans la liste ne crash pas', () => {
     const result = calculerScorePro(APPART_NEUF_NANTES, [APPART_NEUF_NANTES])
     expect(result.scoreGlobal).toBeGreaterThanOrEqual(0)
-    expect(result.axes).toHaveLength(10)
+    expect(result.axes).toHaveLength(11)
   })
 
   it('DPE NC est géré', () => {

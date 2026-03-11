@@ -2,6 +2,7 @@
  * Tests pour les fonctions d'extraction (parseJsonLd, parseAnnonceHTML, parseMetaTags)
  */
 import { describe, expect, it } from 'vitest'
+import { completerDonnees } from '../completerDonnees'
 import { parseAnnonceHTML, parseJsonLd, parseMetaTags } from '../extracteur'
 
 // ============================================
@@ -304,5 +305,70 @@ describe('parseMetaTags', () => {
     const result = parseMetaTags(html)
     expect(result.prix).toBe(350000)
     expect(result.surface).toBe(65)
+  })
+})
+
+// ============================================
+// completerDonnees — fixes P1
+// ============================================
+describe('completerDonnees', () => {
+  it('déduit maison depuis la description quand type manquant', () => {
+    const data: Record<string, unknown> = { description: 'Belle maison avec jardin', surface: 120 }
+    completerDonnees(data)
+    expect(data.type).toBe('maison')
+  })
+
+  it('déduit villa depuis le titre quand type manquant', () => {
+    const data: Record<string, unknown> = { titre: 'Villa 5 pièces vue mer', surface: 180 }
+    completerDonnees(data)
+    expect(data.type).toBe('maison')
+  })
+
+  it('déduit appartement quand ni titre ni description ne mentionnent maison', () => {
+    const data: Record<string, unknown> = { surface: 65 }
+    completerDonnees(data)
+    expect(data.type).toBe('appartement')
+  })
+
+  it('ne touche pas au type si déjà défini', () => {
+    const data: Record<string, unknown> = { type: 'maison', description: 'logement rénové' }
+    completerDonnees(data)
+    expect(data.type).toBe('maison')
+  })
+
+  it('déduit pièces depuis surface', () => {
+    const data: Record<string, unknown> = { surface: 88 }
+    completerDonnees(data)
+    expect(data.pieces).toBe(4) // 88/22 = 4
+  })
+
+  it('déduit chambres depuis pièces', () => {
+    const data: Record<string, unknown> = { pieces: 3 }
+    completerDonnees(data)
+    expect(data.chambres).toBe(2) // 3 - 1 = 2
+  })
+
+  it('DPE par défaut = NC', () => {
+    const data: Record<string, unknown> = {}
+    completerDonnees(data)
+    expect(data.dpe).toBe('NC')
+  })
+
+  it('déduit département depuis code postal Corse 2A', () => {
+    const data: Record<string, unknown> = { codePostal: '20000' }
+    completerDonnees(data)
+    expect(data.departement).toBe('2A')
+  })
+
+  it('déduit département depuis code postal Corse 2B', () => {
+    const data: Record<string, unknown> = { codePostal: '20200' }
+    completerDonnees(data)
+    expect(data.departement).toBe('2B')
+  })
+
+  it('déduit département DOM-TOM', () => {
+    const data: Record<string, unknown> = { codePostal: '97100' }
+    completerDonnees(data)
+    expect(data.departement).toBe('971')
   })
 })

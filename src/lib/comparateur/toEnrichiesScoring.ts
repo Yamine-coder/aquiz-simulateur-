@@ -8,7 +8,8 @@ import type { DonneesEnrichiesScoring } from '@/lib/comparateur/scoreComparateur
 interface AnalyseMinimale {
   marche: { success: boolean; ecartPrixM2?: number; verdict?: string; evolution12Mois?: number; prixM2MedianMarche?: number; nbTransactions?: number }
   risques: { success: boolean; scoreRisque?: number; verdict?: string; zoneInondable?: boolean; niveauRadon?: number }
-  quartier: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }> }
+  quartier: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lat?: number; lon?: number; lignes?: string[]; operateur?: string; couleur?: string }>; counts?: { transport: number; commerce: number; education: number; sante: number; loisirs: number; vert: number } }
+  communeInfos?: { success: boolean; nomCommune?: string; population?: number | null; surfaceKm2?: number | null; densitePopulation?: number | null; revenuMensuel?: number | null; ensoleillement?: number | null; departement?: string; counts?: { education: number | null; commerce: number | null; sante: number | null; transport: number | null; loisirs: number | null } | null }
 }
 
 export function toEnrichiesScoring(analyse: AnalyseMinimale | null): DonneesEnrichiesScoring | undefined {
@@ -23,5 +24,6 @@ export function toEnrichiesScoring(analyse: AnalyseMinimale | null): DonneesEnri
       verdict: analyse.risques.verdict as DonneesEnrichiesScoring['risques'] extends { verdict?: infer V } ? V : never
     } : undefined,
     quartier: analyse.quartier.success ? analyse.quartier : undefined,
+    communeInfos: analyse.communeInfos?.success ? analyse.communeInfos : undefined,
   }
 }

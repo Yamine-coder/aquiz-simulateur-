@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Parseur côté client : extrait les données d'une annonce
  * depuis le texte copié-collé par l'utilisateur.
  * 
@@ -39,6 +39,8 @@ export interface DonneesExtraites {
   latitude?: number
   /** Longitude GPS (fournie par certaines plateformes) */
   longitude?: number
+  /** URL détectée dans le texte collé (source de l'annonce) */
+  url?: string
 }
 
 // ============================================
@@ -95,6 +97,28 @@ function isolerContenuPrincipal(texte: string): string {
     /\bles?\s+annonces?\s+de\s+ce\s+pro\b/i,
     // NOTE: NE PAS mettre "Sécurisez votre achat" ni "Contacter le vendeur" ici !
     // Ils apparaissent AVANT les caractéristiques et équipements sur LeBonCoin.
+
+    // ── Sections agent / conseiller / agence ──
+    // Ces sections contiennent le nom + adresse postale de l'agent/agence
+    // qui peut être dans une autre ville que le bien → pollution de la localisation.
+    // Ex: LaForêt "Votre conseiller Dominique Frélaud 33260" au lieu de Colombes
+    /\bvotre\s+conseill[eè]re?\b/i,
+    /\bvotre\s+(?:agent|interlocuteur|interlocutrice|consultant)\b/i,
+    /\bcontacter\s+l[\u2019']?(?:agence|agent|conseill)/i,
+    /\bl[\u2019']?agence\s+(?:lafor[eêèé]t|orpi|century\s*21|guy\s*hoquet|iad|capifrance|safti|foncia|nexity|stéphane\s+plaza|era\s+immobilier|square\s+habitat)\b/i,
+    /\bagence\s+(?:immobili[eè]re|partenaire)\b/i,
+    /\bnos\s+agents?\b/i,
+    /\bprésent[ée]e?\s+par\b/i,
+    /\bannonce\s+publi[ée]e\s+par\b/i,
+    /\bref\s*\.?\s*(?:agence|mandat)\b/i,
+    // Sections contact / RDV
+    /\bdemande[rz]?\s+(?:un\s+)?rendez[\s-]?vous\b/i,
+    /\bprendre\s+(?:un\s+)?rendez[\s-]?vous\b/i,
+    /\b[eé]crire?\s+(?:à\s+)?l[\u2019']?(?:agence|agent|conseill)/i,
+    /\bt[ée]l[ée]phone\s*:\s*(?:\+33|0[1-9])/i,
+    // Sections honoraires/mandat (contiennent souvent l'adresse de l'agence)
+    /\bhonoraires?\s+(?:d[\u2019']?agence|charge|ttc|ht)\b/i,
+    /\bbarème\s+(?:d[\u2019']?)?honoraires?\b/i,
   ]
 
   // Trouver le premier marqueur de coupure (le plus tôt dans le texte, mais après 200 chars)
@@ -112,14 +136,32 @@ function isolerContenuPrincipal(texte: string): string {
     cleaned = cleaned.substring(0, cutIndex)
   }
 
-  // ══ Supprimer les échelles DPE / GES ══
-  // LeBonCoin et d'autres portails affichent la grille A B C D E F G.
-  // Le parser attrape le premier "A" de la grille au lieu de la vraie classe.
-  // On supprime ces séquences pour ne garder que la valeur réelle.
-  // Pattern : lettres A à G (ou sous-ensembles ordonnés) séparées par espaces/newlines
-  cleaned = cleaned
-    .replace(/\b[A-G](?:\s+[A-G]){4,6}\b/g, '') // "A B C D E F G" sur une ligne
-    .replace(/(?:^|\n)\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G](?:\s*\n\s*[A-G]){0,2}/gm, '') // Chaque lettre sur sa propre ligne
+  return cleaned.trim()
+}
+
+/**
+ * Nettoie les échelles visuelles DPE / GES du texte.
+ * LeBonCoin et d'autres portails affichent la grille A B C D E F G.
+ * Le parser attrape le premier "A" de la grille au lieu de la vraie classe.
+ * On supprime ces séquences pour ne garder que la valeur réelle.
+ *
+ * IMPORTANT : les patterns kWh/kg avec "m²/an" (valeurs réelles) sont PRÉSERVÉS.
+ * Seules les échelles (avec ≤/>/ à) sont supprimées.
+ */
+function nettoyerEchellesDPE(texte: string): string {
+  return texte
+    // "A B C D E F G" sur une MÊME ligne ([ \t]+ au lieu de \s+ pour ne pas croiser les lignes)
+    .replace(/\b[A-G](?:[ \t]+[A-G]){4,6}\b/g, '')
+    // Chaque lettre sur sa propre ligne (5-7 lettres verticales)
+    .replace(/(?:^|\n)\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G]\s*\n\s*[A-G](?:\s*\n\s*[A-G]){0,2}/gm, '')
+    // Échelles inline avec plages de valeurs (LaForêt, Orpi, Century21, etc.) :
+    // "A ≤ 50 B 51 à 90 C 91 à 150 D 151 à 230 E 231 à 330 F 331 à 450 G > 450"
+    .replace(/\b[A-G]\s*(?:≤|<=|⩽|<)\s*\d+\s+[A-G]\s+\d+\s+[àa]\s+\d+(?:\s+[A-G]\s+\d+\s+[àa]\s+\d+){2,}\s+[A-G]\s*(?:>|>=|≥)\s*\d+/gi, '')
+    // Variante : chaque palier kWh/kg sur sa propre ligne "A ≤ 50 kWh\nB 51 à 90 kWh\n..."
+    // EXCLUT les lignes contenant "m²" (ce sont les valeurs réelles, ex: "D 198 kWh/m²/an")
+    .replace(/(?:^|\n)\s*[A-G]\s*(?:≤|<=|⩽|<|>|>=|≥)?\s*\d+\s*(?:à\s*\d+)?\s*(?:kWh|kg)(?![^\n]*m[²2])[^\n]*(?:\n\s*[A-G]\s*(?:≤|<=|⩽|<|>|>=|≥)?\s*\d+\s*(?:à\s*\d+)?\s*(?:kWh|kg)(?![^\n]*m[²2])[^\n]*){3,}/gmi, '')
+    // Variante inline sur une seule ligne : "A ≤ 50 kWh B 51 à 90 kWh ... G > 450 kWh"
+    .replace(/\b[A-G]\s*(?:≤|<=|⩽|<)\s*\d+\s*(?:kWh|kg)[^\n]*?[A-G]\s*(?:>|>=|≥)\s*\d+\s*(?:kWh|kg)[^\n]*/gi, '')
     // LeBonCoin : "Logement économe" ... "Logement énergivore" ou "Faible émission" ... "Forte émission"
     .replace(/logement\s+[ée]conome/gi, '')
     .replace(/logement\s+[ée]nergivore/gi, '')
@@ -128,8 +170,9 @@ function isolerContenuPrincipal(texte: string): string {
     .replace(/passoire\s+[ée]nerg[ée]tique/gi, '')
     .replace(/peu\s+polluant/gi, '')
     .replace(/tr[èe]s\s+polluant/gi, '')
-
-  return cleaned.trim()
+    // Nettoyer les labels de notation graphique (LaForêt, SeLoger, etc.)
+    .replace(/consommation[s]?\s*(?:conventionnelle[s]?)?\s*(?:en)?\s*énergie\s*primaire/gi, '')
+    .replace(/indice\s*d['']?émission[s]?\s*de\s*gaz\s*à\s*effet\s*de\s*serre/gi, '')
 }
 
 /**
@@ -141,10 +184,21 @@ function extraireUrl(texte: string): string | undefined {
   const patterns = [
     /https?:\/\/(?:www\.)?leboncoin\.fr\/\S+/i,
     /https?:\/\/(?:www\.)?seloger\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?selogerneuf\.com\/\S+/i,
     /https?:\/\/(?:www\.)?pap\.fr\/\S+/i,
     /https?:\/\/(?:www\.)?bienici\.com\/\S+/i,
     /https?:\/\/(?:www\.)?logic-immo\.com\/\S+/i,
     /https?:\/\/(?:www\.)?bien-ici\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?laforet\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?orpi\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?century21\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?(?:guy-hoquet|guyhoquet)\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?iadfrance\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?capifrance\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?safti\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?foncia\.com\/\S+/i,
+    /https?:\/\/(?:www\.)?nexity\.fr\/\S+/i,
+    /https?:\/\/(?:www\.)?paruvendu\.fr\/\S+/i,
   ]
   for (const p of patterns) {
     const m = texte.match(p)
@@ -165,15 +219,17 @@ function extraireNombre(s: string): number | null {
 
 function extrairePrix(texte: string): number | undefined {
   // Patterns ordonnés du plus spécifique au plus générique
+  // NOTE: [ \t\u00A0] (pas \s) dans les groupes de chiffres pour éviter
+  // de croiser les lignes (ex: "13100\n695 000 €" → 100695000 faux positif)
   const patterns = [
     // "Prix : 450 000 €" ou "Prix de vente : 450 000€"
-    /prix\s*(?:de\s*vente)?\s*:?\s*(\d{1,3}(?:[\s\u00A0]\d{3})*)\s*€/i,
+    /prix\s*(?:de\s*vente)?\s*:?\s*(\d{1,3}(?:[ \t\u00A0]\d{3})*)\s*€/i,
     // "450 000 €" (avec espaces)
-    /(\d{1,3}(?:[\s\u00A0]\d{3})+)\s*€/,
+    /(\d{1,3}(?:[ \t\u00A0]\d{3})+)\s*€/,
     // "450000€" (sans espaces, 6+ chiffres)
     /(\d{6,8})\s*€/,
     // "450 000 euros"
-    /(\d{1,3}(?:[\s\u00A0]\d{3})+)\s*euros?/i,
+    /(\d{1,3}(?:[ \t\u00A0]\d{3})+)\s*euros?/i,
   ]
 
   for (const p of patterns) {
@@ -226,7 +282,9 @@ function extrairePieces(texte: string): number | undefined {
 
 function extraireChambres(texte: string): number | undefined {
   const patterns = [
-    /(\d+)\s*chambres?/i,
+    // [ \t]* au lieu de \s* pour ne pas croiser les lignes
+    // ("Pièces : 3\nChambres" → empêche de capturer 3)
+    /(\d+)[ \t]*chambres?/i,
     /chambres?\s*:?\s*(\d+)/i,
   ]
 
@@ -242,7 +300,11 @@ function extraireChambres(texte: string): number | undefined {
 
 function extraireType(texte: string): TypeBienAnnonce {
   const lower = texte.toLowerCase()
-  if (/\bmaison\b|\bvilla\b|\bpavillon\b/.test(lower)) return 'maison'
+  // Maison a priorité dans la détection (plus spécifique)
+  if (/\bmaison\b|\bvilla\b|\bpavillon\b|\bcorps\s+de\s+ferme\b|\blongère|\bchalet\b|\bpropriété/.test(lower)) return 'maison'
+  // Si on mentionne explicitement un type d'appartement
+  if (/\bappartement\b|\bstudio\b|\bloft\b|\bduplex\b|\btriplex\b|\batelier\b/.test(lower)) return 'appartement'
+  // Défaut : appartement (type le plus courant)
   return 'appartement'
 }
 
@@ -288,86 +350,164 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
     return cleaned
   }
 
-  // ──── 1. Code postal 5 chiffres (avec validation dept) — priorité haute ────
-  const cpMatch = texte.match(/\b(\d{5})\b/)
-  if (cpMatch && isValidCP(cpMatch[1])) {
-    result.codePostal = cpMatch[1]
+  // ──── 1. Villes connues — LE PLUS FIABLE pour éviter les faux positifs ────
+  // Chercher d'abord dans la liste de villes connues AVANT les patterns génériques.
+  // Les patterns génériques type "Mot 75001" peuvent capturer des noms d'agents.
+  const VILLES = [
+    // Top 60 agglomérations
+    'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
+    'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
+    'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
+    'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
+    'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
+    'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
+    'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
+    'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
+    'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
+    'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
+    'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
+    'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
+    'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
+    'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
+    'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
+    // Villes moyennes importantes
+    'La Rochelle', 'Colmar', 'Pau', 'Bayonne', 'Avignon',
+    'Cannes', 'Antibes', 'Valence', 'Chambéry', 'Troyes',
+    'Vannes', 'Lorient', 'Quimper', 'Saint-Brieuc', 'Saint-Nazaire',
+    'La Roche-sur-Yon', 'Chartres', 'Bourges', 'Châteauroux',
+    'Poitiers', 'Angoulême', 'Niort', 'Agen', 'Tarbes',
+    'Béziers', 'Sète', 'Carcassonne', 'Narbonne', 'Albi',
+    'Montauban', 'Rodez', 'Aurillac', 'Cahors', 'Périgueux',
+    'Bergerac', 'Mont-de-Marsan', 'Dax', 'Biarritz',
+    'Ajaccio', 'Bastia', 'Arles', 'Fréjus', 'Hyères',
+    'Gap', 'Briançon', 'Épinal', 'Thionville', 'Belfort',
+    'Beauvais', 'Compiègne', 'Saint-Quentin', 'Laon',
+    'Dunkerque', 'Calais', 'Boulogne-sur-Mer', 'Lens', 'Douai',
+    'Valenciennes', 'Maubeuge', 'Cambrai', 'Arras',
+    'Évreux', 'Cherbourg', 'Saint-Lô', 'Alençon',
+    'Blois', 'Vendôme', 'Auxerre', 'Sens', 'Nevers',
+    'Mâcon', 'Chalon-sur-Saône', 'Lons-le-Saunier',
+    'Bourg-en-Bresse', 'Oyonnax', 'Vienne', 'Roanne',
+    'Villefranche-sur-Saône', 'Saint-Priest', 'Vénissieux',
+    'Saint-Malo', 'Fougères', 'Vitré', 'Laval',
+    // DOM-TOM
+    'Fort-de-France', 'Pointe-à-Pitre', 'Cayenne',
+    'Saint-Denis', 'Saint-Pierre', 'Mamoudzou',
+  ]
+
+  // Chercher une ville connue.
+  // Stratégie : scanner TOUTES les villes connues, trouver TOUTES les paires ville+CP,
+  // et choisir la meilleure. Cela évite de capturer "Paris 75001" depuis la navigation
+  // LaForêt quand le bien est à "Colombes 92700" dans le corps de l'annonce.
+  //
+  // Heuristique : la paire ville+CP qui apparaît le plus tard dans le texte est
+  // probablement celle du bien (la navigation est en haut, le footer/agent est déjà coupé
+  // par isolerContenuPrincipal).
+  const lower = texte.toLowerCase()
+
+  /**
+   * Cherche un code postal à proximité d'une occurrence de ville.
+   * Retourne le CP si trouvé, sinon undefined.
+   */
+  const chercherCPProche = (idx: number, villeLen: number): string | undefined => {
+    // Après la ville : jusqu'à 80 chars (couvre "Colombes\nDisponible\n92700")
+    // \b pour ne pas matcher "12345" dans "123456" (URLs)
+    const apres = texte.substring(idx + villeLen, idx + villeLen + 80)
+    const cpApres = apres.match(/\b(\d{5})\b/)
+    if (cpApres && isValidCP(cpApres[1])) return cpApres[1]
+    // Avant la ville : jusqu'à 20 chars ("92700 Colombes")
+    if (idx >= 5) {
+      const avant = texte.substring(Math.max(0, idx - 20), idx)
+      const cpAvant = avant.match(/\b(\d{5})\b(?:\s*$)/)
+      if (cpAvant && isValidCP(cpAvant[1])) return cpAvant[1]
+    }
+    return undefined
   }
 
-  // ──── 2. Pattern "Ville (75001)" ou "75001 Ville" — le plus fiable pour extraire le nom ────
-  const patternVilleCP = [
-    // "Ville (75001)" ou "Ville 75001"
-    /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(?\s*(\d{5})\s*\)?/,
-    // "75001 Ville" 
-    /(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)/,
-    // "à Ville" ou "de Ville" (localisation contextuelle)
-    /(?:à|de|sur|en|près de)\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*(?:\((\d{5})\))?/,
-  ]
-  
-  for (const pattern of patternVilleCP) {
-    const m = texte.match(pattern)
-    if (m) {
-      const [cp, villeRaw] = /^\d{5}$/.test(m[1])
-        ? [m[1], m[2]]
-        : [m[2], m[1]]
+  // Scanner toutes les villes connues et collecter les paires ville+CP
+  type VilleMatch = { ville: string; cp: string; idx: number }
+  const villeCPMatches: VilleMatch[] = []
+  let premiereVilleSansCP: { ville: string; idx: number } | undefined
 
-      const ville = villeRaw ? nettoyerVille(villeRaw) : undefined
-      if (ville && ville.length >= 2) {
-        if (!result.ville) result.ville = ville
-        if (cp && isValidCP(cp) && !result.codePostal) result.codePostal = cp
-        if (result.ville && result.codePostal) break
+  for (const v of VILLES) {
+    const vLower = v.toLowerCase()
+    let searchStart = 0
+    while (true) {
+      const idx = lower.indexOf(vLower, searchStart)
+      if (idx < 0) break
+
+      const cp = chercherCPProche(idx, v.length)
+      if (cp) {
+        villeCPMatches.push({ ville: v, cp, idx })
+      } else if (!premiereVilleSansCP) {
+        premiereVilleSansCP = { ville: v, idx }
+      }
+
+      searchStart = idx + v.length
+    }
+  }
+
+  // Choisir le meilleur match : celui qui apparaît le plus tard dans le texte
+  // (la navigation est en haut, isolerContenuPrincipal a déjà coupé le footer/agent)
+  if (villeCPMatches.length > 0) {
+    const best = villeCPMatches.reduce((a, b) => a.idx > b.idx ? a : b)
+    result.ville = best.ville
+    result.codePostal = best.cp
+  } else if (premiereVilleSansCP) {
+    result.ville = premiereVilleSansCP.ville
+  }
+
+  // ──── 2. Code postal 5 chiffres (si pas encore trouvé via ville connue) ────
+  // Si la ville est connue mais le CP n'a pas été trouvé à proximité,
+  // chercher le CP APRÈS la position de la ville (pas le premier du texte,
+  // qui peut venir de la navigation).
+  if (!result.codePostal) {
+    if (result.ville) {
+      // Chercher le premier CP qui apparaît APRÈS la ville dans le texte
+      const villeIdx = lower.indexOf(result.ville.toLowerCase())
+      if (villeIdx >= 0) {
+        const afterCity = texte.substring(villeIdx)
+        const cpAfter = afterCity.match(/\b(\d{5})\b/)
+        if (cpAfter && isValidCP(cpAfter[1])) {
+          result.codePostal = cpAfter[1]
+        }
+      }
+    }
+    // Dernier recours : premier CP du texte
+    if (!result.codePostal) {
+      const cpMatch = texte.match(/\b(\d{5})\b/)
+      if (cpMatch && isValidCP(cpMatch[1])) {
+        result.codePostal = cpMatch[1]
       }
     }
   }
 
-  // ──── 3. Villes connues (fallback si pattern ci-dessus n'a rien trouvé) ────
+  // ──── 3. Pattern "Ville (75001)" ou "75001 Ville" — si aucune ville connue trouvée ────
   if (!result.ville) {
-    const VILLES = [
-      // Top 60 agglomérations
-      'Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes',
-      'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes',
-      'Reims', 'Saint-Étienne', 'Le Havre', 'Toulon', 'Grenoble',
-      'Dijon', 'Angers', 'Nîmes', 'Villeurbanne', 'Clermont-Ferrand',
-      'Le Mans', 'Aix-en-Provence', 'Brest', 'Tours', 'Amiens',
-      'Limoges', 'Annecy', 'Perpignan', 'Boulogne-Billancourt',
-      'Metz', 'Besançon', 'Orléans', 'Rouen', 'Mulhouse', 'Caen',
-      'Nancy', 'Saint-Denis', 'Argenteuil', 'Montreuil', 'Versailles',
-      'Courbevoie', 'Vitry-sur-Seine', 'Colombes', 'Neuilly-sur-Seine',
-      'Issy-les-Moulineaux', 'Levallois-Perret', 'Antony', 'Clichy',
-      'Ivry-sur-Seine', 'Pantin', 'Bobigny', 'Clamart', 'Suresnes',
-      'Massy', 'Meaux', 'Créteil', 'Nanterre', 'Rueil-Malmaison',
-      'Champigny-sur-Marne', 'Saint-Maur-des-Fossés', 'Drancy',
-      'Aulnay-sous-Bois', 'Aubervilliers', 'Noisy-le-Grand',
-      'Fontenay-sous-Bois', 'Vincennes', 'Saint-Germain-en-Laye',
-      // Villes moyennes importantes
-      'La Rochelle', 'Colmar', 'Pau', 'Bayonne', 'Avignon',
-      'Cannes', 'Antibes', 'Valence', 'Chambéry', 'Troyes',
-      'Vannes', 'Lorient', 'Quimper', 'Saint-Brieuc', 'Saint-Nazaire',
-      'La Roche-sur-Yon', 'Chartres', 'Bourges', 'Châteauroux',
-      'Poitiers', 'Angoulême', 'Niort', 'Agen', 'Tarbes',
-      'Béziers', 'Sète', 'Carcassonne', 'Narbonne', 'Albi',
-      'Montauban', 'Rodez', 'Aurillac', 'Cahors', 'Périgueux',
-      'Bergerac', 'Mont-de-Marsan', 'Dax', 'Biarritz',
-      'Ajaccio', 'Bastia', 'Arles', 'Fréjus', 'Hyères',
-      'Gap', 'Briançon', 'Épinal', 'Thionville', 'Belfort',
-      'Beauvais', 'Compiègne', 'Saint-Quentin', 'Laon',
-      'Dunkerque', 'Calais', 'Boulogne-sur-Mer', 'Lens', 'Douai',
-      'Valenciennes', 'Maubeuge', 'Cambrai', 'Arras',
-      'Évreux', 'Cherbourg', 'Saint-Lô', 'Alençon',
-      'Blois', 'Vendôme', 'Auxerre', 'Sens', 'Nevers',
-      'Mâcon', 'Chalon-sur-Saône', 'Lons-le-Saunier',
-      'Bourg-en-Bresse', 'Oyonnax', 'Vienne', 'Roanne',
-      'Villefranche-sur-Saône', 'Saint-Priest', 'Vénissieux',
-      'Saint-Malo', 'Fougères', 'Vitré', 'Laval',
-      // DOM-TOM
-      'Fort-de-France', 'Pointe-à-Pitre', 'Cayenne',
-      'Saint-Denis', 'Saint-Pierre', 'Mamoudzou',
+    const patternVilleCP = [
+      // "Paris 11ème (75011)", "Lyon 3ème (69003)" — arrondissement avec CP
+      /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s+\d+(?:er?|[eè]me|ème)\s*\(?(\d{5})\)?/,
+      // "Ville (75001)" ou "Ville 75001"
+      /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*\(?\s*(\d{5})\s*\)?/,
+      // "75001 Ville" 
+      /(\d{5})\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)/,
+      // "à Ville" ou "de Ville" (localisation contextuelle)
+      /(?:à|de|sur|en|près de)\s+([A-ZÀ-Ÿ][a-zà-ÿ]+(?:[- ][A-ZÀ-Ÿa-zà-ÿ]+)*)\s*(?:\((\d{5})\))?/,
     ]
-    const lower = texte.toLowerCase()
-    for (const v of VILLES) {
-      if (lower.includes(v.toLowerCase())) {
-        result.ville = v
-        break
+    
+    for (const pattern of patternVilleCP) {
+      const m = texte.match(pattern)
+      if (m) {
+        const [cp, villeRaw] = /^\d{5}$/.test(m[1])
+          ? [m[1], m[2]]
+          : [m[2], m[1]]
+
+        const ville = villeRaw ? nettoyerVille(villeRaw) : undefined
+        if (ville && ville.length >= 2) {
+          if (!result.ville) result.ville = ville
+          if (cp && isValidCP(cp) && !result.codePostal) result.codePostal = cp
+          if (result.ville && result.codePostal) break
+        }
       }
     }
   }
@@ -415,7 +555,15 @@ function extraireDPE(texte: string): ClasseDPE | undefined {
     /DPE\)\s*([A-G])\b/i,
     /diagnostic\s*(?:de\s*)?performance\s*énergétique\s*(?:\(DPE\))?\s*:?\s*([A-G])\b/i,
     /étiquette\s*énergie\s*:?\s*([A-G])\b/i,
+    /consommation\s*(?:d')?énergie\s*(?:primaire)?\s*:?\s*([A-G])\b/i,
+    /bilan\s*(?:énergétique|énergie)\s*:?\s*([A-G])\b/i,
     /[ée]nergie\s*:?\s*([A-G])\b/i,
+    // LaForêt, Orpi : "Consommation conventionnelle en énergie primaire D"
+    /consommation\s*conventionnelle[^.]{0,50}?\s*([A-G])\b/i,
+    // Pattern numérique sans unité : "DPE 234 D" ou "DPE : 234 kWh - D"
+    /\bDPE\s*:?\s*\d+\s*(?:kWh[^.]*?)?\s*[-–]?\s*([A-G])\b/i,
+    // Variante inversée : "D - 234 kWh/m²/an"
+    /\b([A-G])\s*[-–]\s*\d+\s*kWh/i,
   ]
 
   for (const p of patterns) {
@@ -443,12 +591,19 @@ function extraireGES(texte: string): ClasseDPE | undefined {
   // 2. Patterns textuels
   const patterns = [
     /classe\s*(?:GES|climat)\s*:?\s*([A-G])\b/i,
-    /GES\s*:?\s*([A-G])(?![ \t]+[A-G](?![a-zA-Z]))/i,
-    /\(GES\)\s*([A-G])\b/i,
-    /GES\)\s*([A-G])\b/i,
+    /\bGES\s*:?\s*([A-G])(?![ \t]+[A-G](?![a-zA-Z]))/i,
+    /\(\bGES\)\s*([A-G])\b/i,
+    /\bGES\)\s*([A-G])\b/i,
     /gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre\s*(?:\(GES\))?\s*:?\s*([A-G])\b/i,
     /étiquette\s*climat\s*:?\s*([A-G])\b/i,
-    /émissions?\s*(?:de\s*)?(?:GES|CO2?)\s*:?\s*([A-G])\b/i,
+    /émissions?\s*(?:de\s*)?(?:GES|CO2?|gaz)\s*:?\s*([A-G])\b/i,
+    /bilan\s*(?:carbone|climat)\s*:?\s*([A-G])\b/i,
+    // LaForêt, Orpi, Century21 : "Indice d'émission de gaz à effet de serre D"
+    /indice\s*d['']?émission[s]?\s*(?:de\s*)?(?:gaz\s*(?:à\s*)?effet\s*(?:de\s*)?serre)?\s*:?\s*([A-G])\b/i,
+    // Pattern numérique sans unité : "GES 12 D" ou "GES : 12 kg - D"
+    /\bGES\s*:?\s*\d+\s*(?:kg[^.]*?)?\s*[-–]?\s*([A-G])\b/i,
+    // Variante inversée : "D - 12 kg CO₂/m²/an"
+    /\b([A-G])\s*[-–]\s*\d+\s*kg\s*CO/i,
   ]
 
   for (const p of patterns) {
@@ -472,11 +627,21 @@ function extraireEtagesTotal(texte: string): number | undefined {
     /étage\s*\d+\s*\/\s*(\d+)/i,
     /\d+(?:er?|e|ème)?\s*étage\s*\/\s*(\d+)/i,
     /(?:immeuble|bâtiment|résidence)\s*(?:de\s*)?(?:R\+)?(\d+)\s*étages?/i,
+    // "immeuble de R+5", "résidence R+9" (sans "étages" après)
+    /(?:immeuble|bâtiment|résidence)\s+(?:\w+\s+)*?(?:de\s*)?R\+(\d+)/i,
     /(\d+)\s*étages?\s*(?:au\s*total|en\s*tout)/i,
     /sur\s*(\d+)\s*étages?/i,
+    // "2ème étage sur 5" (SeLoger format — no "étages" word after the total)
+    /\d+(?:er?|e|ème)?\s*étage\s+sur\s+(\d+)/i,
     /(?:nombre\s*d'?étages?|étages?\s*total)\s*:?\s*(\d+)/i,
     // "8/9 étages" generic
     /\d+\s*\/\s*(\d+)\s*étages?/i,
+    // "Étage : 5 / 8" — étage courant / total
+    /étage\s*:?\s*\d+\s*\/\s*(\d+)/i,
+    // "N étages" — plural only (fallback, avoids matching "5ème étage" singular)
+    /\b(\d+)\s*étages\b/i,
+    // "R+N" standalone (fallback)
+    /\bR\+(\d+)\b/i,
   ]
   for (const p of patterns) {
     const m = texte.match(p)
@@ -496,7 +661,8 @@ function extraireAnneeConstruction(texte: string): number | undefined {
     /(?:construit|construction)\s*(?:en\s*)?:?\s*((?:18|19|20)\d{2})/i,
     /(?:bâti|b[aâ]tie?|édifié|livré|livrée?)\s*(?:en\s*)?((?:18|19|20)\d{2})/i,
     // "Immeuble de 1972", "Résidence de 1985", "Copropriété de 1974"
-    /(?:immeuble|résidence|r[eé]sidence|copropri[eé]t[eé]|programme|b[aâ]timent)\s+(?:de|du)\s+((?:18|19|20)\d{2})/i,
+    // Also handles: "copropriété bien entretenue de 1965" (up to 5 words in between)
+    /(?:immeuble|résidence|r[eé]sidence|copropri[eé]t[eé]|programme|b[aâ]timent)\s+(?:\S+\s+){0,5}(?:de|du)\s+((?:18|19|20)\d{2})/i,
     // "Livraison 2024", "Livraison prévue T3 2025", "Livraison prévue 2025"
     /livraison\s*(?:prévue\s*)?(?:T\d\s*)?((?:19|20)\d{2})/i,
     // "Neuf - livré en 2024"
@@ -536,23 +702,45 @@ function extraireAnneeConstruction(texte: string): number | undefined {
 }
 
 function extraireNbSallesBains(texte: string): number | undefined {
-  const patterns = [
-    /(\d+)\s*salles?\s*(?:de\s*)?bains?/i,
-    /salles?\s*(?:de\s*)?bains?\s*:?\s*(\d+)/i,
-    /(\d+)\s*salles?\s*d'eau/i,
-    /salles?\s*d'eau\s*:?\s*(\d+)/i,
-    /(\d+)\s*(?:SDB|sdb)/i,
-  ]
-  for (const p of patterns) {
-    const m = texte.match(p)
-    if (m) {
-      // Groupe de capture peut être en position 1 ou 2 selon le pattern
-      const val = m[1] || m[2]
-      const n = parseInt(val)
-      if (n >= 1 && n <= 10) return n
+  let total = 0
+
+  // 1. Count all "N salle(s) de bains" with numbers before
+  // Use [ \t]* (no newlines) between number and "salle" to avoid matching
+  // "Chambres 2\nSalle de bain" across lines.
+  for (const m of texte.matchAll(/(\d+)[ \t]*salles?[ \t]*(?:de[ \t]*)?bains?/gi)) {
+    total += parseInt(m[1])
+  }
+
+  // 2. Count all "N salle(s) d'eau" with numbers before (both straight and curly apostrophes)
+  for (const m of texte.matchAll(/(\d+)[ \t]*salles?[ \t]*d['\u2019]eau/gi)) {
+    total += parseInt(m[1])
+  }
+
+  // 3. Count "salle(s) de bains : N" and "salle(s) d'eau : N" (number after)
+  // Use [ \t]* before (\d+) to avoid matching across newlines.
+  if (total === 0) {
+    for (const m of texte.matchAll(/salles?\s*(?:de\s*)?bains?[ \t]*:?[ \t]*(\d+)/gi)) {
+      total += parseInt(m[1])
+    }
+    for (const m of texte.matchAll(/salles?\s*d['\u2019]eau[ \t]*:?[ \t]*(\d+)/gi)) {
+      total += parseInt(m[1])
     }
   }
-  return undefined
+
+  // 4. Count "N SDB"
+  if (total === 0) {
+    for (const m of texte.matchAll(/(\d+)\s*\bSDB\b/gi)) {
+      total += parseInt(m[1])
+    }
+  }
+
+  // 5. If still 0, check bare mentions (without number → count 1 each)
+  if (total === 0) {
+    if (/\bsalles?\s*(?:de\s*)?bains?\b/i.test(texte)) total += 1
+    if (/\bsalles?\s*d['\u2019']eau\b/i.test(texte)) total += 1
+  }
+
+  return total >= 1 && total <= 10 ? total : undefined
 }
 
 function extraireOrientation(texte: string): string | undefined {
@@ -594,7 +782,9 @@ function extraireDescription(texte: string): string | undefined {
 
 function extraireEtage(texte: string): number | undefined {
   const patterns = [
-    /(\d+)(?:er?|e|ème)?\s*étage/i,
+    // [ \t]* au lieu de \s* pour ne pas croiser les lignes
+    // ("Chambres : 2\nÉtage" → empêche de capturer 2)
+    /(\d+)(?:er?|e|ème)?[ \t]*étage/i,
     /étage\s*:?\s*(\d+)/i,
   ]
 
@@ -617,6 +807,8 @@ function extraireCharges(texte: string): number | undefined {
     /provisions?\s*sur\s*charges?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
     /charges?\s*:\s*(\d[\d\s]*)\s*(?:€|euros?)\s*\/\s*mois/i,
     /(\d[\d\s]*)\s*(?:€|euros?)\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
+    // Fallback générique : "charges 3600 €" (sans ":" ni qualificatif)
+    /charges?\s+(\d[\d\s]*)\s*(?:€|euros?)/i,
     // Pattern sans symbole : "charges mensuelles : 235" (SeLoger JSON text)
     /charges?\s*mensuelles?\s*:?\s*(\d[\d\s.,]+)\b/i,
   ]
@@ -647,11 +839,12 @@ function extraireCharges(texte: string): number | undefined {
 
 function extraireTaxeFonciere(texte: string): number | undefined {
   const patterns = [
-    /taxe\s*foncière\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)\b/i,
-    /foncière?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)\b/i,
-    /(\d[\d\s]*)\s*(?:€|euros?)\s*(?:de\s+)?taxe\s*foncière/i,
+    /taxe\s*foncière\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
+    /foncière?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
+    // "320 € de taxe foncière" — same-line only ([ \t] not \s to avoid cross-line match)
+    /(\d[\d\s]*)[ \t]*(?:€|euros?)[ \t]+(?:de[ \t]+)?taxe\s*foncière/i,
     // Pattern sans symbole euro (SeLoger : "Taxe Foncière: 1442 Euros")
-    /taxe\s*foncière\s*:?\s*(\d[\d\s.,]+)(?:\s*(?:€|euros?|par\s*an|\/\s*an))?\b/i,
+    /taxe\s*foncière\s*:?\s*(\d[\d\s.,]+)(?:\s*(?:€|euros?|par\s*an|\/\s*an))?/i,
   ]
 
   for (const p of patterns) {
@@ -674,10 +867,10 @@ function extraireEquipements(texte: string) {
     return !exclusions.some(excl => excl.test(lower))
   }
 
-  const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/]
-  const NEG_BALCON = [/sans\s+(?:balcon|terrasse)/, /pas\s+d['’e]?\s*(?:balcon|terrasse)/, /aucun\s+(?:balcon|terrasse)/]
-  const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/]
-  const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/]
+  const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/, /ascenseur\s*:\s*non/]
+  const NEG_BALCON = [/sans\s+(?:balcon|terrasse)/, /pas\s+d['’e]?\s*(?:balcon|terrasse)/, /aucun\s+(?:balcon|terrasse)/, /balcon\s*:\s*non/, /terrasse\s*:\s*non/]
+  const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/, /parking\s*:\s*non/, /garage\s*:\s*non/]
+  const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/, /cave\s*:\s*non/]
 
   return {
     ascenseur: presente(/\bascenseur\b/, NEG_ASCENSEUR),
@@ -722,18 +915,26 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
   // Protection ReDoS : tronquer les textes trop longs
   const texteBrut = texte.length > MAX_TEXT_LENGTH ? texte.substring(0, MAX_TEXT_LENGTH) : texte
 
-  // ══ Isoler le contenu principal ══
-  // Supprime "annonces similaires", footer, prix de marché, etc.
-  // pour éviter de parser les données d'AUTRES biens
-  const texteSafe = isolerContenuPrincipal(texteBrut)
+  // ══ Isoler le contenu principal (2 étapes) ══
+  // Étape 1 : Supprimer sections parasites (similaires, footer, agent, etc.)
+  const texteCoupe = isolerContenuPrincipal(texteBrut)
+  // Étape 2 : Nettoyer les échelles visuelles DPE/GES
+  const texteSafe = nettoyerEchellesDPE(texteCoupe)
 
   // Extraire l'URL du bien (utile pour la source et les images)
   const url = extraireUrl(texteBrut) // chercher dans le texte complet
 
+  // ══ DPE / GES ══
+  // Extraire d'abord sur texteCoupe (AVANT nettoyage échelles) avec les patterns
+  // kWh/kg qui utilisent derniereLettrePourUnite — gère les échelles nativement.
+  // Si ça échoue, fallback sur texteSafe (APRÈS nettoyage) avec les patterns textuels.
+  const dpe = extraireDPE(texteCoupe) || extraireDPE(texteSafe)
+  const ges = extraireGES(texteCoupe) || extraireGES(texteSafe)
+
   const localisation = extraireLocalisation(texteSafe)
   const equipements = extraireEquipements(texteSafe)
 
-  const resultat: DonneesExtraites & { url?: string } = {
+  const resultat: DonneesExtraites = {
     prix: extrairePrix(texteSafe),
     surface: extraireSurface(texteSafe),
     pieces: extrairePieces(texteSafe),
@@ -741,8 +942,8 @@ export function parseTexteAnnonce(texteColle: string): DonneesExtraites {
     type: extraireType(texteSafe),
     ville: localisation.ville,
     codePostal: localisation.codePostal,
-    dpe: extraireDPE(texteSafe),
-    ges: extraireGES(texteSafe),
+    dpe,
+    ges,
     etage: extraireEtage(texteSafe),
     etagesTotal: extraireEtagesTotal(texteSafe),
     chargesMensuelles: extraireCharges(texteSafe),
@@ -913,6 +1114,25 @@ export function upgradeImageUrl(url: string): string {
  * Priorités pour l'image principale : og:image > twitter:image > première grande <img>
  * Les URLs sont automatiquement transformées en version haute résolution.
  */
+
+/**
+ * Décoder les URLs Next.js /_next/image?url=ENCODED pour récupérer l'image originale.
+ * LaForêt, SeLoger neuf et d'autres sites Next.js wrappent les images via ce proxy :
+ *   https://www.laforet.com/_next/image?url=https%3A%2F%2Fmedia.laforet.com%2Fphoto.jpg&w=640&q=75
+ * → On extrait l'URL originale : https://media.laforet.com/photo.jpg
+ */
+function decodeNextImageUrl(url: string): string {
+  try {
+    if (!url.includes('/_next/image')) return url
+    const urlObj = new URL(url)
+    const originalUrl = urlObj.searchParams.get('url')
+    if (originalUrl && originalUrl.startsWith('http')) {
+      return originalUrl
+    }
+  } catch { /* URL malformée, on retourne l'originale */ }
+  return url
+}
+
 export function extraireImagesFromHTML(html: string): { imageUrl?: string; images: string[] } {
   if (!html || html.length < 20) return { images: [] }
 
@@ -940,25 +1160,25 @@ export function extraireImagesFromHTML(html: string): { imageUrl?: string; image
     }
   }
 
-  // 3. Toutes les <img> — v\u00e9rifier src, data-src, data-lazy-src, srcset
+  // 3. Toutes les <img> — vérifier src, data-src, data-lazy-src, srcset
   const imgTagRegex = /<img[^>]+>/gi
   let imgTag: RegExpExecArray | null
   while ((imgTag = imgTagRegex.exec(html)) !== null) {
     const tag = imgTag[0]
     
-    // Extraire les diff\u00e9rentes sources possibles (ordre de qualit\u00e9 d\u00e9croissante)
+    // Extraire les différentes sources possibles (ordre de qualité décroissante)
     const dataSrcMatch = tag.match(/data-(?:lazy-)?src=["']([^"']+)["']/i)
     const srcSetMatch = tag.match(/(?:data-)?srcset=["']([^"']+)["']/i)
     // Utiliser un espace ou début de tag avant "src=" pour ne pas re-matcher data-src
     const srcMatch = tag.match(/(?:^|[\s"'])src=["']([^"']+)["']/i)
     
-    // Privil\u00e9gier la plus grande image du srcset
+    // Privilégier la plus grande image du srcset
     let bestUrl: string | undefined
     if (srcSetMatch?.[1]) {
       const entries = srcSetMatch[1].split(',').map(s => s.trim())
       let bestWidth = 0
       for (const entry of entries) {
-        const parts = entry.split(/\\s+/)
+        const parts = entry.split(/\s+/)
         const url = parts[0]?.trim()
         const widthStr = parts[1]?.replace('w', '')
         const w = widthStr ? parseInt(widthStr) : 0
@@ -969,7 +1189,7 @@ export function extraireImagesFromHTML(html: string): { imageUrl?: string; image
       }
     }
     
-    // Puis data-src (image lazy-load\u00e9e = souvent la vraie image haute qualit\u00e9)
+    // Puis data-src (image lazy-loadée = souvent la vraie image haute qualité)
     if (!bestUrl && dataSrcMatch?.[1]?.startsWith('http')) {
       bestUrl = dataSrcMatch[1].trim()
     }
@@ -980,6 +1200,10 @@ export function extraireImagesFromHTML(html: string): { imageUrl?: string; image
     }
     
     if (!bestUrl) continue
+
+    // Décoder les URLs Next.js /_next/image?url=ENCODED pour récupérer l'image originale haute-res
+    bestUrl = decodeNextImageUrl(bestUrl)
+
     if (/\.svg(\?|$)/i.test(bestUrl)) continue
     if (/logo|icon|avatar|sprite|pixel|tracking|badge|button|loader|spinner/i.test(bestUrl)) continue
     const widthMatch = tag.match(/width=["']?(\d+)/i)
@@ -998,7 +1222,9 @@ export function extraireImagesFromHTML(html: string): { imageUrl?: string; image
     const urlRegex = /https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'<>]*)?/gi
     let urlMatch: RegExpExecArray | null
     while ((urlMatch = urlRegex.exec(html)) !== null) {
-      const url = urlMatch[0]
+      let url = urlMatch[0]
+      url = decodeNextImageUrl(url)
+      if (/logo|icon|avatar|sprite|pixel|tracking/i.test(url)) continue
       if (!allImages.includes(url)) {
         if (!mainImage) mainImage = url
         allImages.push(url)
@@ -1007,10 +1233,11 @@ export function extraireImagesFromHTML(html: string): { imageUrl?: string; image
     }
   }
 
-  // Dédupliquer les URLs
-  const uniqueImages = [...new Set(allImages)]
+  // Dédupliquer les URLs et décoder les /_next/image restantes
+  const uniqueImages = [...new Set(allImages.map(u => decodeNextImageUrl(u)))]
+  const finalMain = mainImage ? decodeNextImageUrl(mainImage) : undefined
 
-  return { imageUrl: mainImage, images: uniqueImages.length > 1 ? uniqueImages : [] }
+  return { imageUrl: finalMain, images: uniqueImages.length > 1 ? uniqueImages : [] }
 }
 
 /** @deprecated Utiliser extraireImagesFromHTML à la place */

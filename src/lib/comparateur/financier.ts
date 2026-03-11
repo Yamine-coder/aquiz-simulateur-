@@ -5,23 +5,32 @@
  * Utilisé par TableauComparaison et VueMobileAccordeon
  */
 
+import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
+
 // ============================================
 // MENSUALITÉ DE CRÉDIT
 // ============================================
 
 /**
  * Calcule la mensualité de crédit pour un bien immobilier
- * Formule : M = (C × t) / (1 - (1 + t)^(-n))
+ * Inclut l'assurance emprunteur (norme HCSF : comptabilisée dans le taux d'endettement)
+ * 
+ * Formule crédit : M = (C × t) / (1 - (1 + t)^(-n))
+ * Assurance : A = (C × tauxAssurance) / 12
+ * Total : M + A
+ * 
  * @param prixBien Prix du bien en euros
  * @param apport Apport personnel en euros
  * @param tauxAnnuel Taux d'intérêt annuel en % (ex: 3.5)
  * @param dureeAns Durée du prêt en années
+ * @param tauxAssurance Taux d'assurance annuel en décimal (défaut: 0.0034 = 0.34%)
  */
 export function calculerMensualite(
   prixBien: number,
   apport: number,
   tauxAnnuel: number,
-  dureeAns: number
+  dureeAns: number,
+  tauxAssurance: number = SIMULATEUR_CONFIG.tauxAssuranceMoyen
 ): number {
   const capitalEmprunte = prixBien - apport
   if (capitalEmprunte <= 0) return 0
@@ -29,14 +38,18 @@ export function calculerMensualite(
   const tauxMensuel = tauxAnnuel / 100 / 12
   const nombreMensualites = dureeAns * 12
 
+  let mensualiteCredit: number
   if (tauxMensuel === 0) {
-    return Math.round(capitalEmprunte / nombreMensualites)
+    mensualiteCredit = capitalEmprunte / nombreMensualites
+  } else {
+    mensualiteCredit = (capitalEmprunte * tauxMensuel) /
+      (1 - Math.pow(1 + tauxMensuel, -nombreMensualites))
   }
 
-  const mensualite = (capitalEmprunte * tauxMensuel) /
-    (1 - Math.pow(1 + tauxMensuel, -nombreMensualites))
+  // Assurance emprunteur sur capital initial (méthode la plus courante en France)
+  const mensualiteAssurance = (capitalEmprunte * tauxAssurance) / 12
 
-  return Math.round(mensualite)
+  return Math.round(mensualiteCredit + mensualiteAssurance)
 }
 
 // ============================================

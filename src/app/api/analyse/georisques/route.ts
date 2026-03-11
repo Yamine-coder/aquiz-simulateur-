@@ -180,6 +180,28 @@ export async function GET(request: NextRequest) {
       // Radon optionnel — on continue sans
     }
 
+    // ── Appel API SIS — Sites et Sols Pollués (best effort) ──────
+    let pollutionSols = false
+    let nbSitesPollues = 0
+    try {
+      const sisCtrl = new AbortController()
+      const sisTimeout = setTimeout(() => sisCtrl.abort(), 4000)
+      const sisRes = await fetch(
+        `https://georisques.gouv.fr/api/v1/sis?latlon=${lat},${lon}&rayon=${rayon}`,
+        { headers: { 'Accept': 'application/json' }, signal: sisCtrl.signal }
+      )
+      clearTimeout(sisTimeout)
+      if (sisRes.ok) {
+        const sisData = await sisRes.json()
+        if (sisData.data && Array.isArray(sisData.data) && sisData.data.length > 0) {
+          pollutionSols = true
+          nbSitesPollues = sisData.data.length
+        }
+      }
+    } catch {
+      // SIS optionnel — on continue sans
+    }
+
     // Calculer le score global (100 = sûr, 0 = très risqué)
     // Éviter le double-comptage : les risques inondation sont déjà pénalisés via zoneInondable
     const nonFloodNaturels = risquesNaturels.filter(r => r.type !== 'inondation')
@@ -188,17 +210,19 @@ export async function GET(request: NextRequest) {
     scoreGlobal -= risquesTechnologiques.length * 15
     if (zoneInondable) scoreGlobal -= 20
     if (niveauRadon && niveauRadon >= 3) scoreGlobal -= 10
+    if (pollutionSols) scoreGlobal -= Math.min(nbSitesPollues * 10, 25) // Max -25 pour pollution sols
     scoreGlobal = Math.max(0, Math.min(100, scoreGlobal))
     
     // Générer la synthèse
     const totalRisques = risquesNaturels.length + risquesTechnologiques.length
     let synthese = '✅ Aucun risque majeur identifié'
-    if (totalRisques > 0) {
-      const alertes: string[] = []
-      if (zoneInondable) alertes.push('Zone inondable')
-      if (risquesNaturels.length > 0) alertes.push(`${risquesNaturels.length} risque(s) naturel(s)`)
-      if (risquesTechnologiques.length > 0) alertes.push(`${risquesTechnologiques.length} risque(s) techno(s)`)
-      if (niveauRadon && niveauRadon >= 3) alertes.push('Radon élevé')
+    const alertes: string[] = []
+    if (zoneInondable) alertes.push('Zone inondable')
+    if (risquesNaturels.length > 0) alertes.push(`${risquesNaturels.length} risque(s) naturel(s)`)
+    if (risquesTechnologiques.length > 0) alertes.push(`${risquesTechnologiques.length} risque(s) techno(s)`)
+    if (niveauRadon && niveauRadon >= 3) alertes.push('Radon élevé')
+    if (pollutionSols) alertes.push(`${nbSitesPollues} site(s) pollué(s)`)
+    if (alertes.length > 0) {
       synthese = '⚠️ ' + alertes.join(' • ')
     } else if (niveauRadon && niveauRadon >= 3) {
       synthese = '⚠️ Potentiel radon élevé'
@@ -211,6 +235,8 @@ export async function GET(request: NextRequest) {
         risquesTechnologiques,
         zoneInondable,
         niveauRadon,
+        pollutionSols,
+        nbSitesPollues,
         scoreGlobal,
         synthese
       },

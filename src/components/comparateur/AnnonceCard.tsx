@@ -24,7 +24,8 @@ import {
     Trash2
 } from 'lucide-react'
 import Image from 'next/image'
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
+import { ImageCarousel } from './ImageCarousel'
 
 interface AnnonceCardProps {
   annonce: Annonce
@@ -45,7 +46,7 @@ interface AnnonceCardProps {
   compact?: boolean
 }
 
-export function AnnonceCard({
+export const AnnonceCard = memo(function AnnonceCard({
   annonce,
   isSelected = false,
   selectionDisabled = false,
@@ -70,11 +71,18 @@ export function AnnonceCard({
     return url.replace(/[?&]rule=ad-(?:image|thumb|small)/, (m) => m.replace(/=ad-\w+/, '=ad-large'))
   }
 
-  // Image unique de meilleure qualité : images[0] (HQ) > imageUrl (thumbnail og:image)
-  const bestImage = useMemo(() => {
-    const raw = annonce.images?.[0] || annonce.imageUrl || null
-    return toHD(raw)
+  // Toutes les images en HD pour le carrousel
+  const allImages = useMemo(() => {
+    const raw = annonce.images?.length
+      ? annonce.images
+      : annonce.imageUrl
+        ? [annonce.imageUrl]
+        : []
+    return raw.map(u => toHD(u)).filter((u): u is string => u !== null)
   }, [annonce.imageUrl, annonce.images])
+
+  // Image unique pour compact / legacy
+  const bestImage = allImages[0] || null
 
   const [imgError, setImgError] = useState(false)
 
@@ -186,7 +194,7 @@ export function AnnonceCard({
               ? 'ring-2 ring-aquiz-green shadow-md shadow-aquiz-green/10'
               : isDisabled
                 ? 'border border-aquiz-gray-lighter'
-                : 'border border-aquiz-gray-lighter hover:border-aquiz-green/40 hover:shadow-lg hover:shadow-aquiz-green/5'
+                : 'border border-aquiz-gray-lighter hover:border-aquiz-green/40 hover:shadow-lg hover:shadow-aquiz-green/5 sm:hover:-translate-y-0.5'
         }
       `}
       onClick={() => {
@@ -198,33 +206,15 @@ export function AnnonceCard({
         }
       }}
     >
-      {/* ── Image zone ── */}
-      <div
-        className="relative h-24 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100 overflow-hidden"
+      {/* ── Image zone — Carrousel si plusieurs images ── */}
+      <ImageCarousel
+        images={allImages}
+        alt={annonce.titre || 'Bien immobilier'}
+        typeBien={annonce.type}
+        className="relative h-24 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100"
+        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
       >
-        {bestImage && !imgError ? (
-          <Image
-            src={bestImage}
-            alt={annonce.titre || 'Bien immobilier'}
-            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
-            unoptimized
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="w-14 h-14 rounded-2xl bg-white/80 flex items-center justify-center mb-2 shadow-sm">
-              <IconType className="h-7 w-7 text-aquiz-gray-light" />
-            </div>
-            <span className="text-[10px] text-aquiz-gray-light font-medium">Pas d&apos;image</span>
-          </div>
-        )}
-
-        {/* Gradient overlay bottom */}
-        <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/30 to-transparent pointer-events-none" />
-
-        {/* Hover overlay — manage mode (red) or comparison hint (green) — desktop only */}
+        {/* Hover overlay — manage mode (red) or compare hint (green) — desktop only */}
         {manageMode && !isManageSelected ? (
           <div className="absolute inset-0 bg-rose-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none hidden sm:flex items-center justify-center">
             <div className="bg-white/90 backdrop-blur-sm rounded-xl px-4 py-2 shadow-sm flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-1 group-hover:translate-y-0">
@@ -316,7 +306,7 @@ export function AnnonceCard({
             {faisabilite.niveau === 'impossible' && '✗ Hors budget'}
           </span>
         )}
-      </div>
+      </ImageCarousel>
 
       {/* ── Content ── */}
       <div className="flex flex-col flex-1 p-3 sm:p-4">
@@ -510,4 +500,6 @@ export function AnnonceCard({
       </div>
     </div>
   )
-}
+})
+
+AnnonceCard.displayName = 'AnnonceCard'

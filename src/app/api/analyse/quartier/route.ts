@@ -58,6 +58,9 @@ interface POI {
   nom?: string
   categorie: string
   distance: number
+  /** Coordonnées GPS du POI */
+  lat: number
+  lon: number
   /** Lignes de transport (parsées depuis route_ref) */
   lignes?: string[]
   /** Opérateur (RATP, SNCF, Keolis…) */
@@ -147,9 +150,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Construire la requête Overpass
-    const allAmenities = Object.values(CATEGORIES)
+    // IMPORTANT : ancrer les regex avec ^(...)$ pour éviter les faux positifs
+    // Sans ancrage, "cafe" matche "internet_cafe", "school" matche "music_school", etc.
+    const allAmenities = '^(' + Object.values(CATEGORIES)
       .flatMap(cat => cat.amenities)
-      .join('|')
+      .join('|') + ')$'
     
     // Rayon élargi pour le transport lourd (RER, métro, gare) — on marche/prend un bus pour un RER
     const rayonTransportLourd = Math.max(rayon, 2000)
@@ -162,17 +167,17 @@ export async function GET(request: NextRequest) {
       (
         node["amenity"~"${allAmenities}"](around:${rayon},${lat},${lon});
         way["amenity"~"${allAmenities}"](around:${rayon},${lat},${lon});
-        node["healthcare"~"doctor|clinic|dentist|hospital|pharmacy"](around:${rayon},${lat},${lon});
-        way["healthcare"~"doctor|clinic|dentist|hospital|pharmacy"](around:${rayon},${lat},${lon});
-        node["leisure"~"park|garden|playground|fitness_centre|sports_centre"](around:${rayon},${lat},${lon});
-        way["leisure"~"park|garden|playground|fitness_centre|sports_centre"](around:${rayon},${lat},${lon});
+        node["healthcare"~"^(doctor|clinic|dentist|hospital|pharmacy)$"](around:${rayon},${lat},${lon});
+        way["healthcare"~"^(doctor|clinic|dentist|hospital|pharmacy)$"](around:${rayon},${lat},${lon});
+        node["leisure"~"^(park|garden|playground|fitness_centre|sports_centre)$"](around:${rayon},${lat},${lon});
+        way["leisure"~"^(park|garden|playground|fitness_centre|sports_centre)$"](around:${rayon},${lat},${lon});
         node["highway"="bus_stop"](around:${rayon},${lat},${lon});
-        node["shop"~"supermarket|bakery|convenience"](around:${rayon},${lat},${lon});
+        node["shop"~"^(supermarket|bakery|convenience)$"](around:${rayon},${lat},${lon});
         node["amenity"="marketplace"](around:${rayon},${lat},${lon});
         node["amenity"="childcare"](around:${rayon},${lat},${lon});
         node["social_facility"="day_care"](around:${rayon},${lat},${lon});
         node["amenity"="bicycle_rental"](around:${rayon},${lat},${lon});
-        node["railway"~"station|halt"](around:${rayon},${lat},${lon});
+        node["railway"~"^(station|halt)$"](around:${rayon},${lat},${lon});
       );
       out center;
     `
@@ -183,11 +188,11 @@ export async function GET(request: NextRequest) {
     const queryTransportNodes = `
       [out:json][timeout:15];
       (
-        node["railway"~"station|halt|tram_stop|subway_entrance|stop"](around:${rayonTransportLourd},${lat},${lon});
+        node["railway"~"^(station|halt|tram_stop|subway_entrance|stop)$"](around:${rayonTransportLourd},${lat},${lon});
         node["public_transport"="station"](around:${rayonTransportLourd},${lat},${lon});
         node["public_transport"="platform"]["tram"="yes"](around:${rayonTransportLourd},${lat},${lon});
         node["public_transport"="stop_position"]["tram"="yes"](around:${rayonTransportLourd},${lat},${lon});
-        node["station"~"subway|metro"](around:${rayonTransportLourd},${lat},${lon});
+        node["station"~"^(subway|metro)$"](around:${rayonTransportLourd},${lat},${lon});
       );
       out tags center;
     `
@@ -195,7 +200,7 @@ export async function GET(request: NextRequest) {
     // Requête 3 : Relations de route (enrichissement lignes — optionnel)
     const queryRelations = `
       [out:json][timeout:20];
-      rel["route"~"train|subway|light_rail|tram"]["ref"](around:${rayonTransportLourd},${lat},${lon});
+      rel["route"~"^(train|subway|light_rail|tram)$"]["ref"](around:${rayonTransportLourd},${lat},${lon});
       out body;
     `
 
@@ -437,7 +442,19 @@ export async function GET(request: NextRequest) {
         const operateur = tags.operator || tags.network || undefined
         const couleur = tags.colour || tags.color || undefined
         
-        pois.push({ type: enrichedType, nom, categorie, distance: Math.round(distance), lignes, operateur, couleur, originalType: amenity })
+        pois.push({ type: enrichedType, nom, categorie, distance: Math.round(distance), lat: poiLat, lon: poiLon!, lignes, operateur, couleur, originalType: amenity })
+    }
+
+    // ── Post-traitement : filtrer les "garden" sans nom (pelouses HLM, jardins privés) ──
+    // OSM contient des centaines de micro-jardins résidentiels non pertinents
+    const beforeGarden = pois.length
+    const filteredPois = pois.filter(p => {
+      if (p.type === 'garden' && (!p.nom || p.nom === 'garden')) return false
+      return true
+    })
+    if (filteredPois.length < beforeGarden) {
+      pois.length = 0
+      pois.push(...filteredPois)
     }
 
     // ── Post-traitement : dédupliquer les arrêts de bus proches (< 50m) ──
@@ -561,8 +578,19 @@ export async function GET(request: NextRequest) {
             ? 40 * (withProx.reduce((s, v) => s + v, 0) / withProx.length)
             : 0
         } else {
-          // Catégories non-transport : comptage linéaire classique
-          countScore = Math.min(poisCat.length * 15, 60)
+          // Catégories non-transport : scoring logarithmique pour mieux différencier
+          // Les petits nombres comptent beaucoup, les grands saturent progressivement
+          const COUNT_THRESHOLDS: Record<string, number> = {
+            commerce: 80,    // 80 commerces = score max (centre-ville dense IDF)
+            education: 25,   // 25 écoles = score max
+            sante: 25,       // 25 établissements = score max
+            loisirs: 15,     // 15 lieux = score max
+            vert: 20,        // 20 espaces verts = score max
+          }
+          const threshold = COUNT_THRESHOLDS[catKey] ?? 15
+          // Courbe logarithmique : progression rapide au début, lente ensuite
+          // À threshold/2 POIs → ~70% du score, à threshold → ~90%
+          countScore = Math.round(60 * Math.min(1, Math.log(1 + poisCat.length) / Math.log(1 + threshold)))
           const avgDistance = poisCat.reduce((sum, p) => sum + p.distance, 0) / poisCat.length
           proximityScore = Math.max(0, 40 * (1 - avgDistance / rayon))
         }
@@ -624,6 +652,8 @@ export async function GET(request: NextRequest) {
       type: string
       nom: string
       distance: number
+      lat: number
+      lon: number
       lignes: string[]
       operateur?: string
       couleur?: string
@@ -667,7 +697,11 @@ export async function GET(request: NextRequest) {
             if (!isDuplicate) existing.lignes.push(l)
           }
         }
-        existing.distance = Math.min(existing.distance, p.distance)
+        if (p.distance < existing.distance) {
+          existing.distance = p.distance
+          existing.lat = p.lat
+          existing.lon = p.lon
+        }
         // Préférer le nom le plus court/propre (sans parenthèses)
         if (rawName.length < existing.nom.length && !rawName.includes('(')) {
           existing.nom = rawName
@@ -682,6 +716,8 @@ export async function GET(request: NextRequest) {
           type: p.type,
           nom: p.nom || getLabelTransport(p.type),
           distance: p.distance,
+          lat: p.lat,
+          lon: p.lon,
           lignes: p.lignes ? [...p.lignes] : [],
           operateur: p.operateur,
           couleur: p.couleur,
@@ -739,18 +775,58 @@ export async function GET(request: NextRequest) {
     // Trier : transports lourds d'abord par type, puis par distance dans chaque type
     const typeWeight = (t: string) => TYPE_ORDER.indexOf(t) >= 0 ? TYPE_ORDER.indexOf(t) : 99
     selected.sort((a, b) => typeWeight(a.type) - typeWeight(b.type) || a.distance - b.distance)
-    
+
+    // Propager les lignes : si une station RER/métro/train n'a pas de lignes,
+    // hériter des lignes de la plus proche du même type
+    for (const s of selected) {
+      if (s.lignes.length === 0 && ['rer_station', 'subway_entrance', 'station', 'train_station'].includes(s.type)) {
+        const donor = selected.find(d => d.type === s.type && d.lignes.length > 0)
+        if (donor) s.lignes = [...donor.lignes]
+      }
+    }
+
+    // Reclassifier le type selon les lignes résolues :
+    // - Si toutes les lignes sont des lignes de métro (1-14) → c'est un métro, pas un RER
+    // - Si toutes les lignes sont des lignes RER (A-E) → c'est un RER
+    const KNOWN_METRO = new Set(['1','2','3','3bis','4','5','6','7','7bis','8','9','10','11','12','13','14'])
+    const KNOWN_RER = new Set(['A','B','C','D','E'])
+    for (const s of selected) {
+      if (s.lignes.length > 0) {
+        const allMetro = s.lignes.every(l => KNOWN_METRO.has(l))
+        const allRER = s.lignes.every(l => KNOWN_RER.has(l.toUpperCase()))
+        if (allMetro && s.type !== 'subway_entrance') {
+          s.type = 'subway_entrance' // Reclassifier en métro
+        } else if (allRER && s.type !== 'rer_station') {
+          s.type = 'rer_station' // Reclassifier en RER
+        }
+      }
+    }
+
+    /** Nettoie le nom d'une station pour l'affichage (supprime suffixes, parenthèses) */
+    function cleanStationName(nom: string): string {
+      return nom
+        .replace(/\s*\([^)]*\)\s*/g, ' ')  // supprimer (RER A), (2019), etc.
+        .replace(/\s+(RER|Gare|SNCF|RATP)\s*$/i, '') // supprimer suffixes
+        .replace(/\s+/g, ' ')
+        .trim()
+    }
+
     const transportsProches = selected
       .map(s => ({
         type: s.type,
         typeTransport: getTypeTransport(s.type, s.operateur) as string,
-        nom: s.nom,
+        nom: cleanStationName(s.nom),
         distance: s.distance,
+        lat: s.lat,
+        lon: s.lon,
         walkMin: Math.max(1, Math.round(s.distance / VITESSE_PIETON_M_PAR_MIN)),
         lignes: s.lignes.length > 0 ? s.lignes : undefined,
         operateur: s.operateur,
         couleur: s.couleur,
       }))
+
+    // Extraire les comptages bruts par catégorie
+    const getCount = (cat: string) => categories.find(c => c.categorie === cat)?.count || 0
 
     const responseData = {
       success: true,
@@ -763,6 +839,15 @@ export async function GET(request: NextRequest) {
         espaceVerts: getScore('vert'),
         synthese,
         transportsProches,
+        /** Comptages bruts de POIs par catégorie (rayon 800m) */
+        counts: {
+          transport: getCount('transport'),
+          commerce: getCount('commerce'),
+          education: getCount('education'),
+          sante: getCount('sante'),
+          loisirs: getCount('loisirs'),
+          vert: getCount('vert'),
+        },
       },
       source: 'OpenStreetMap'
     }

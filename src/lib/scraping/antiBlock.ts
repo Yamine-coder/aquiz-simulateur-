@@ -136,19 +136,45 @@ const domainLastRequest = new Map<string, number>()
 
 /** Délai minimum entre 2 requêtes au même domaine (en ms) */
 const DOMAIN_MIN_DELAYS: Record<string, number> = {
-  'www.seloger.com':       5000,   // SeLoger très agressif en blocage
-  'www.leboncoin.fr':      3000,   // LeBonCoin modéré
+  // ── Top portails (protections agressives) ──
+  'www.seloger.com':       5000,   // SeLoger — DataDome
+  'www.selogerneuf.com':    5000,   // SeLoger Neuf — même groupe
+  'www.leboncoin.fr':      3000,   // LeBonCoin
   'api.leboncoin.fr':      2000,   // API LBC
   'www.bienici.com':       3000,   // Bien'ici
-  'www.logic-immo.com':    3000,   // Logic-Immo
-  'www.pap.fr':            2000,   // PAP
-  'www.orpi.com':          2000,   // Orpi
-  'www.century21.fr':      2000,   // Century 21
-  'www.laforet.com':       2000,   // Laforêt
+  'www.logic-immo.com':    3000,   // Logic-Immo — DataDome
+  'www.pap.fr':            2000,   // PAP — DataDome
+  // ── Réseaux d'agences ──
+  'www.orpi.com':          2000,
+  'www.century21.fr':      2000,
+  'www.laforet.com':       2000,
+  'www.guyhoquet.com':     2000,
+  'www.guy-hoquet.com':    2000,
+  'www.stephaneplazaimmobilier.com': 2000,
+  // ── Mandataires ──
+  'www.iadfrance.fr':      2000,
+  'www.capifrance.fr':     2000,
+  'www.safti.fr':          2000,
+  'www.optimhome.com':     2000,
+  // ── Portails ──
+  'www.paruvendu.fr':      2000,
+  'www.superimmo.com':     2000,
+  'www.avendrealouer.fr':  2000,
   'www.green-acres.fr':    2000,
-  'www.paruvendu.fr':      2000,   // ParuVendu
-  'www.guyhoquet.com':     2000,   // Guy Hoquet
-  'www.stephaneplazaimmobilier.com': 2000, // Stéphane Plaza
+  'www.meilleursagents.com': 2000,
+  'www.hosman.co':         2000,
+  'www.hosman.com':        2000,
+  // ── Promoteurs ──
+  'www.nexity.fr':         2000,
+  'www.bouygues-immobilier.com': 2000,
+  'www.kaufmanbroad.fr':   2000,
+  // ── Agences / Gestion ──
+  'www.foncia.com':        2000,
+  // ── Protégés ──
+  'www.ouestfrance-immo.com': 2000,
+  'www.explorimmo.com':    2000,
+  'immobilier.lefigaro.fr': 3000,
+  'immo.lefigaro.fr':      3000,
   'default':               1500,   // Tous les autres sites
 }
 
@@ -197,6 +223,70 @@ export function markDomainRequest(url: string): void {
   domainLastRequest.set(domain, Date.now())
 }
 
+
+// ═══════════════════════════════════════════════════════
+// 2b. CIRCUIT BREAKER PAR DOMAINE
+// Si un domaine bloque N requêtes consécutives, on arrête de le taper
+// pendant une période de cooldown croissante (backoff)
+// ═══════════════════════════════════════════════════════
+
+interface CircuitBreakerState {
+  /** Nombre de blocages consécutifs */
+  consecutiveFailures: number
+  /** Timestamp après lequel on peut retenter */
+  openUntil: number
+}
+
+/** Seuil de blocages consécutifs avant ouverture du circuit */
+const CB_FAILURE_THRESHOLD = 3
+/** Cooldown de base (30 secondes) — doublé à chaque ouverture */
+const CB_BASE_COOLDOWN_MS = 30_000
+/** Cooldown maximum (10 minutes) */
+const CB_MAX_COOLDOWN_MS = 10 * 60 * 1000
+
+const circuitBreakers = new Map<string, CircuitBreakerState>()
+
+/**
+ * Vérifie si un domaine est actuellement en circuit ouvert (bloqué).
+ * Retourne true si on doit SKIP ce domaine, false si on peut tenter.
+ */
+export function isDomainCircuitOpen(url: string): boolean {
+  const domain = extractDomain(url)
+  const state = circuitBreakers.get(domain)
+  if (!state) return false
+  if (state.consecutiveFailures < CB_FAILURE_THRESHOLD) return false
+  return Date.now() < state.openUntil
+}
+
+/**
+ * Enregistre un blocage (403, captcha, challenge) pour un domaine.
+ * Après N blocages consécutifs, ouvre le circuit breaker.
+ */
+export function recordDomainFailure(url: string): void {
+  const domain = extractDomain(url)
+  const state = circuitBreakers.get(domain) || { consecutiveFailures: 0, openUntil: 0 }
+  state.consecutiveFailures++
+  
+  if (state.consecutiveFailures >= CB_FAILURE_THRESHOLD) {
+    // Cooldown exponentiel : 30s, 60s, 120s, ... max 10min
+    const multiplier = Math.pow(2, state.consecutiveFailures - CB_FAILURE_THRESHOLD)
+    const cooldown = Math.min(CB_BASE_COOLDOWN_MS * multiplier, CB_MAX_COOLDOWN_MS)
+    state.openUntil = Date.now() + cooldown
+    console.warn(
+      `[circuitBreaker] 🔴 ${domain} bloqué ${state.consecutiveFailures}x → pause ${Math.round(cooldown / 1000)}s`
+    )
+  }
+  
+  circuitBreakers.set(domain, state)
+}
+
+/**
+ * Enregistre un succès pour un domaine → réinitialise le circuit breaker.
+ */
+export function recordDomainSuccess(url: string): void {
+  const domain = extractDomain(url)
+  circuitBreakers.delete(domain)
+}
 
 // ═══════════════════════════════════════════════════════
 // 3. RETRY AVEC BACKOFF EXPONENTIEL
@@ -312,38 +402,37 @@ export function sleep(ms: number): Promise<void> {
 // 5. FETCH PROTÉGÉ — Wrapper fetch avec toutes les protections
 // ═══════════════════════════════════════════════════════
 
-/** Pool étendu de User-Agents réalistes (desktop + mobile, 2024-2025) */
+/** Pool étendu de User-Agents réalistes (desktop + mobile, 2025-2026) */
 const USER_AGENT_POOL = [
-  // Chrome Windows
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  // Chrome Windows (134, 133, 132)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
   // Chrome Mac
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  // Firefox Windows
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+  // Firefox Windows (135, 134)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0',
   // Firefox Mac
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0',
-  // Safari Mac
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
-  // Edge Windows
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:135.0) Gecko/20100101 Firefox/135.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:134.0) Gecko/20100101 Firefox/134.0',
+  // Safari Mac (18.3, 18.2)
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Safari/605.1.15',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Safari/605.1.15',
+  // Edge Windows (134, 133)
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0',
   // Chrome Linux
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-  // Mobile (iOS)
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1',
-  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-  // Mobile (Android)
-  'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
-  'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+  // Mobile (iOS 18.3, 18.2)
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.2 Mobile/15E148 Safari/604.1',
+  // Mobile (Android 15)
+  'Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Mobile Safari/537.36',
 ]
 
 /** Sélectionne un User-Agent aléatoire du pool élargi */
@@ -354,7 +443,7 @@ export function getRandomUserAgent(): string {
 /** Génère des headers Sec-CH-UA cohérents avec le User-Agent choisi */
 function getSecChUaHeaders(ua: string): Record<string, string> {
   if (ua.includes('Edg/')) {
-    const ver = ua.match(/Edg\/(\d+)/)?.[1] || '131'
+    const ver = ua.match(/Edg\/(\d+)/)?.[1] || '132'
     return {
       'Sec-Ch-Ua': `"Microsoft Edge";v="${ver}", "Chromium";v="${ver}", "Not-A.Brand";v="99"`,
       'Sec-Ch-Ua-Mobile': ua.includes('Mobile') ? '?1' : '?0',
@@ -362,7 +451,7 @@ function getSecChUaHeaders(ua: string): Record<string, string> {
     }
   }
   if (ua.includes('Chrome/')) {
-    const ver = ua.match(/Chrome\/(\d+)/)?.[1] || '131'
+    const ver = ua.match(/Chrome\/(\d+)/)?.[1] || '132'
     return {
       'Sec-Ch-Ua': `"Chromium";v="${ver}", "Google Chrome";v="${ver}", "Not-A.Brand";v="99"`,
       'Sec-Ch-Ua-Mobile': ua.includes('Mobile') ? '?1' : '?0',
@@ -401,12 +490,159 @@ interface ProtectedFetchOptions {
  * Fetch protégé avec toutes les protections anti-blocage intégrées :
  * - Rotation User-Agent cohérente (UA + Sec-CH-UA alignés)
  * - Headers réalistes de navigateur
+ * - Referer réaliste (page de recherche du site, pas la racine)
  * - Throttle par domaine automatique
  * - Retry avec backoff sur erreurs retryable
  * - Détection automatique des challenges/captchas
  * 
  * @throws FetchError si la réponse n'est pas OK après retries
  */
+
+/** Referers réalistes par domaine (pages de recherche du site) */
+const REALISTIC_REFERERS: Record<string, string[]> = {
+  // ── Top portails ──
+  'www.seloger.com': [
+    'https://www.seloger.com/immobilier/achat/',
+    'https://www.seloger.com/list.htm?projects=2',
+    'https://www.google.fr/search?q=appartement+vente+seloger',
+  ],
+  'www.selogerneuf.com': [
+    'https://www.selogerneuf.com/immobilier/neuf/',
+    'https://www.selogerneuf.com/annonces/neuf/',
+    'https://www.google.fr/search?q=programme+neuf+seloger',
+  ],
+  'www.leboncoin.fr': [
+    'https://www.leboncoin.fr/recherche?category=9',
+    'https://www.leboncoin.fr/ventes_immobilieres/',
+    'https://www.google.fr/search?q=annonce+immobilier+leboncoin',
+  ],
+  'www.bienici.com': [
+    'https://www.bienici.com/recherche/achat/',
+    'https://www.bienici.com/recherche/',
+    'https://www.google.fr/search?q=appartement+achat+bien+ici',
+  ],
+  // ── Réseaux d'agences ──
+  'www.laforet.com': [
+    'https://www.laforet.com/acheter',
+    'https://www.laforet.com/recherche',
+  ],
+  'www.orpi.com': [
+    'https://www.orpi.com/acheter/',
+    'https://www.orpi.com/recherche/',
+  ],
+  'www.century21.fr': [
+    'https://www.century21.fr/trouver_logement/',
+    'https://www.century21.fr/annonces/',
+  ],
+  'www.guy-hoquet.com': [
+    'https://www.guy-hoquet.com/acheter',
+    'https://www.google.fr/search?q=guy+hoquet+immobilier+achat',
+  ],
+  // ── Mandataires ──
+  'www.iadfrance.fr': [
+    'https://www.iadfrance.fr/annonces/achat',
+    'https://www.google.fr/search?q=iad+france+immobilier',
+  ],
+  'www.capifrance.fr': [
+    'https://www.capifrance.fr/achat',
+    'https://www.google.fr/search?q=capifrance+annonce+immobilier',
+  ],
+  'www.safti.fr': [
+    'https://www.safti.fr/acheter',
+    'https://www.google.fr/search?q=safti+immobilier+achat',
+  ],
+  // ── Portails ──
+  'www.avendrealouer.fr': [
+    'https://www.avendrealouer.fr/recherche/achat',
+    'https://www.google.fr/search?q=a+vendre+a+louer+immobilier',
+  ],
+  'www.meilleursagents.com': [
+    'https://www.meilleursagents.com/annonces/achat/',
+    'https://www.google.fr/search?q=meilleursagents+annonces',
+  ],
+  'www.green-acres.fr': [
+    'https://www.green-acres.fr/properties-for-sale',
+    'https://www.google.fr/search?q=green+acres+immobilier+france',
+  ],
+  // ── Promoteurs ──
+  'www.nexity.fr': [
+    'https://www.nexity.fr/immobilier-neuf',
+    'https://www.google.fr/search?q=nexity+programme+neuf',
+  ],
+  'www.bouygues-immobilier.com': [
+    'https://www.bouygues-immobilier.com/logements-neufs',
+    'https://www.google.fr/search?q=bouygues+immobilier+neuf',
+  ],
+  // ── Protégés ──
+  'www.logic-immo.com': [
+    'https://www.logic-immo.com/vente-immobilier-paris-75,100_1/',
+    'https://www.google.fr/search?q=achat+immobilier+logic+immo',
+  ],
+  'www.pap.fr': [
+    'https://www.pap.fr/annonce/vente-immobilier',
+    'https://www.pap.fr/annonce/vente-appartement',
+    'https://www.google.fr/search?q=pap+immobilier+achat',
+  ],
+  'www.ouestfrance-immo.com': [
+    'https://www.ouestfrance-immo.com/acheter/',
+    'https://www.google.fr/search?q=ouestfrance+immo+vente',
+  ],
+  'www.explorimmo.com': [
+    'https://www.explorimmo.com/annonce-immobiliere/',
+    'https://www.google.fr/search?q=explorimmo+achat+immobilier',
+  ],
+  'immobilier.lefigaro.fr': [
+    'https://immobilier.lefigaro.fr/annonces/immobilier-vente.html',
+    'https://www.google.fr/search?q=figaro+immobilier+achat',
+  ],
+  // ── Autres portails ──
+  'www.stephaneplazaimmobilier.com': [
+    'https://www.stephaneplazaimmobilier.com/acheter',
+    'https://www.google.fr/search?q=stephane+plaza+immobilier',
+  ],
+  'www.guyhoquet.com': [
+    'https://www.guyhoquet.com/acheter',
+    'https://www.google.fr/search?q=guy+hoquet+immobilier',
+  ],
+  'www.optimhome.com': [
+    'https://www.optimhome.com/achat-immobilier',
+    'https://www.google.fr/search?q=optimhome+immobilier',
+  ],
+  'www.paruvendu.fr': [
+    'https://www.paruvendu.fr/immobilier/vente/',
+    'https://www.google.fr/search?q=paruvendu+immobilier',
+  ],
+  'www.superimmo.com': [
+    'https://www.superimmo.com/achat',
+    'https://www.google.fr/search?q=superimmo+annonces',
+  ],
+  'www.hosman.co': [
+    'https://www.hosman.co/acheter',
+    'https://www.google.fr/search?q=hosman+immobilier',
+  ],
+  'www.kaufmanbroad.fr': [
+    'https://www.kaufmanbroad.fr/trouver-un-logement',
+    'https://www.google.fr/search?q=kaufman+broad+immobilier+neuf',
+  ],
+  'www.foncia.com': [
+    'https://www.foncia.com/achat',
+    'https://www.google.fr/search?q=foncia+immobilier+achat',
+  ],
+}
+
+/** Referers génériques (pour les sites sans mapping spécifique) */
+const GENERIC_REFERERS = [
+  'https://www.google.fr/search?q=achat+immobilier',
+  'https://www.google.fr/search?q=annonce+appartement+vente',
+  'https://www.google.com/search?q=immobilier+france+achat',
+]
+
+function getRealisticReferer(url: string): string {
+  const hostname = new URL(url).hostname.toLowerCase()
+  const referers = REALISTIC_REFERERS[hostname] || GENERIC_REFERERS
+  return referers[Math.floor(Math.random() * referers.length)]
+}
+
 export async function protectedFetch(
   url: string,
   options?: ProtectedFetchOptions
@@ -442,7 +678,7 @@ export async function protectedFetch(
       'Accept-Encoding': 'gzip, deflate, br',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
-      'Referer': `${parsedUrl.protocol}//${parsedUrl.hostname}/`,
+      'Referer': getRealisticReferer(url),
       'Sec-Fetch-Dest': 'document',
       'Sec-Fetch-Mode': 'navigate',
       'Sec-Fetch-Site': 'none',
@@ -501,24 +737,41 @@ export async function protectedFetch(
 
 /** Patterns indicateurs d'un challenge anti-bot ou blocage */
 const CHALLENGE_PATTERNS = [
+  // Cloudflare
   'cf-challenge',
   'cf-chl-managed',
   'Just a moment...',
   'Checking your browser',
   'Please Wait... | Cloudflare',
+  'Attention Required! | Cloudflare',
+  'Error 1020',
+  'challenges.cloudflare.com',
+  // DataDome
   'datadome',
   'DataDome',
+  '_dd_s', // DataDome cookie pattern
+  'geo.captcha-delivery.com',
+  // PerimeterX / HUMAN Security
+  'px-captcha',
+  'perimeterx',
+  // CAPTCHA
   'captcha',
   'recaptcha',
   'hCaptcha',
-  'Attention Required! | Cloudflare',
+  // Generic anti-bot
   'Access denied',
-  'Error 1020',
   'Please verify you are a human',
   'Pardon Our Interruption',
-  '_dd_s', // DataDome cookie pattern
-  'geo.captcha-delivery.com',
-  'challenges.cloudflare.com',
+  'please enable javascript',
+  'please enable cookies',
+  'bot detected',
+  'automated access',
+  'rate limit',
+  'too many requests',
+  // French-language challenges (sites français)
+  'Veuillez patienter',
+  'Vérification en cours',
+  'Accès refusé',
 ]
 
 /**

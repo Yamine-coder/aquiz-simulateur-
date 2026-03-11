@@ -25,7 +25,8 @@ export function detecterSource(url: string): string | null {
   const urlLower = url.toLowerCase()
   
   // ── Top 3 (API interne dédiée — bypass anti-bot, JSON complet) ──
-  if (urlLower.includes('seloger.com')) return 'seloger'
+  if (urlLower.includes('selogerneuf.com')) return 'seloger'  // SeLoger Neuf (même API)
+  if (urlLower.includes('seloger.com')) return 'seloger'      // SeLoger classique
   if (urlLower.includes('leboncoin.fr')) return 'leboncoin'
   if (urlLower.includes('bienici.com') || urlLower.includes('bien-ici.com')) return 'bienici'
   
@@ -33,17 +34,36 @@ export function detecterSource(url: string): string | null {
   if (urlLower.includes('laforet.com')) return 'laforet'
   if (urlLower.includes('orpi.com')) return 'orpi'
   if (urlLower.includes('century21.fr')) return 'century21'
-  if (urlLower.includes('guy-hoquet.com')) return 'guyhoquet'
+  if (urlLower.includes('guy-hoquet.com') || urlLower.includes('guyhoquet.com')) return 'guyhoquet'
   if (urlLower.includes('stephaneplaza')) return 'stephaneplaza'
+  
+  // ── Réseaux de mandataires (HTML / JSON-LD accessibles) ──
+  if (urlLower.includes('iadfrance.fr')) return 'iad'
+  if (urlLower.includes('capifrance.fr')) return 'capifrance'
+  if (urlLower.includes('safti.fr')) return 'safti'
+  if (urlLower.includes('optimhome.com')) return 'optimhome'
   
   // ── Portails immobiliers (HTML / JSON-LD accessibles) ──
   if (urlLower.includes('paruvendu.fr')) return 'paruvendu'
   if (urlLower.includes('superimmo.com')) return 'superimmo'
+  if (urlLower.includes('avendrealouer.fr')) return 'avendrealouer'
+  if (urlLower.includes('green-acres.') || urlLower.includes('greenacres.')) return 'greenacres'
+  if (urlLower.includes('meilleursagents.com')) return 'meilleursagents'
+  if (urlLower.includes('proprioo.com') || urlLower.includes('hosman.co') || urlLower.includes('hosman.com')) return 'hosman'
+  
+  // ── Promoteurs / Neuf (HTML / JSON-LD) ──
+  if (urlLower.includes('nexity.fr')) return 'nexity'
+  if (urlLower.includes('bouygues-immobilier.com')) return 'bouygues'
+  if (urlLower.includes('kaufmanbroad.fr')) return 'kaufman'
+  
+  // ── Agences / Gestion (HTML / SPA) ──
+  if (urlLower.includes('foncia.com')) return 'foncia'
   
   // ── Sites protégés (DataDome/Cloudflare — fallback cascade uniquement) ──
   if (urlLower.includes('logic-immo.com')) return 'logic-immo'
   if (urlLower.includes('pap.fr')) return 'pap'
   if (urlLower.includes('ouestfrance-immo.com')) return 'ouestfrance'
+  if (urlLower.includes('explorimmo.com')) return 'figaro'  // redirige vers Figaro
   if (urlLower.includes('immo.lefigaro.fr') || urlLower.includes('immobilier.lefigaro.fr')) return 'figaro'
   
   return null
@@ -338,6 +358,22 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     }
   }
   
+  // Extraire le TITRE tôt — nécessaire pour le fallback ville-depuis-titre ci-dessous
+  // (sera éventuellement écrasé par un titre plus précis trouvé ultérieurement via JSON-LD)
+  if (!data.titre) {
+    const earlyTitreMatch = html.match(/<title[^>]*>([^<]+)</i) ||
+                            html.match(/<h1[^>]*>([^<]+)</i)
+    if (earlyTitreMatch) {
+      data.titre = earlyTitreMatch[1]
+        .replace(/\s+/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim()
+        .substring(0, 200)
+    }
+  }
+  
   // Extraire la ville depuis le titre si on a toujours pas
   if (!data.ville && data.titre) {
     // Liste des grandes villes françaises pour matching
@@ -492,7 +528,8 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
   }
   // Fallback: og:description
   if (!data.description) {
-    const ogDescMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]{50,})"/i)
+    const ogDescMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]{50,})"/i) ||
+                        html.match(/<meta[^>]+content="([^"]{50,})"[^>]+property="og:description"/i)
     if (ogDescMatch) {
       data.description = ogDescMatch[1].substring(0, 1000)
     }
@@ -755,6 +792,22 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
                      html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/i)
   if (imageMatch) {
     data.imageUrl = imageMatch[1]
+  }
+  
+  // ===== COORDONNÉES GPS =====
+  // JSON-LD GeoCoordinates — courant sur SeLoger, LeBonCoin, Bien'ici
+  if (!data.latitude || !data.longitude) {
+    const latMatch = html.match(/"(?:latitude|lat)"\s*:\s*"?([-]?\d+(?:\.\d+)?)"?/i)
+    const lngMatch = html.match(/"(?:longitude|lng)"\s*:\s*"?([-]?\d+(?:\.\d+)?)"?/i)
+    if (latMatch && lngMatch) {
+      const lat = parseFloat(latMatch[1])
+      const lng = parseFloat(lngMatch[1])
+      // Vérifier que ce sont des coordonnées en France (métropole + DOM-TOM)
+      if (lat >= -22 && lat <= 52 && lng >= -62 && lng <= 56 && lat !== 0 && lng !== 0) {
+        data.latitude = lat
+        data.longitude = lng
+      }
+    }
   }
   
   return data
@@ -1166,7 +1219,9 @@ function parseLeBonCoinAttributes(attributes: unknown[], data: Partial<NouvelleA
         if (!data.chargesMensuelles) {
           const n = parseFloat(value)
           if (n > 0 && n < 50000) {
-            data.chargesMensuelles = n > 500 ? Math.round(n / 12) : Math.round(n)
+            // Seuil 1200€ : à Paris charges mensuelles 500-800€ sont courantes
+            // Au-delà de 1200€ c'est quasi certainement annuel → diviser par 12
+            data.chargesMensuelles = n > 1200 ? Math.round(n / 12) : Math.round(n)
           }
         }
         break
@@ -1373,12 +1428,25 @@ function extractFromNestedJson(
       data.orientation = orientVal.trim()
     }
   }
+
+  // --- Coordonnées GPS (lat/lng, latitude/longitude) ---
+  if (!data.latitude || !data.longitude) {
+    const latVal = record.lat ?? record.latitude
+    const lngVal = record.lng ?? record.longitude
+    if (typeof latVal === 'number' && typeof lngVal === 'number') {
+      if (latVal >= -22 && latVal <= 52 && lngVal >= -62 && lngVal <= 56 && latVal !== 0 && lngVal !== 0) {
+        data.latitude = latVal
+        data.longitude = lngVal
+      }
+    }
+  }
   
   // --- Récursion dans les valeurs ---
   for (const value of Object.values(record)) {
     if (Array.isArray(value)) {
-      // Pour les arrays, ne parcourir que les 5 premiers éléments (éviter les listings similaires)
-      for (let i = 0; i < Math.min(value.length, 5); i++) {
+      // Pour les arrays, ne parcourir que les 15 premiers éléments (éviter les listings similaires)
+      // Augmenté de 5 à 15 : certains __NEXT_DATA__ ont les données du bien au-delà du 5e élément
+      for (let i = 0; i < Math.min(value.length, 15); i++) {
         extractFromNestedJson(value[i], data, depth + 1)
       }
     } else if (typeof value === 'object' && value !== null) {
@@ -1403,6 +1471,18 @@ export function parseMetaTags(html: string): Partial<NouvelleAnnonce> {
                      html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:title"/i)
   if (titleMatch) {
     data.titre = titleMatch[1]
+    
+    // Extract prix and surface from og:title (e.g. "Maison 4P 120m² Toulouse 350 000 €")
+    const titleText = titleMatch[1]
+    if (!data.prix) {
+      const prixMatch = titleText.match(/(\d{1,3}(?:[\s\u00A0]\d{3})+)\s*€/) || titleText.match(/(\d{4,8})\s*€/)
+      const prix = extraireNombre(prixMatch?.[1] || '')
+      if (prix && prix > 10000) data.prix = prix
+    }
+    if (!data.surface) {
+      const surface = extraireSurface(titleText)
+      if (surface) data.surface = surface
+    }
   }
   
   // og:image
@@ -1413,18 +1493,23 @@ export function parseMetaTags(html: string): Partial<NouvelleAnnonce> {
   }
   
   // og:description - peut contenir des infos utiles
-  const descMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i)
+  const descMatch = html.match(/<meta[^>]+property="og:description"[^>]+content="([^"]+)"/i) ||
+                    html.match(/<meta[^>]+content="([^"]+)"[^>]+property="og:description"/i)
   if (descMatch) {
     const desc = descMatch[1]
     
     // Essayer d'extraire des infos de la description
     // Pattern amélioré pour les prix >= 1 000 000 € (ex: "1 400 000 €")
-    const prixMatch = desc.match(/(\d{1,3}(?:[\s\u00A0]\d{3})+)\s*€/) || desc.match(/(\d{4,8})\s*€/)
-    const prix = extraireNombre(prixMatch?.[1] || '')
-    if (prix && prix > 10000) data.prix = prix
+    if (!data.prix) {
+      const prixMatch = desc.match(/(\d{1,3}(?:[\s\u00A0]\d{3})+)\s*€/) || desc.match(/(\d{4,8})\s*€/)
+      const prix = extraireNombre(prixMatch?.[1] || '')
+      if (prix && prix > 10000) data.prix = prix
+    }
     
-    const surface = extraireSurface(desc)
-    if (surface) data.surface = surface
+    if (!data.surface) {
+      const surface = extraireSurface(desc)
+      if (surface) data.surface = surface
+    }
     
     const pieces = extrairePieces(desc)
     if (pieces) data.pieces = pieces

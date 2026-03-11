@@ -103,3 +103,67 @@ export const dureeSchema = z
   .int('La durée doit être un nombre entier')
   .min(1, 'Durée minimum : 1 an')
   .max(30, 'Durée maximum : 30 ans')
+
+// ============================================
+// SCHÉMA ANNONCE COMPARATEUR
+// ============================================
+
+/** Sources supportées */
+const sourceAnnonceEnum = z.enum([
+  'leboncoin', 'seloger', 'bienici', 'pap', 'orpi', 'century21',
+  'laforet', 'guyhoquet', 'stephaneplaza', 'logic-immo', 'foncia',
+  'nexity', 'figaro', 'ouestfrance', 'superimmo', 'paruvendu',
+  'iad', 'capifrance', 'safti', 'optimhome', 'proprietes-lefigaro',
+  'explorimmo', 'avendrealouer', 'bellesdemeures', 'luxresidence',
+  'green-acres', 'acheter-louer', 'immonot', 'selogerneuf', 'bien-ici',
+  'autre', 'manuelle',
+])
+
+/** Classes DPE / GES */
+const classeDpeSchema = z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'NC'])
+
+/** Type de bien */
+const typeBienAnnonceSchema = z.enum(['appartement', 'maison'])
+
+/**
+ * Schéma de validation d'une nouvelle annonce (import / scraping)
+ * Valide les bornes réalistes pour l'immobilier français
+ */
+export const nouvelleAnnonceSchema = z.object({
+  // Obligatoires
+  prix: z.number().min(1000, 'Prix minimum 1 000 €').max(50_000_000, 'Prix maximum 50 M€'),
+  surface: z.number().min(5, 'Surface minimum 5 m²').max(10_000, 'Surface maximum 10 000 m²'),
+  type: typeBienAnnonceSchema,
+  pieces: z.number().int().min(1, 'Minimum 1 pièce').max(30),
+  chambres: z.number().int().min(0).max(25),
+  ville: z.string().min(1, 'Ville requise').max(200),
+  codePostal: z.string().regex(/^\d{5}$/, 'Code postal à 5 chiffres'),
+  dpe: classeDpeSchema,
+
+  // Optionnels
+  url: z.string().url().max(2000).optional(),
+  source: sourceAnnonceEnum.optional(),
+  adresse: z.string().max(500).optional(),
+  departement: z.string().max(5).optional(),
+  etage: z.number().int().min(0).max(100).optional(),
+  etagesTotal: z.number().int().min(0).max(100).optional(),
+  ascenseur: z.boolean().optional(),
+  balconTerrasse: z.boolean().optional(),
+  parking: z.boolean().optional(),
+  cave: z.boolean().optional(),
+  chargesMensuelles: z.number().min(0).max(50_000).optional(),
+  taxeFonciere: z.number().min(0).max(100_000).optional(),
+  titre: z.string().max(500).optional(),
+  description: z.string().max(10_000).optional(),
+  imageUrl: z.string().url().max(2000).optional(),
+  images: z.array(z.string().url().max(2000)).max(50).optional(),
+  notes: z.string().max(5000).optional(),
+  ges: classeDpeSchema.optional(),
+  anneeConstruction: z.number().int().min(1600).max(2035).optional(),
+  nbSallesBains: z.number().int().min(0).max(20).optional(),
+  orientation: z.string().max(100).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+})
+
+export type NouvelleAnnonceFormData = z.infer<typeof nouvelleAnnonceSchema>

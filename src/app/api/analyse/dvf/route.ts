@@ -131,6 +131,25 @@ async function fetchFromInternalData(
       ? Math.round(calculerMediane(prixTotaux))
       : null
 
+    // ── Calcul évolution intra-année (S1 vs S2) ──
+    let evolution12Mois: number | null = null
+    const withDate = filtered.filter(t => t.dateMutation)
+    if (withDate.length >= 10) {
+      // Trier par date pour séparer 1ère moitié vs 2ème moitié
+      const sorted = [...withDate].sort((a, b) => (a.dateMutation ?? '').localeCompare(b.dateMutation ?? ''))
+      const mid = Math.floor(sorted.length / 2)
+      const firstHalf = sorted.slice(0, mid)
+      const secondHalf = sorted.slice(mid)
+      if (firstHalf.length >= 3 && secondHalf.length >= 3) {
+        const avgFirst = firstHalf.reduce((s, t) => s + t.prixM2, 0) / firstHalf.length
+        const avgSecond = secondHalf.reduce((s, t) => s + t.prixM2, 0) / secondHalf.length
+        if (avgFirst > 0) {
+          // Extrapoler à 12 mois : les données couvrent ~1 an, on annualise
+          evolution12Mois = Math.round(((avgSecond - avgFirst) / avgFirst) * 100 * 10) / 10
+        }
+      }
+    }
+
     return {
       prixMedian,
       prixMoyen: null,
@@ -139,7 +158,7 @@ async function fetchFromInternalData(
       prixM2Median,
       prixM2Moyen: prixM2Median,
       nbTransactions: filtered.length,
-      evolution12Mois: null,
+      evolution12Mois,
       avertissement
     }
   } catch {

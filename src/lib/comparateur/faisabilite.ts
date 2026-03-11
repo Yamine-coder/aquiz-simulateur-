@@ -3,6 +3,7 @@
  * Utilisé dans le comparateur et les annonces cards
  */
 
+import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import type { AnalyseFaisabilite } from '@/types/annonces'
 
@@ -48,7 +49,7 @@ export function calculerFaisabilite(
     faisable: pourcentage <= 100,
     ecartBudget: ecart,
     pourcentageBudget: pourcentage,
-    mensualiteEstimee: calculerMensualite(coutTotal, 0, 3.5, 25), // Estimation sur coût total (25 ans, 3.5%, sans apport)
+    mensualiteEstimee: calculerMensualite(coutTotal, 0, SIMULATEUR_CONFIG.tauxInteretDefaut.long * 100, 25),
     fraisNotaire,
     niveau,
     message

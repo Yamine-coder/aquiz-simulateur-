@@ -10,7 +10,9 @@
  * - OpenStreetMap : Score quartier
  */
 
+import type { AnnonceScoreData } from '@/components/comparateur/EmailComparisonModal'
 import { Badge } from '@/components/ui/badge'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAnalyseEnrichie } from '@/hooks/useAnalyseEnrichie'
 import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
@@ -18,15 +20,16 @@ import {
     calculerScorePro,
 } from '@/lib/comparateur/scoreComparateur'
 import { toEnrichiesScoring } from '@/lib/comparateur/toEnrichiesScoring'
+import { cleanVille } from '@/lib/utils'
 import type { Annonce, NouvelleAnnonce, StatistiquesComparaison } from '@/types/annonces'
 import { COULEURS_DPE } from '@/types/annonces'
 import {
     Building2,
     Check,
+    ChevronDown,
     CreditCard,
     ExternalLink,
     FileDown,
-    Footprints,
     Home,
     Info,
     Key,
@@ -43,7 +46,6 @@ import Image from 'next/image'
 import { useEffect, useMemo, useRef } from 'react'
 import { EditableCell, type EditableFieldType } from './EditableCell'
 import { MiniRadar } from './MiniRadar'
-import { LineBadge, TypeBadge } from './TransportIcons'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
 
 /** Couleur du score */
@@ -68,16 +70,7 @@ interface TableauComparaisonProps {
   budgetMax?: number | null
   onRemove: (id: string) => void
   /** Callback quand les scores sont prêts (pour PDF) */
-  onScoresReady?: (scores: Array<{
-    annonceId: string
-    scoreGlobal: number
-    verdict: string
-    recommandation: string
-    conseilPerso: string
-    confiance: number
-    axes: Array<{ axe: string; label: string; score: number; disponible: boolean; detail: string; impact: 'positif' | 'neutre' | 'negatif' }>
-    points: Array<{ texte: string; detail?: string; type: 'avantage' | 'attention' | 'conseil' }>
-  }>) => void
+  onScoresReady?: (scores: AnnonceScoreData[]) => void
   /** Paramètres de financement pour calculer la mensualité */
   tauxInteret?: number
   dureeAns?: number
@@ -203,7 +196,7 @@ function LigneComparaison({
         {label}
       </td>
       {values.map((value, index) => (
-        <td key={index} className="py-3.5 px-4 text-center text-sm">
+        <td key={index} className="py-3.5 px-4 text-center text-sm overflow-visible relative">
           {formatValue(value, index)}
         </td>
       ))}
@@ -235,7 +228,7 @@ export function TableauComparaison({
     return annonces.map(annonce => {
       const enrichie = getAnalyseEnrichie(annonce.id)
       const enrichiScoring = toEnrichiesScoring(enrichie ?? null)
-      return calculerScorePro(annonce, annonces, enrichiScoring, budgetMax)
+      return calculerScorePro(annonce, annonces, enrichiScoring, budgetMax, null)
     })
   }, [annonces, budgetMax, getAnalyseEnrichie])
   
@@ -259,7 +252,8 @@ export function TableauComparaison({
       const marcheKey = enrichie?.marche?.success ? `m${enrichie.marche.ecartPrixM2 ?? ''}` : 'mx'
       const risqKey = enrichie?.risques?.success ? `r${enrichie.risques.scoreRisque ?? ''}` : 'rx'
       const quartKey = enrichie?.quartier?.success ? `q${enrichie.quartier.scoreQuartier ?? ''}` : 'qx'
-      return `${sp.annonceId}:${sp.scoreGlobal}:${marcheKey}:${risqKey}:${quartKey}`
+      const commKey = enrichie?.communeInfos?.success ? `c${enrichie.communeInfos.population ?? ''}` : 'cx'
+      return `${sp.annonceId}:${sp.scoreGlobal}:${marcheKey}:${risqKey}:${quartKey}:${commKey}`
     }).join('|')
 
     if (fingerprint === lastFingerprintRef.current) return
@@ -294,7 +288,9 @@ export function TableauComparaison({
             sante: enrichie.quartier.sante,
             espaceVerts: enrichie.quartier.espaceVerts,
             transportsProches: enrichie.quartier.transportsProches,
+            counts: enrichie.quartier.counts,
           } : undefined,
+          communeInfos: enrichie.communeInfos?.success ? enrichie.communeInfos : undefined,
         } : undefined,
       }
     })
@@ -322,28 +318,41 @@ export function TableauComparaison({
         meilleurRapportId={statistiques.meilleurRapportId}
         budgetMax={budgetMax}
         mensualiteParams={tauxInteret !== undefined && dureeAns ? { tauxInteret, dureeAns, apport: apport || 0 } : undefined}
+        getEnrichissement={(id) => getAnalyseEnrichie(id)}
         onRemove={onRemove}
       />
       
       {/* Vue Desktop - Tableau */}
       <div className="hidden md:block">
-        <div className="overflow-x-auto rounded-2xl border border-aquiz-gray-lighter/60 shadow-sm bg-white">
-          <table className="w-full min-w-150">
+        <div className="overflow-x-auto overflow-y-visible rounded-2xl border border-aquiz-gray-lighter/60 shadow-sm bg-white">
+          <table className="w-full min-w-150 table-fixed">
+            {/* Colonnes à largeurs fixes et égales */}
+            <colgroup>
+              <col className="w-44" />
+              {annonces.map((a) => (
+                <col key={a.id} />
+              ))}
+            </colgroup>
             {/* Header avec cartes des biens */}
             <thead>
               <tr className="border-b-2 border-aquiz-gray-lighter/80 bg-aquiz-gray-lightest/30">
-                <th className="py-5 px-5 text-left w-48">
+                <th className="py-5 px-5 text-left">
                   <span className="text-[11px] font-bold text-aquiz-gray-dark uppercase tracking-widest">Comparaison</span>
                 </th>
-                {annonces.map((annonce) => {
+                {(() => {
+                  // Recommandé = meilleur Score AQUIZ global (pas le meilleur prix/m²)
+                  const bestScoreId = scoresPro
+                    .filter(s => s.scoreGlobal > 0)
+                    .sort((a, b) => b.scoreGlobal - a.scoreGlobal)[0]?.annonceId
+                  return annonces.map((annonce) => {
                   const IconType = annonce.type === 'maison' ? Home : Building2
-                  const isMeilleurRapport = annonce.id === statistiques.meilleurRapportId
+                  const isRecommande = annonce.id === bestScoreId
                   
                   return (
-                    <th key={annonce.id} className="py-5 px-3 min-w-48 align-top">
+                    <th key={annonce.id} className="py-5 px-3 align-top">
                       <div className="relative pt-2">
-                        {/* Badge recommandé */}
-                        {isMeilleurRapport && (
+                        {/* Badge recommandé — basé sur le meilleur Score AQUIZ */}
+                        {isRecommande && (
                           <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
                             <Badge className="bg-aquiz-green text-white text-[10px] shadow-md whitespace-nowrap px-2.5 py-1">
                               <Sparkles className="w-3 h-3 mr-1" />
@@ -354,7 +363,7 @@ export function TableauComparaison({
                     
                     {/* Carte du bien */}
                     <div className={`relative rounded-xl overflow-hidden border-2 transition-all shadow-sm ${
-                      isMeilleurRapport ? 'border-aquiz-green shadow-lg shadow-aquiz-green/15' : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light hover:shadow-md'
+                      isRecommande ? 'border-aquiz-green shadow-lg shadow-aquiz-green/15' : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light hover:shadow-md'
                     }`}>
                       {/* Image */}
                       <div className="relative h-24 bg-linear-to-br from-aquiz-gray-lightest to-aquiz-gray-lighter">
@@ -383,32 +392,78 @@ export function TableauComparaison({
                       
                       {/* Infos */}
                       <div className="p-3 bg-white">
-                        <div className={`text-lg font-bold ${isMeilleurRapport ? 'text-aquiz-green' : 'text-aquiz-black'}`}>
+                        <div className={`text-lg font-bold ${isRecommande ? 'text-aquiz-green' : 'text-aquiz-black'}`}>
                           {annonce.prix.toLocaleString('fr-FR')} €
                         </div>
                         <div className="flex items-center gap-1 text-[11px] text-aquiz-gray mt-1">
                           <MapPin className="w-3 h-3 shrink-0" />
-                          <span className="truncate">{annonce.ville}</span>
+                          <span className="truncate">{cleanVille(annonce.ville)}</span>
                         </div>
-                        {/* Score AQUIZ + Mini Radar */}
+                        {/* Score AQUIZ + Mini Radar avec popover détaillé */}
                         {(() => {
                           const sp = getScorePro(annonce.id)
                           if (!sp) return null
                           const radarColor = sp.scoreGlobal >= 75 ? '#22c55e' : sp.scoreGlobal >= 60 ? '#84cc16' : sp.scoreGlobal >= 45 ? '#f59e0b' : '#ef4444'
                           return (
-                            <div className="flex items-center gap-2 mt-2">
-                              <MiniRadar
-                                axes={sp.axes.map(a => ({ score: a.score }))}
-                                size={48}
-                                color={radarColor}
-                              />
-                              <div>
-                                <div className={`text-sm font-bold ${getScoreColor(sp.scoreGlobal)}`}>
-                                  {sp.scoreGlobal}<span className="text-[9px] font-normal text-aquiz-gray">/100</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="flex items-center gap-2.5 mt-2.5 px-2.5 py-2 rounded-xl border border-aquiz-gray-lighter/60 bg-white hover:border-aquiz-green/40 hover:shadow-md shadow-sm cursor-pointer transition-all duration-200 group w-full">
+                                  <MiniRadar
+                                    axes={sp.axes.map(a => ({ score: a.score }))}
+                                    size={48}
+                                    color={radarColor}
+                                  />
+                                  <div className="text-left flex-1 min-w-0">
+                                    <div className={`text-base font-extrabold leading-tight ${getScoreColor(sp.scoreGlobal)}`}>
+                                      {sp.scoreGlobal}<span className="text-[10px] font-normal text-aquiz-gray">/100</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <Sparkles className="w-2.5 h-2.5 text-aquiz-green shrink-0" />
+                                      <span className="text-[10px] font-semibold text-aquiz-green group-hover:underline leading-none">Voir le détail</span>
+                                    </div>
+                                  </div>
+                                  <ChevronDown className="w-3.5 h-3.5 text-aquiz-gray-light group-hover:text-aquiz-green transition-colors shrink-0" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="bottom" align="center" className="z-40 w-80 p-0 rounded-2xl shadow-2xl border border-aquiz-gray-lighter/40">
+                                {/* Header du popover */}
+                                <div className="px-4 py-3.5 border-b border-aquiz-gray-lightest/80 bg-linear-to-br from-white to-aquiz-gray-lightest/30 rounded-t-2xl">
+                                  <div className="flex items-center gap-3">
+                                    <MiniRadar
+                                      axes={sp.axes.map(a => ({ score: a.score }))}
+                                      size={64}
+                                      color={radarColor}
+                                    />
+                                    <div>
+                                      <div className="text-[10px] uppercase tracking-wider font-bold text-aquiz-gray mb-0.5">Score AQUIZ</div>
+                                      <div className={`text-2xl font-extrabold leading-none ${getScoreColor(sp.scoreGlobal)}`}>
+                                        {sp.scoreGlobal}<span className="text-sm font-normal text-aquiz-gray">/100</span>
+                                      </div>
+                                      <div className="text-[11px] text-aquiz-gray mt-1">{sp.verdict}</div>
+                                    </div>
+                                  </div>
                                 </div>
-                                <span className="text-[9px] text-aquiz-gray leading-none">Score AQUIZ</span>
-                              </div>
-                            </div>
+                                {/* Détail par axe */}
+                                <div className="px-3 py-2.5 max-h-72 overflow-y-auto">
+                                  {sp.axes.filter(ax => ax.disponible).map((axe) => {
+                                    const barColor = axe.score >= 75 ? 'bg-green-500' : axe.score >= 60 ? 'bg-lime-500' : axe.score >= 45 ? 'bg-amber-400' : 'bg-red-400'
+                                    return (
+                                      <div key={axe.axe} className="flex items-center gap-2 py-1.5 px-1.5 rounded-lg hover:bg-slate-50/80 transition-colors group/axe">
+                                        <span className="text-[11px] text-aquiz-gray-dark/80 w-28 shrink-0 truncate">{axe.label}</span>
+                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${axe.score}%` }} />
+                                        </div>
+                                        <span className={`text-[11px] font-bold tabular-nums w-8 text-right ${getScoreColor(axe.score)}`}>{axe.score}</span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                                {/* Footer */}
+                                <div className="px-4 py-2.5 border-t border-aquiz-gray-lightest/80 bg-aquiz-gray-lightest/15 rounded-b-2xl">
+                                  <p className="text-[9px] text-aquiz-gray text-center">Survolez un axe pour plus de détails • Score basé sur {sp.axes.filter(ax => ax.disponible).length} critères</p>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           )
                         })()}
                         {annonce.url && (
@@ -426,7 +481,8 @@ export function TableauComparaison({
                   </div>
                 </th>
               )
-            })}
+            })
+            })()}
           </tr>
         </thead>
         
@@ -665,7 +721,7 @@ export function TableauComparaison({
           
           <LigneComparaison
             label="Localisation"
-            values={annonces.map((a) => `${a.ville} (${a.codePostal})`)}
+            values={annonces.map((a) => `${cleanVille(a.ville)} (${a.codePostal})`)}
           />
 
           <LigneComparaison
@@ -689,7 +745,6 @@ export function TableauComparaison({
           <LigneComparaison
             label="Étage"
             values={annonces.map((a) => {
-              if (a.type !== 'appartement') return '—'
               if (a.etage === 0) return 'RDC'
               if (a.etage) return a.etagesTotal ? `${a.etage}/${a.etagesTotal}` : `${a.etage}e`
               return undefined
@@ -737,134 +792,6 @@ export function TableauComparaison({
               placeholder: 'Ex: 1',
             }}
           />
-          
-          {/* Section Localisation & Risques */}
-          <tr className="bg-aquiz-green/5">
-            <td colSpan={annonces.length + 1} className="py-2.5 px-5 border-l-[3px] border-aquiz-green">
-              <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
-                <MapPin className="w-4 h-4 text-aquiz-green" />
-                Localisation & Risques
-              </div>
-            </td>
-          </tr>
-
-          {/* Score Quartier (OSM) */}
-          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
-            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
-              <div className="flex items-center gap-2">
-                <span>Score quartier</span>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs">
-                    <p>Commerces, écoles, santé, espaces verts à proximité (OpenStreetMap)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </td>
-            {annonces.map((a) => {
-              const enrichie = getAnalyseEnrichie(a.id)
-              const score = enrichie?.quartier?.success ? enrichie.quartier.scoreQuartier : undefined
-              const barColor = score !== undefined ? (score >= 75 ? 'bg-green-500' : score >= 60 ? 'bg-lime-500' : score >= 45 ? 'bg-amber-400' : 'bg-red-400') : ''
-              const loading = loadingIds.has(a.id)
-              return (
-                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
-                  {score !== undefined ? (
-                    <div className="flex flex-col items-center gap-1">
-                      <span className={`font-semibold text-xs ${getScoreColor(score)}`}>{score}/100</span>
-                      <div className="w-full max-w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
-                      </div>
-                    </div>
-                  ) : loading ? (
-                    <div className="flex flex-col items-center gap-1">
-                      <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin" />
-                      <span className="text-[9px] text-aquiz-gray-light">Chargement…</span>
-                    </div>
-                  ) : (
-                    <span className="text-aquiz-gray text-xs">—</span>
-                  )}
-                </td>
-              )
-            })}
-          </tr>
-
-          {/* Transports */}
-          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
-            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
-              <div className="flex items-center gap-2">
-                <span>Transports</span>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs">
-                    <p>Desserte en transports en commun (OpenStreetMap)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </td>
-            {annonces.map((a) => {
-              const enrichie = getAnalyseEnrichie(a.id)
-              const score = enrichie?.quartier?.success ? enrichie.quartier.transports : undefined
-              const barColor = score !== undefined ? (score >= 75 ? 'bg-green-500' : score >= 60 ? 'bg-lime-500' : score >= 45 ? 'bg-amber-400' : 'bg-red-400') : ''
-              const proches = enrichie?.quartier?.success ? enrichie.quartier.transportsProches : undefined
-              const loading = loadingIds.has(a.id)
-
-              return (
-                <td key={a.id} className="py-3 px-4 text-sm align-top">
-                  {score !== undefined ? (
-                    <div className="flex flex-col items-center gap-2">
-                      {/* Score */}
-                      <span className={`font-semibold text-xs ${getScoreColor(score)}`}>{score}/100</span>
-                      <div className="w-full max-w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${score}%` }} />
-                      </div>
-
-                      {/* Stations — badges IDFM intégrés */}
-                      {proches && proches.length > 0 && (
-                        <div className="w-full mt-2 space-y-2">
-                          {proches.map((tp, i) => (
-                            <div key={i} className="flex items-center gap-2 min-h-5.5">
-                              {/* Badges lignes (largeur fixe pour alignement) */}
-                              <div className="flex items-center gap-1 shrink-0 min-w-5.5">
-                                {tp.lignes && tp.lignes.length > 0 ? (
-                                  tp.lignes.slice(0, 3).map((l, j) => (
-                                    <LineBadge key={j} ligne={l} typeTransport={tp.typeTransport} size="sm" />
-                                  ))
-                                ) : (
-                                  <TypeBadge typeTransport={tp.typeTransport} size="sm" />
-                                )}
-                              </div>
-                              {/* Nom station */}
-                              <span className="text-gray-700 text-xs truncate flex-1 text-left leading-tight" title={tp.nom}>
-                                {tp.nom}
-                              </span>
-                              {/* Temps de marche — icône Lucide */}
-                              <span className="inline-flex items-center gap-0.5 text-gray-400 shrink-0 tabular-nums text-[10px] whitespace-nowrap">
-                                <Footprints className="w-3 h-3" />
-                                {tp.walkMin ?? Math.max(1, Math.round(tp.distance / 75))} min
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : loading ? (
-                    <div className="flex flex-col items-center gap-1 py-2">
-                      <Loader2 className="w-5 h-5 text-aquiz-gray-light animate-spin" />
-                      <span className="text-[9px] text-aquiz-gray-light">Chargement…</span>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <span className="text-aquiz-gray text-xs">—</span>
-                    </div>
-                  )}
-                </td>
-              )
-            })}
-          </tr>
 
           {/* Section Performance */}
           <tr className="bg-aquiz-gray-lightest/60">
@@ -968,7 +895,7 @@ export function TableauComparaison({
           
           <LigneComparaison
             label="Ascenseur"
-            values={annonces.map((a) => a.type === 'appartement' ? a.ascenseur : undefined)}
+            values={annonces.map((a) => a.ascenseur)}
             format="boolean"
             editConfig={{
               annonceIds: annonces.map((a) => a.id),

@@ -22,6 +22,7 @@ import {
     isBlockedResponse,
     waitForDomainThrottle,
 } from '@/lib/scraping/antiBlock'
+import { completerDonnees } from '@/lib/scraping/completerDonnees'
 import {
     extractFromHTML,
 } from '@/lib/scraping/extracteur'
@@ -203,7 +204,11 @@ async function tryLocalPlaywright(
       'logic-immo': 'https://www.logic-immo.com/vente-immobilier-paris-75,100_1/',
     }
     
-    const warmingUrl = source ? SITES_NEED_WARMING[source] : null
+    // SeLoger Neuf est un domaine séparé — le warming doit être sur selogerneuf.com
+    const isSeLogerNeuf = url.includes('selogerneuf.com')
+    const warmingUrl = isSeLogerNeuf
+      ? 'https://www.selogerneuf.com/immobilier-neuf/'
+      : (source ? SITES_NEED_WARMING[source] : null)
     if (warmingUrl) {
       try {
         await page.goto(warmingUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
@@ -418,24 +423,4 @@ async function tryLocalPlaywright(
   }
 }
 
-/** Complète les champs manquants avec des estimations raisonnables */
-function completerDonnees(data: Record<string, unknown>) {
-  if (!data.pieces && data.surface) {
-    data.pieces = Math.max(1, Math.round((data.surface as number) / 22))
-  }
-  if (!data.chambres && data.pieces) {
-    data.chambres = Math.max(0, (data.pieces as number) - 1)
-  }
-  if (!data.dpe) data.dpe = 'NC'
-  if (!data.type) data.type = 'appartement'
-  if (data.codePostal && !data.departement) {
-    const cp = data.codePostal as string
-    if (cp.startsWith('97')) data.departement = cp.substring(0, 3)
-    else if (cp.startsWith('20')) {
-      const num = parseInt(cp)
-      data.departement = num < 20200 ? '2A' : '2B'
-    } else {
-      data.departement = cp.substring(0, 2)
-    }
-  }
-}
+// completerDonnees importé depuis @/lib/scraping/completerDonnees

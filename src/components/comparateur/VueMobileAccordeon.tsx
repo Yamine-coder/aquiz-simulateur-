@@ -3,25 +3,33 @@
 /**
  * Vue mobile accordéon pour la comparaison des biens
  * Affiche chaque bien dans un accordéon dépliable
+ * Parité données avec la vue desktop : DVF, transports, risques
  */
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
+import type { AnalyseComplete } from '@/lib/api/analyseIntelligente'
 import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import { COULEURS_DPE, type Annonce } from '@/types/annonces'
 import {
+    AlertTriangle,
     Building2,
     CreditCard,
     ExternalLink,
     Home,
     Key,
     MapPin,
+    ShieldCheck,
     Sparkles,
+    Train,
+    TrendingDown,
+    TrendingUp,
     X,
     Zap
 } from 'lucide-react'
 import Image from 'next/image'
 import { EditableCell } from './EditableCell'
+import { LineBadge, TypeBadge } from './TransportIcons'
 
 /** Score Pro result type (subset needed for mobile) */
 interface ScoreProResult {
@@ -52,9 +60,12 @@ function getMobileScoreBg(score: number): string {
 interface VueMobileAccordeonProps {
   annonces: Annonce[]
   scoresPro?: ScoreProResult[]
+  /** @deprecated - use scoresPro to determine best */
   meilleurRapportId?: string
   budgetMax?: number | null
   mensualiteParams?: { tauxInteret: number; dureeAns: number; apport: number }
+  /** Enrichment data per annonce (DVF, risques, quartier) */
+  getEnrichissement?: (annonceId: string) => AnalyseComplete | null
   onRemove: (id: string) => void
 }
 
@@ -65,16 +76,23 @@ export function VueMobileAccordeon({
   scoresPro,
   meilleurRapportId,
   mensualiteParams,
+  getEnrichissement,
   onRemove,
 }: VueMobileAccordeonProps) {
   const getScorePro = (id: string) => scoresPro?.find(s => s.annonceId === id)
+
+  // Recommandé = meilleur Score AQUIZ (pas le meilleur prix/m²)
+  const bestScoreId = scoresPro
+    ?.filter(s => s.scoreGlobal > 0)
+    .sort((a, b) => b.scoreGlobal - a.scoreGlobal)[0]?.annonceId
 
   return (
     <div className="md:hidden space-y-4">
       <Accordion type="single" collapsible className="space-y-3">
         {annonces.map((annonce) => {
-          const isMeilleur = annonce.id === meilleurRapportId
+          const isMeilleur = annonce.id === bestScoreId
           const IconType = annonce.type === 'maison' ? Home : Building2
+          const enrichi = getEnrichissement?.(annonce.id)
           
           return (
             <AccordionItem
@@ -113,12 +131,12 @@ export function VueMobileAccordeon({
                     <div className="flex items-center gap-1 text-xs text-aquiz-gray truncate">
                       <MapPin className="w-3 h-3 shrink-0" />
                       <span className="truncate">{annonce.ville}</span>
-                      <span>'¢</span>
+                      <span>·</span>
                       <span>{annonce.surface} m²</span>
                     </div>
                   </div>
                   
-                  {/* Score indicator '” always visible as hook */}
+                  {/* Score indicator — always visible as hook */}
                   {getScorePro(annonce.id) ? (
                     <div className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border ${getMobileScoreBg(getScorePro(annonce.id)!.scoreGlobal)}`}>
                       <span className={`text-base font-bold ${getMobileScoreColor(getScorePro(annonce.id)!.scoreGlobal)}`}>
@@ -233,6 +251,114 @@ export function VueMobileAccordeon({
                     </div>
                   </div>
                   
+                  {/* DVF — Prix vs Marché */}
+                  {enrichi?.marche?.success && enrichi.marche.ecartPrixM2 !== undefined && (
+                    <div className="bg-blue-50/80 rounded-lg p-3 border border-blue-100">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
+                        {enrichi.marche.ecartPrixM2 <= 0 ? (
+                          <TrendingDown className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <TrendingUp className="w-3.5 h-3.5 text-red-500" />
+                        )}
+                        Prix vs Marché (DVF)
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-aquiz-gray text-xs">Écart marché</span>
+                          <div className={`font-bold ${enrichi.marche.ecartPrixM2 <= 0 ? 'text-green-600' : enrichi.marche.ecartPrixM2 <= 10 ? 'text-amber-500' : 'text-red-500'}`}>
+                            {enrichi.marche.ecartPrixM2 > 0 ? '+' : ''}{enrichi.marche.ecartPrixM2.toFixed(1)}%
+                          </div>
+                        </div>
+                        {enrichi.marche.prixM2MedianMarche && (
+                          <div>
+                            <span className="text-aquiz-gray text-xs">Médiane secteur</span>
+                            <div className="font-medium">{Math.round(enrichi.marche.prixM2MedianMarche).toLocaleString('fr-FR')} €/m²</div>
+                          </div>
+                        )}
+                      </div>
+                      {enrichi.marche.verdict && (
+                        <Badge variant="outline" className={`mt-2 text-[10px] ${
+                          enrichi.marche.verdict === 'excellent' || enrichi.marche.verdict === 'bon'
+                            ? 'border-green-300 text-green-700'
+                            : enrichi.marche.verdict === 'correct'
+                            ? 'border-amber-300 text-amber-700'
+                            : 'border-red-300 text-red-700'
+                        }`}>
+                          {enrichi.marche.verdict === 'excellent' ? 'Très bon prix' :
+                           enrichi.marche.verdict === 'bon' ? 'Bon prix' :
+                           enrichi.marche.verdict === 'correct' ? 'Prix correct' :
+                           enrichi.marche.verdict === 'cher' ? 'Au-dessus du marché' : 'Très cher'}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Transports proches */}
+                  {enrichi?.quartier?.success && enrichi.quartier.transportsProches && enrichi.quartier.transportsProches.length > 0 && (
+                    <div className="bg-aquiz-gray-lightest/50 rounded-lg p-3">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
+                        <Train className="w-3.5 h-3.5" />
+                        Transports ({enrichi.quartier.transports ?? '?'}/100)
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {enrichi.quartier.transportsProches
+                          .filter((t) => t.distance <= 1000)
+                          .slice(0, 6)
+                          .map((t, i) => (
+                            <div key={i} className="flex items-center gap-1 text-[10px]">
+                              <TypeBadge typeTransport={t.typeTransport} />
+                              {t.lignes?.slice(0, 3).map((l, j) => (
+                                <LineBadge key={j} ligne={l} typeTransport={t.typeTransport} />
+                              ))}
+                              <span className="text-aquiz-gray">{t.distance}m</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Risques naturels */}
+                  {enrichi?.risques?.success && (
+                    <div className={`rounded-lg p-3 border ${
+                      (enrichi.risques.scoreRisque ?? 100) >= 70
+                        ? 'bg-green-50/50 border-green-100'
+                        : (enrichi.risques.scoreRisque ?? 100) >= 40
+                        ? 'bg-amber-50/50 border-amber-100'
+                        : 'bg-red-50/50 border-red-100'
+                    }`}>
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
+                        {(enrichi.risques.scoreRisque ?? 100) >= 60 ? (
+                          <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                        )}
+                        Risques ({enrichi.risques.scoreRisque ?? '?'}/100)
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {enrichi.risques.zoneInondable && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-blue-300 text-blue-700">
+                            Inondation
+                          </Badge>
+                        )}
+                        {enrichi.risques.niveauRadon !== undefined && enrichi.risques.niveauRadon >= 2 && (
+                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-amber-300 text-amber-700">
+                            Radon {enrichi.risques.niveauRadon}/3
+                          </Badge>
+                        )}
+                        {enrichi.risques.verdict && (
+                          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 ${
+                            enrichi.risques.verdict === 'sûr' ? 'border-green-300 text-green-700' :
+                            enrichi.risques.verdict === 'vigilance' ? 'border-amber-300 text-amber-700' :
+                            'border-red-300 text-red-700'
+                          }`}>
+                            {enrichi.risques.verdict === 'sûr' ? 'Zone sûre' :
+                             enrichi.risques.verdict === 'vigilance' ? 'Vigilance' : 'Risqué'}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Caractéristiques */}
                   <div className="bg-aquiz-gray-lightest/50 rounded-lg p-3">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">

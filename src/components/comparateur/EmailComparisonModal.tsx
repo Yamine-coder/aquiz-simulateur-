@@ -10,6 +10,7 @@
  */
 
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import type { ScoreComparateurResult } from '@/lib/comparateur/scoreComparateur'
 import type { Annonce } from '@/types/annonces'
 import {
     AlertCircle,
@@ -29,36 +30,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** Données de scoring par annonce, passées depuis TableauComparaison */
-export interface AnnonceScoreData {
-  annonceId: string
-  scoreGlobal: number
-  verdict: string
-  recommandation: string
-  conseilPerso: string
-  confiance: number
-  axes: Array<{
-    axe: string
-    label: string
-    score: number
-    disponible: boolean
-    detail: string
-    impact: 'positif' | 'neutre' | 'negatif'
-  }>
-  points: Array<{
-    texte: string
-    detail?: string
-    type: 'avantage' | 'attention' | 'conseil'
-  }>
-  estimations?: {
-    loyerMensuelEstime?: number
-    rendementBrut?: number
-    coutEnergieAnnuel?: number
-    budgetTravauxEstime?: number
-  }
+export interface AnnonceScoreData extends ScoreComparateurResult {
   enrichissement?: {
-    marche?: { success: boolean; ecartPrixM2?: number; verdict?: string; prixM2MedianMarche?: number }
-    risques?: { success: boolean; scoreRisque?: number; verdict?: string }
-    quartier?: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }> }
+    marche?: { success: boolean; ecartPrixM2?: number; verdict?: string; prixM2MedianMarche?: number; evolution12Mois?: number; nbTransactions?: number }
+    risques?: { success: boolean; scoreRisque?: number; verdict?: string; zoneInondable?: boolean; niveauRadon?: number }
+    quartier?: { success: boolean; scoreQuartier?: number; transports?: number; commerces?: number; ecoles?: number; sante?: number; espaceVerts?: number; transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lat?: number; lon?: number; lignes?: string[]; operateur?: string; couleur?: string }>; counts?: { transport: number; commerce: number; education: number; sante: number; loisirs: number; vert: number } }
+    communeInfos?: { success: boolean; nomCommune?: string; population?: number | null; surfaceKm2?: number | null; densitePopulation?: number | null; revenuMensuel?: number | null; ensoleillement?: number | null; departement?: string; counts?: { education: number | null; commerce: number | null; sante: number | null; transport: number | null; loisirs: number | null } | null }
   }
 }
 

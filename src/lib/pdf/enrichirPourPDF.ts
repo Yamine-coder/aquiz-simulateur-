@@ -22,6 +22,19 @@ export interface DonneesMarcheLocal {
   codePostal: string
 }
 
+export interface TransportProche {
+  type: string
+  typeTransport: string
+  nom: string
+  distance: number
+  walkMin: number
+  lat: number
+  lon: number
+  lignes?: string[]
+  operateur?: string
+  couleur?: string
+}
+
 export interface DonneesQuartier {
   scoreGlobal: number
   transports: number
@@ -30,6 +43,22 @@ export interface DonneesQuartier {
   sante: number
   espaceVerts: number
   synthese: string
+  // ── Transports proches (source OSM) ──
+  transportsProches?: TransportProche[]
+  /** Coordonnées GPS du bien (centre de la recherche) */
+  bienLat?: number
+  bienLon?: number
+  /** URL de la carte statique des transports */
+  mapImageUrl?: string
+  /** Comptages bruts de POIs par catégorie (rayon 800m) */
+  counts?: {
+    transport: number
+    commerce: number
+    education: number
+    sante: number
+    loisirs: number
+    vert: number
+  }
   // ── Enrichissements (optionnels) ──
   /** Score risques 0-10 (10 = très sûr, 0 = très exposé) — source Géorisques */
   risques?: number | null
@@ -37,6 +66,8 @@ export interface DonneesQuartier {
   /** Score niveau de vie 0-10 — source INSEE Filosofi (revenu médian) */
   niveauVie?: number | null
   niveauVieLabel?: string | null
+  /** Revenu médian annuel en euros — source INSEE Filosofi */
+  revenuMedian?: number | null
   /** Score qualité de l'air 0-10 — source ATMO */
   qualiteAir?: number | null
   qualiteAirLabel?: string | null
@@ -135,11 +166,14 @@ async function fetchMarche(
 /**
  * Récupère le score quartier via géocodage + analyse OSM + Géorisques + INSEE + ATMO
  */
-async function fetchQuartier(codePostal: string): Promise<DonneesQuartier | null> {
+async function fetchQuartier(codePostal: string, nomCommune?: string): Promise<DonneesQuartier | null> {
   try {
-    // 1. Géocoder le code postal
+    // 1. Géocoder avec commune + code postal pour cibler la bonne localisation
+    const geoParams = new URLSearchParams()
+    geoParams.set('code_postal', codePostal)
+    if (nomCommune) geoParams.set('adresse', nomCommune)
     const geoRes = await fetch(
-      `/api/analyse/geocode?code_postal=${encodeURIComponent(codePostal)}`,
+      `/api/analyse/geocode?${geoParams.toString()}`,
       { signal: AbortSignal.timeout(5000) }
     )
     if (!geoRes.ok) return null
@@ -173,17 +207,9 @@ async function fetchQuartier(codePostal: string): Promise<DonneesQuartier | null
       }
     }
 
-    // Si même le score OSM a échoué, on construit un objet minimal
+    // Si même le score OSM a échoué, on ne renvoie pas de données quartier
     if (!quartierData) {
-      quartierData = {
-        scoreGlobal: 0,
-        transports: 0,
-        commerces: 0,
-        ecoles: 0,
-        sante: 0,
-        espaceVerts: 0,
-        synthese: '',
-      }
+      return null
     }
 
     // 4. Enrichir avec Géorisques
@@ -208,6 +234,7 @@ async function fetchQuartier(codePostal: string): Promise<DonneesQuartier | null
         if (inseeJson.success && inseeJson.data) {
           quartierData.niveauVie = inseeJson.data.score ?? null
           quartierData.niveauVieLabel = inseeJson.data.niveauVie ?? null
+          quartierData.revenuMedian = inseeJson.data.revenuMedian ?? null
         }
       } catch {
         // INSEE parsing échoué — OK
@@ -238,10 +265,10 @@ async function fetchQuartier(codePostal: string): Promise<DonneesQuartier | null
     let totalPoids = 0
     let totalScore = 0
     const sources: Array<{ score: number | null; poids: number }> = [
-      { score: osmScore > 0 ? osmScore : null, poids: 70 },
+      { score: osmScore > 0 ? osmScore : null, poids: 55 },
       { score: risquesScore, poids: 12 },
-      { score: niveauVieScore, poids: 10 },
-      { score: airScore, poids: 8 },
+      { score: niveauVieScore, poids: 20 },
+      { score: airScore, poids: 13 },
     ]
     for (const src of sources) {
       if (src.score != null) {
@@ -278,6 +305,37 @@ async function fetchQuartier(codePostal: string): Promise<DonneesQuartier | null
       parts.push(labelMap[quartierData.niveauVieLabel] || quartierData.niveauVieLabel)
     }
     quartierData.synthese = parts.join(' - ')
+
+    // 9. Stocker les coordonnées du bien pour la carte statique
+    quartierData.bienLat = lat
+    quartierData.bienLon = lon
+
+    // 10. Générer l'URL de la carte statique OpenStreetMap
+    if (quartierData.transportsProches && quartierData.transportsProches.length > 0) {
+      const transports = quartierData.transportsProches.filter(
+        (tp: TransportProche) => !/^(Gare|Station|Arrêt|Transport)$/i.test(tp.nom.trim())
+      )
+      if (transports.length > 0) {
+        // Construire les marqueurs pour l'API staticmap.openstreetmap.de
+        // Marqueur rouge pour le bien
+        const markers: string[] = [`${lat},${lon},red-pushpin`]
+        // Marqueurs bleus pour les stations
+        for (const tp of transports) {
+          if (tp.lat && tp.lon) {
+            markers.push(`${tp.lat},${tp.lon},blue-pushpin`)
+          }
+        }
+        // Calculer un bbox englobant tous les points avec marge
+        const allLats = [lat, ...transports.filter((t: TransportProche) => t.lat).map((t: TransportProche) => t.lat)]
+        const allLons = [lon, ...transports.filter((t: TransportProche) => t.lon).map((t: TransportProche) => t.lon)]
+        const minLat = Math.min(...allLats) - 0.002
+        const maxLat = Math.max(...allLats) + 0.002
+        const minLon = Math.min(...allLons) - 0.003
+        const maxLon = Math.max(...allLons) + 0.003
+        quartierData.mapImageUrl =
+          `https://staticmap.openstreetmap.de/staticmap.php?bbox=${minLon},${minLat},${maxLon},${maxLat}&size=500x300&maptype=osmarenderer&markers=${markers.join('|')}`
+      }
+    }
 
     return quartierData
   } catch {
@@ -344,7 +402,7 @@ async function fetchSyntheseIA(
             }
           : undefined,
       }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30_000),
     })
     if (!res.ok) {
       const errText = await res.text().catch(() => 'no body')
@@ -471,7 +529,7 @@ export async function enrichirPourPDF(params: EnrichissementParams): Promise<Enr
     const typeLogement = params.typeLogement || 'appartement'
     const [marche, quartier] = await Promise.all([
       fetchMarche(params.codePostal, typeLogement, params.prixAchatMax),
-      fetchQuartier(params.codePostal),
+      fetchQuartier(params.codePostal, params.nomCommune),
     ])
     result.marche = marche
     result.quartier = quartier

@@ -4,7 +4,7 @@
  * Généré avec @react-pdf/renderer
  */
 import type { DonneesQuartier, SyntheseIA } from '@/lib/pdf/enrichirPourPDF'
-import { Document, Image, Link, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Image, Link, Page, Path, StyleSheet, Svg, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ───
 interface SimulationDuree {
@@ -70,6 +70,112 @@ export interface SimulationPDFModeBProps {
 }
 
 // ─── Couleurs charte AQUIZ ───
+// ─── Couleurs officielles transports RATP/SNCF/Transilien ───
+/** Couleurs officielles des lignes de métro RATP */
+const METRO_LINE_COLORS: Record<string, string> = {
+  '1': '#FFCD00', '2': '#003CA6', '3': '#9B993A', '3bis': '#98D4E2',
+  '4': '#BE418D', '5': '#F57F25', '6': '#76C882', '7': '#F57F25',
+  '7bis': '#76C882', '8': '#E19BCD', '9': '#CDC83F', '10': '#C9910D',
+  '11': '#8D6539', '12': '#007852', '13': '#87D3DF', '14': '#662D91',
+}
+/** Couleurs officielles des lignes RER */
+const RER_LINE_COLORS: Record<string, string> = {
+  A: '#E2001A', B: '#4C90CD', C: '#FECE00', D: '#008B5A', E: '#BD76A1',
+}
+/** Couleurs officielles Transilien */
+const TRANSILIEN_COLORS: Record<string, string> = {
+  H: '#8D6539', J: '#CDC83F', K: '#9B993A', L: '#BD76A1',
+  N: '#00A88F', P: '#F57F25', R: '#E2007A', U: '#B90845',
+}
+/** Lignes claires nécessitant un texte noir */
+const DARK_TEXT_LINES = new Set(['1', '9', '3bis', '6', '7bis', '8', '13', 'C', 'J', 'K'])
+
+/** Identifiants de lignes valides (patterns connus) */
+const VALID_METRO_LINES = new Set(['1', '2', '3', '3bis', '4', '5', '6', '7', '7bis', '8', '9', '10', '11', '12', '13', '14'])
+const VALID_RER_LINES = new Set(['A', 'B', 'C', 'D', 'E'])
+const VALID_TRANSILIEN_LINES = new Set(['H', 'J', 'K', 'L', 'N', 'P', 'R', 'U'])
+const VALID_TRAM_PATTERN = /^T\d{1,2}$/i
+
+/** Nettoie et filtre les lignes pour ne garder que les identifiants reconnus */
+function cleanTransportLines(type: string, rawLignes?: string[]): string[] {
+  if (!rawLignes || rawLignes.length === 0) return []
+  const cleaned = rawLignes.map(l => l.split(':')[0].split(' ')[0].trim()).filter(Boolean)
+  const uniq = [...new Set(cleaned)]
+
+  if (type === 'metro') return uniq.filter(l => VALID_METRO_LINES.has(l))
+  if (type === 'rer') return uniq.filter(l => VALID_RER_LINES.has(l.toUpperCase())).map(l => l.toUpperCase())
+  if (type === 'train') return uniq.filter(l => VALID_TRANSILIEN_LINES.has(l.toUpperCase())).map(l => l.toUpperCase())
+  if (type === 'tram') return uniq.filter(l => VALID_TRAM_PATTERN.test(l))
+  if (type === 'bus') return uniq.filter(l => /^\d{1,3}[A-Za-z]?$/.test(l)).slice(0, 3)
+  return []
+}
+
+/**
+ * Logo Métro RATP — Cercle bleu marine + M blanc
+ * Style officiel RATP : rond bleu #003CA6 avec lettre M blanche
+ */
+function LogoMetro() {
+  return (
+    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', marginTop: -1 }}>M</Text>
+    </View>
+  )
+}
+
+/**
+ * Logo RER — Cercle bleu avec bordure blanche + texte RER
+ * Style officiel : double cercle bleu-blanc-bleu
+ */
+function LogoRER() {
+  return (
+    <View style={{ width: 20, height: 16, borderRadius: 3, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFFFFF' }}>
+      <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFFFFF', letterSpacing: 0.5 }}>RER</Text>
+    </View>
+  )
+}
+
+/**
+ * Logo Train/Transilien — Pastille bleue avec icône
+ */
+function LogoTrain() {
+  return (
+    <View style={{ width: 20, height: 16, borderRadius: 3, backgroundColor: '#1D4A8C', alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>Train</Text>
+    </View>
+  )
+}
+
+/**
+ * Pastille de ligne colorée — style officiel RATP
+ * Cercle avec la couleur officielle de la ligne + numéro/lettre
+ */
+function PastilleLigne({ ligne, type }: { ligne: string; type: string }) {
+  let bg = '#888888'
+  if (type === 'metro') bg = METRO_LINE_COLORS[ligne] || '#888'
+  else if (type === 'rer') bg = RER_LINE_COLORS[ligne.toUpperCase()] || '#888'
+  else if (type === 'train') bg = TRANSILIEN_COLORS[ligne.toUpperCase()] || '#888'
+  else if (type === 'tram') bg = '#000000'
+  else if (type === 'bus') bg = '#1D9448'
+
+  const textColor = DARK_TEXT_LINES.has(ligne) ? '#000000' : '#FFFFFF'
+  const size = ligne.length > 2 ? 18 : 14
+
+  return (
+    <View style={{ width: size, height: 14, borderRadius: 7, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: ligne.length > 2 ? 5 : 7, fontFamily: 'Helvetica-Bold', color: textColor }}>{ligne}</Text>
+    </View>
+  )
+}
+
+/** Badge transport pour Bus, Tram, Vélib' */
+function TransportBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={{ backgroundColor: color, borderRadius: 3, paddingHorizontal: 4, paddingVertical: 2, minWidth: 28, alignItems: 'center' }}>
+      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFFFFF' }}>{label}</Text>
+    </View>
+  )
+}
+
 const C = {
   black: '#1a1a1a',
   white: '#ffffff',
@@ -84,6 +190,11 @@ const C = {
   orangeLight: '#fff3e0',
   red: '#ef4444',
   blue: '#3b82f6',
+  // Section titles
+  sectionBg: '#2d3748',
+  // Hero
+  heroBg: '#f8fafb',
+  heroBorder: '#e2e8f0',
 }
 
 // ─── Styles ───
@@ -124,8 +235,12 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 28 },
   // Hero card
   heroCard: {
-    backgroundColor: C.greenLight,
+    backgroundColor: C.heroBg,
     borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: C.heroBorder,
+    borderLeftWidth: 3,
+    borderLeftColor: C.green,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 16,
@@ -137,12 +252,12 @@ const s = StyleSheet.create({
   heroValue: {
     fontSize: 24,
     fontFamily: 'Helvetica-Bold',
-    color: C.greenDark,
+    color: C.black,
     marginTop: 4,
   },
-  heroSub: { fontSize: 7, color: C.gray, marginTop: 2 },
+  heroSub: { fontSize: 7, color: C.grayLight, marginTop: 2 },
   heroBadge: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 4,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -176,7 +291,7 @@ const s = StyleSheet.create({
   metricSub: { fontSize: 5, color: C.grayLight, marginTop: 2 },
   // Section title
   sectionTitle: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 3,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -230,7 +345,7 @@ const s = StyleSheet.create({
   // Table
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 3,
     paddingVertical: 4,
     paddingHorizontal: 4,
@@ -705,7 +820,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                 <DataRow label="Frais annexes" value={`${fmt(fraisAnnexes)} EUR`} />
                 <DataRow label="Coût total acquisition" value={`${fmt(coutTotal)} EUR`} />
                 <DataRow label="Apport déduit" value={`- ${fmt(apport)} EUR`} />
-                <DataRow label="Montant du prêt" value={`${fmt(montantAEmprunter)} EUR`} color={C.blue} />
+                <DataRow label="Montant du prêt" value={`${fmt(montantAEmprunter)} EUR`} color={C.greenDark} />
               </View>
             </View>
           </View>
@@ -715,7 +830,7 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             <SectionTitle title="MENSUALITÉ DÉTAILLÉE" />
             <View style={s.dataCard}>
               <DataRow label="Remboursement crédit" value={`${fmt(mensualiteCredit)} EUR /mois`} />
-              <DataRow label="Assurance emprunteur" value={`${fmt(mensualiteAssurance)} EUR /mois`} />
+              <DataRow label="Assurance emprunteur" value={`${fmt(mensualiteAssurance)} EUR /mois (${montantAEmprunter > 0 ? ((mensualiteAssurance * 12 / montantAEmprunter) * 100).toFixed(2) : '0.34'}%)`} />
               <DataRow label="Total mensualité" value={`${fmt(mensualiteTotal)} EUR /mois`} color={C.greenDark} />
               <DataRow label="Coût total du crédit" value={`${fmt(coutTotalCredit)} EUR`} color={C.gray} />
             </View>
@@ -881,58 +996,120 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
           )}
 
           {/* ═══ 3. Qualité du quartier ═══ */}
-          {quartier && (
-            <View style={{ marginTop: 14 }} wrap={false}>
+          {quartier && quartier.scoreGlobal > 0 && (
+            <View style={{ marginTop: 14 }}>
               <SectionTitle title={`QUALITÉ DU QUARTIER — ${nomCommune || codePostal}`} />
 
-              {/* Score global mis en avant */}
+              {/* ── Score global + synthese ── */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, marginBottom: 8 }}>
-                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: quartier.scoreGlobal / 10 >= 7 ? C.greenLight : quartier.scoreGlobal / 10 >= 4 ? C.orangeLight : '#fee2e2', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 16, fontFamily: 'Helvetica-Bold', color: quartier.scoreGlobal / 10 >= 7 ? C.greenDark : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: quartier.scoreGlobal / 10 >= 7 ? C.greenLight : quartier.scoreGlobal / 10 >= 4 ? C.orangeLight : '#fee2e2', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: quartier.scoreGlobal / 10 >= 7 ? C.green : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
+                  <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: quartier.scoreGlobal / 10 >= 7 ? C.greenDark : quartier.scoreGlobal / 10 >= 4 ? C.orange : C.red }}>
                     {(quartier.scoreGlobal / 10).toFixed(1)}
                   </Text>
+                  <Text style={{ fontSize: 5, color: C.grayLight }}>/10</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
                     Score global : {(quartier.scoreGlobal / 10).toFixed(1)}/10
                   </Text>
                   <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, lineHeight: 1.3 }}>
                     {quartier.scoreGlobal / 10 >= 7 ? 'Quartier bien desservi avec de bons équipements.' : quartier.scoreGlobal / 10 >= 4 ? 'Quartier correct, quelques points à vérifier.' : 'Quartier peu équipé, vigilance recommandée.'}
                   </Text>
+                  {quartier.counts && (
+                    <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 3 }}>
+                      {quartier.counts.transport + quartier.counts.commerce + quartier.counts.education + quartier.counts.sante + quartier.counts.vert + quartier.counts.loisirs} équipements recensés dans un rayon de 800m (source : OpenStreetMap)
+                    </Text>
+                  )}
                 </View>
               </View>
 
-              {/* Détail des scores — barres horizontales */}
+              {/* ── Détail des scores — barres horizontales ── */}
               <View style={{ borderWidth: 0.5, borderColor: C.grayBorder, borderRadius: 4, overflow: 'hidden' }}>
                 {[
-                  { label: 'Commerces', score: quartier.commerces / 10, icon: 'Supermarchés, boulangeries' },
-                  { label: 'Écoles', score: quartier.ecoles / 10, icon: 'Écoles, collèges, lycées' },
-                  { label: 'Santé', score: quartier.sante / 10, icon: 'Médecins, pharmacies' },
-                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, icon: 'Parcs, jardins' },
-                  ...(quartier.niveauVie != null ? [{ label: 'Niveau de vie', score: quartier.niveauVie, icon: 'Revenu médian INSEE' }] : []),
-                  ...(quartier.qualiteAir != null ? [{ label: 'Qualité air', score: quartier.qualiteAir, icon: 'Indice ATMO' }] : []),
+                  { label: 'Transports', score: quartier.transports / 10, icon: 'Métro, bus, tramway', count: quartier.counts?.transport },
+                  { label: 'Commerces', score: quartier.commerces / 10, icon: 'Supermarchés, boulangeries', count: quartier.counts?.commerce },
+                  { label: 'Écoles', score: quartier.ecoles / 10, icon: 'Écoles, collèges, lycées', count: quartier.counts?.education },
+                  { label: 'Santé', score: quartier.sante / 10, icon: 'Médecins, pharmacies', count: quartier.counts?.sante },
+                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, icon: 'Parcs, jardins', count: quartier.counts?.vert },
+                  ...(quartier.niveauVie != null ? [{ label: 'Niveau de vie', score: quartier.niveauVie, icon: quartier.revenuMedian ? `${fmt(Math.round(quartier.revenuMedian / 12))} €/mois médian` : 'Source INSEE', count: undefined as number | undefined }] : []),
+                  ...(quartier.qualiteAir != null ? [{ label: 'Qualité air', score: quartier.qualiteAir, icon: quartier.qualiteAirLabel || 'Indice ATMO', count: undefined as number | undefined }] : []),
                 ].map((item, idx) => (
                   <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 8, backgroundColor: idx % 2 === 0 ? C.white : C.grayBg, borderBottomWidth: 0.3, borderBottomColor: C.grayBorder }}>
-                    <View style={{ width: 70 }}>
+                    <View style={{ width: 65 }}>
                       <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{item.label}</Text>
                     </View>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {/* Barre */}
-                      <View style={{ flex: 1, height: 5, backgroundColor: '#e6e6e6', borderRadius: 2 }}>
-                        <View style={{ height: 5, borderRadius: 2, width: `${item.score * 10}%`, backgroundColor: item.score >= 7 ? C.green : item.score >= 4 ? C.orange : C.red }} />
+                      <View style={{ flex: 1, height: 6, backgroundColor: '#e6e6e6', borderRadius: 3 }}>
+                        <View style={{ height: 6, borderRadius: 3, width: `${item.score * 10}%`, backgroundColor: item.score >= 7 ? C.green : item.score >= 4 ? C.orange : C.red }} />
                       </View>
-                      {/* Score */}
-                      <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', width: 30, textAlign: 'right', color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }}>
+                      <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', width: 30, textAlign: 'right', color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }}>
                         {item.score.toFixed(1)}/10
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 5, color: C.grayLight, width: 75, textAlign: 'right' }}>{item.icon}</Text>
+                    <View style={{ width: 80, alignItems: 'flex-end' }}>
+                      {item.count != null && item.count > 0 ? (
+                        <Text style={{ fontSize: 5.5, color: C.gray }}>{item.count} trouvé{item.count > 1 ? 's' : ''}</Text>
+                      ) : (
+                        <Text style={{ fontSize: 5, color: C.grayLight }}>{item.icon}</Text>
+                      )}
+                    </View>
                   </View>
                 ))}
               </View>
 
+              {/* ── Transports proches (Carte réaliste + légende) ── */}
+              {quartier.transportsProches && quartier.transportsProches.length > 0 && (() => {
+                const filtered = quartier.transportsProches.filter(tp => {
+                  const isGenericName = /^(Gare|Station|Arrêt|Transport)$/i.test(tp.nom.trim())
+                  return !isGenericName
+                })
+                if (filtered.length === 0) return null
+
+                return (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.sectionBg, marginBottom: 6 }}>Transports à proximité</Text>
+
+                    {/* Liste compacte des transports */}
+                    <View style={{ gap: 3 }}>
+                      {filtered.map((tp, idx) => {
+                        const lignes = cleanTransportLines(tp.typeTransport, tp.lignes)
+                        return (
+                          <View key={`${tp.nom}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 4, backgroundColor: idx % 2 === 0 ? '#F8FAFC' : C.white, borderRadius: 3 }}>
+                            {/* Logo transport */}
+                            {tp.typeTransport === 'metro' && <LogoMetro />}
+                            {tp.typeTransport === 'rer' && <LogoRER />}
+                            {tp.typeTransport === 'train' && <LogoTrain />}
+                            {tp.typeTransport === 'tram' && <TransportBadge label="Tram" color="#000000" />}
+                            {tp.typeTransport === 'bus' && <TransportBadge label="Bus" color="#1D9448" />}
+                            {tp.typeTransport === 'velo' && <TransportBadge label="Vélib'" color="#7AB648" />}
+                            {/* Pastilles lignes */}
+                            {lignes.length > 0 && lignes.slice(0, 4).map(l => (
+                              <PastilleLigne key={l} ligne={l} type={tp.typeTransport} />
+                            ))}
+                            {/* Nom */}
+                            <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.black, flex: 1 }}>{tp.nom}</Text>
+                            {/* Icône marche + temps */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                              {/* Lucide Footprints icon */}
+                              <Svg viewBox="0 0 24 24" width={8} height={8}>
+                                <Path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                                <Path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                                <Path d="M16 17h4" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" />
+                                <Path d="M4 13h4" fill="none" stroke="#64748B" strokeWidth={1.8} strokeLinecap="round" />
+                              </Svg>
+                              <Text style={{ fontSize: 5.5, color: '#64748B', fontFamily: 'Helvetica-Bold' }}>{tp.walkMin} min</Text>
+                            </View>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  </View>
+                )
+              })()}
+
+              {/* ── Synthèse texte ── */}
               {quartier.synthese && (
-                <View style={{ backgroundColor: C.grayBg, borderRadius: 3, padding: 6, marginTop: 6 }}>
+                <View style={{ backgroundColor: C.grayBg, borderRadius: 3, padding: 6, marginTop: 6, borderLeftWidth: 2, borderLeftColor: C.green }}>
                   <Text style={{ fontSize: 6.5, color: C.gray, lineHeight: 1.4 }}>
                     {quartier.synthese}
                   </Text>

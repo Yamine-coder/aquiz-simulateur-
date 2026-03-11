@@ -1,6 +1,5 @@
 import { ConditionalAnalytics } from "@/components/ConditionalAnalytics";
 import { CookieConsent } from "@/components/CookieConsent";
-import { SplashScreen } from "@/components/SplashScreen";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -253,10 +252,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white`}
       >
-        <SplashScreen>
           {children}
           <CookieConsent />
-        </SplashScreen>
         <ConditionalAnalytics />
       </body>
     </html>

@@ -2,14 +2,31 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 
 export const metadata: Metadata = {
-  title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens',
+  title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens | AQUIZ',
   description:
-    'Comparez jusqu\'à 4 biens immobiliers côte à côte : prix, surface, charges, rentabilité. Outil gratuit pour faire le bon choix.',
+    'Comparez jusqu\'à 4 biens immobiliers côte à côte : prix au m², scoring 10 axes, analyse IA, risques naturels, DPE. Outil 100\u00a0% gratuit.',
+  keywords: [
+    'comparateur immobilier',
+    'comparer annonces immobilières',
+    'prix au m2',
+    'scoring immobilier',
+    'analyse immobilière IA',
+    'DPE comparaison',
+    'acheter un bien immobilier',
+  ],
   openGraph: {
     title: 'Comparateur immobilier — AQUIZ',
     description:
       'Comparez prix, surface, charges et localisation de plusieurs biens immobiliers pour prendre la meilleure décision.',
     url: 'https://www.aquiz.eu/comparateur',
+    siteName: 'AQUIZ',
+    locale: 'fr_FR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Comparateur immobilier gratuit — AQUIZ',
+    description: 'Comparez jusqu\'à 4 biens côte à côte avec scoring IA, prix DVF et analyse des risques.',
   },
   alternates: {
     canonical: 'https://www.aquiz.eu/comparateur',
@@ -17,7 +34,7 @@ export const metadata: Metadata = {
 }
 
 function ComparateurJsonLd() {
-  const jsonLd = {
+  const breadcrumb = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
@@ -25,11 +42,47 @@ function ComparateurJsonLd() {
       { '@type': 'ListItem', position: 2, name: 'Comparateur', item: 'https://www.aquiz.eu/comparateur' },
     ],
   }
+  const faq = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: 'Comment fonctionne le comparateur AQUIZ ?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Ajoutez de 2 à 4 annonces immobilières (par URL ou manuellement). AQUIZ analyse automatiquement chaque bien sur 10 axes : prix vs marché DVF, DPE, transports, risques naturels, etc. Vous obtenez un score sur 100 et un rapport PDF complet.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Est-ce que le comparateur est gratuit ?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'Oui, le comparateur AQUIZ est 100\u00a0% gratuit. L\'analyse comparative, le scoring 10 axes et le rapport PDF sont accessibles sans abonnement.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Quels sites d\'annonces sont supportés ?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: 'AQUIZ supporte les annonces de SeLoger, LeBonCoin, Bien\'ici, PAP, Logic-Immo, Orpi, Century 21, Laforêt, IAD France, et bien d\'autres portails immobiliers français.',
+        },
+      },
+    ],
+  }
   return (
-    <script
-      type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faq) }}
+      />
+    </>
   )
 }
 

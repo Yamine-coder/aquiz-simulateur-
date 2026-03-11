@@ -9,11 +9,40 @@
 
 /** Sources d'annonces supportées */
 export type SourceAnnonce = 
+  // Top 3 (API dédiée)
   | 'seloger' 
   | 'leboncoin' 
-  | 'pap' 
   | 'bienici' 
+  // Réseaux d'agences
+  | 'laforet'
+  | 'orpi'
+  | 'century21'
+  | 'guyhoquet'
+  | 'stephaneplaza'
+  // Mandataires
+  | 'iad'
+  | 'capifrance'
+  | 'safti'
+  | 'optimhome'
+  // Portails
+  | 'paruvendu'
+  | 'superimmo'
+  | 'avendrealouer'
+  | 'greenacres'
+  | 'meilleursagents'
+  | 'hosman'
+  // Promoteurs
+  | 'nexity'
+  | 'bouygues'
+  | 'kaufman'
+  // Agences / Gestion
+  | 'foncia'
+  // Protégés
   | 'logic-immo' 
+  | 'pap' 
+  | 'ouestfrance'
+  | 'figaro'
+  // Manuel
   | 'manuel'
 
 /** Type de bien */
@@ -138,8 +167,8 @@ export interface Annonce {
   /** URLs des images supplémentaires (carousel) */
   images?: string[]
   
-  /** Date d'ajout au comparateur */
-  dateAjout: Date
+  /** Date d'ajout au comparateur (string après rehydratation localStorage) */
+  dateAjout: Date | string
   
   /** Notes personnelles */
   notes?: string
@@ -239,6 +268,8 @@ export type TriAnnonces =
   | 'prixM2-desc'
   | 'surface-asc' 
   | 'surface-desc'
+  | 'pieces-desc'
+  | 'dpe-asc'
   | 'dateAjout-desc'
 
 /**
@@ -325,8 +356,29 @@ export const LABELS_DPE: Record<ClasseDPE, string> = {
 export const LABELS_SOURCES: Record<SourceAnnonce, string> = {
   seloger: 'SeLoger',
   leboncoin: 'LeBonCoin',
-  pap: 'PAP',
   bienici: 'Bien\'ici',
+  laforet: 'Laforêt',
+  orpi: 'Orpi',
+  century21: 'Century 21',
+  guyhoquet: 'Guy Hoquet',
+  stephaneplaza: 'Stéphane Plaza',
+  iad: 'IAD France',
+  capifrance: 'Capifrance',
+  safti: 'Safti',
+  optimhome: 'OptimHome',
+  paruvendu: 'ParuVendu',
+  superimmo: 'SuperImmo',
+  avendrealouer: 'AVendreALouer',
+  greenacres: 'Green-Acres',
+  meilleursagents: 'MeilleursAgents',
+  hosman: 'Hosman',
+  nexity: 'Nexity',
+  bouygues: 'Bouygues Immobilier',
+  kaufman: 'Kaufman & Broad',
+  foncia: 'Foncia',
   'logic-immo': 'Logic-Immo',
+  pap: 'PAP',
+  ouestfrance: 'Ouest-France Immo',
+  figaro: 'Figaro Immo',
   manuel: 'Saisie manuelle'
 }

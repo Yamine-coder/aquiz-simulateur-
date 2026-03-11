@@ -1,41 +1,53 @@
 /**
  * Moteur de Scoring Professionnel pour le Comparateur
  * 
- * Score unifié basé sur 10 axes pondérés comme un professionnel immobilier :
+ * Score unifié basé sur 11 axes pondérés comme un professionnel immobilier :
  * 
  * 1. Prix vs Marché (20%) - DVF données
- * 2. Rendement locatif (15%) - estimation automatique
+ * 2. Rendement locatif (15%) - estimation automatique (0 si DPE G, interdit location)
  * 3. Performance énergétique (12%) - DPE + coût énergie estimé
- * 4. Emplacement / quartier (15%) - OpenStreetMap
- * 5. Transports (8%) - OpenStreetMap desserte transports
+ * 4. Emplacement / quartier (13%) - OpenStreetMap
+ * 5. Transports (7%) - OpenStreetMap desserte transports
  * 6. État du bien / travaux (10%) - année construction + DPE
  * 7. Charges & fiscalité (8%) - charges copro + taxe foncière
- * 8. Surface & agencement (5%) - rapport surface/pièces
- * 9. Équipements & confort (5%) - parking, balcon, ascenseur...
- * 10. Potentiel plus-value (2%) - état + quartier + tendance
+ * 8. Risques naturels (5%) - Géorisques
+ * 9. Surface & agencement (4%) - rapport surface/pièces
+ * 10. Équipements & confort (4%) - parking, balcon, ascenseur...
+ * 11. Potentiel plus-value (2%) - état + quartier + tendance
  * 
  * Chaque axe note de 0 à 100, le score final est la moyenne pondérée.
  * Si un axe n'a pas de données, son poids est redistribué.
  */
 
+import {
+    type AxeScoring,
+    BUDGET_TRAVAUX_DPE,
+    COUT_ENERGIE_M2_AN,
+    COUT_ENERGIE_MAX_RATIO,
+    DEPTS_GRANDE_COURONNE,
+    DEPTS_GRANDES_METROPOLES,
+    DEPTS_PETITE_COURONNE,
+    DEPTS_VILLES_MOYENNES,
+    DESCRIPTIONS_AXES,
+    ENERGIE_WEIGHTS,
+    EQUIPEMENTS_SCORING,
+    LABELS_AXES,
+    POIDS_AXES,
+    RATIO_LOYER_ZONE,
+    SCORE_DPE,
+    SCORE_GES,
+    SEUILS_PRIX_MARCHE,
+    SEUILS_SURFACE,
+    VETUSTE_SEUILS
+} from '@/config/scoring.config'
 import type { Annonce, ClasseDPE } from '@/types/annonces'
+
+// Re-export the type so external consumers don't need to change imports
+export type { AxeScoring }
 
 // ============================================
 // TYPES
 // ============================================
-
-/** Axes d'évaluation professionnelle */
-export type AxeScoring =
-  | 'prixMarche'
-  | 'rendement'
-  | 'energie'
-  | 'emplacement'
-  | 'transports'
-  | 'etatBien'
-  | 'charges'
-  | 'surface'
-  | 'equipements'
-  | 'plusValue'
 
 /** Résultat d'un axe individuel */
 export interface ResultatAxe {
@@ -64,6 +76,54 @@ export type NiveauRecommandation =
   | 'a_etudier'
   | 'prudence'
   | 'deconseille'
+
+/**
+ * Profil de scoring adaptatif — permet à l'utilisateur de pondérer ses priorités
+ * Chaque valeur est un multiplicateur (1 = normal, 2 = prioritaire, 0.5 = moins important)
+ */
+export type ProfilScoringId = 'equilibre' | 'investisseur' | 'famille' | 'premier_achat' | 'eco' | 'personnalise'
+
+export interface ProfilScoring {
+  id: ProfilScoringId
+  label: string
+  description: string
+  /** Multiplicateurs par axe (1 = neutre, >1 = boost, <1 = réduire) */
+  multiplicateurs: Partial<Record<AxeScoring, number>>
+}
+
+/** Profils prédéfinis */
+export const PROFILS_SCORING: ProfilScoring[] = [
+  {
+    id: 'equilibre',
+    label: 'Équilibré',
+    description: 'Pondération professionnelle standard',
+    multiplicateurs: {},
+  },
+  {
+    id: 'investisseur',
+    label: 'Investisseur',
+    description: 'Priorité au rendement et à la plus-value',
+    multiplicateurs: { rendement: 2.5, plusValue: 3, prixMarche: 1.5, charges: 1.5, emplacement: 0.7, equipements: 0.5, surface: 0.5 },
+  },
+  {
+    id: 'famille',
+    label: 'Famille',
+    description: 'Espace, école, sécurité, calme',
+    multiplicateurs: { surface: 2.5, emplacement: 1.8, risques: 1.5, transports: 1.3, equipements: 1.5, rendement: 0.3, plusValue: 0.3 },
+  },
+  {
+    id: 'premier_achat',
+    label: 'Premier achat',
+    description: 'Budget serré, bon rapport qualité-prix',
+    multiplicateurs: { prixMarche: 2, charges: 1.8, etatBien: 1.5, transports: 1.3, rendement: 0.5, plusValue: 0.5 },
+  },
+  {
+    id: 'eco',
+    label: 'Éco-responsable',
+    description: 'Performance énergétique et environnement',
+    multiplicateurs: { energie: 3, risques: 1.5, emplacement: 1.3, charges: 1.3, rendement: 0.5, plusValue: 0.3 },
+  },
+]
 
 /** Résultat complet du scoring pour une annonce */
 export interface ScoreComparateurResult {
@@ -99,6 +159,7 @@ export interface DonneesEnrichiesScoring {
     verdict?: 'excellent' | 'bon' | 'correct' | 'cher' | 'tres_cher'
     evolution12Mois?: number
     prixM2MedianMarche?: number
+    nbTransactions?: number
   }
   risques?: {
     success: boolean
@@ -122,71 +183,33 @@ export interface DonneesEnrichiesScoring {
     sante?: number
     /** Score espaces verts 0-100 */
     espaceVerts?: number
-    transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lignes?: string[]; operateur?: string; couleur?: string }>
+    transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lat?: number; lon?: number; lignes?: string[]; operateur?: string; couleur?: string }>
+    /** Comptages bruts de POIs par catégorie (rayon 800m) */
+    counts?: {
+      transport: number
+      commerce: number
+      education: number
+      sante: number
+      loisirs: number
+      vert: number
+    }
+  }
+  communeInfos?: {
+    success: boolean
+    nomCommune?: string
+    population?: number | null
+    surfaceKm2?: number | null
+    densitePopulation?: number | null
+    revenuMensuel?: number | null
+    ensoleillement?: number | null
+    departement?: string
+    counts?: { education: number | null; commerce: number | null; sante: number | null; transport: number | null; loisirs: number | null } | null
   }
 }
 
 // ============================================
-// CONSTANTES
+// CONSTANTES — importées de @/config/scoring.config
 // ============================================
-
-/** Pondérations professionnelles par axe (total = 100%) */
-const POIDS_AXES: Record<AxeScoring, number> = {
-  prixMarche: 20,
-  rendement: 15,
-  energie: 12,
-  emplacement: 15,
-  transports: 8,
-  etatBien: 10,
-  charges: 8,
-  surface: 5,
-  equipements: 5,
-  plusValue: 2,
-}
-
-/** Labels des axes */
-const LABELS_AXES: Record<AxeScoring, string> = {
-  prixMarche: 'Prix vs Marché',
-  rendement: 'Rendement locatif',
-  energie: 'Performance énergie',
-  emplacement: 'Emplacement',
-  transports: 'Transports',
-  etatBien: 'État du bien',
-  charges: 'Charges & fiscalité',
-  surface: 'Surface & agencement',
-  equipements: 'Équipements',
-  plusValue: 'Potentiel plus-value',
-}
-
-/**
- * Coût énergie annuel estimé par classe DPE (€/m²/an)
- * Source : ADEME, données moyennes France 2024
- * A: <70 kWh/m²/an → ~5€/m²/an  |  G: >450 kWh/m²/an → ~35€/m²/an
- */
-const COUT_ENERGIE_M2_AN: Record<ClasseDPE, number> = {
-  A: 5,
-  B: 8,
-  C: 12,
-  D: 17,
-  E: 23,
-  F: 30,
-  G: 38,
-  NC: 20, // Hypothèse prudente
-}
-
-/**
- * Score DPE pour la notation (A=100, B=85, ..., G=10)
- */
-const SCORE_DPE: Record<ClasseDPE, number> = {
-  A: 100,
-  B: 85,
-  C: 70,
-  D: 55,
-  E: 40,
-  F: 20,
-  G: 10,
-  NC: 40, // Prudent
-}
 
 /**
  * Estimation du budget travaux selon l'année de construction et la classe DPE
@@ -197,37 +220,26 @@ function estimerBudgetTravaux(anneeConstruction?: number, dpe?: ClasseDPE, surfa
   
   let coutM2 = 0
 
-  // Composante vétusté (âge du bâtiment)
+  // Composante vétusté (âge du bâtiment) — seuils depuis scoring.config
   // Si année inconnue : on déduit une fourchette via le DPE
   // Un DPE A/B/C suggère un bâtiment récent ou rénové → pas de surcoût vétusté par défaut
-  // Un DPE D/E/F/G suggère un bâtiment plus ancien → hypothèse prudente 1985
   const annee = anneeConstruction
     || (dpe && ['A', 'B', 'C'].includes(dpe) ? 2012 : undefined)
 
   if (annee !== undefined) {
-    if (annee < 1950) {
-      coutM2 += 250 // Ancien : mise aux normes probable
-    } else if (annee < 1975) {
-      coutM2 += 150 // Pré-réglementation thermique
-    } else if (annee < 1990) {
-      coutM2 += 80 // Première RT
-    } else if (annee < 2005) {
-      coutM2 += 40 // RT 2000
-    } else if (annee < 2012) {
-      coutM2 += 15 // RT 2005
+    for (const seuil of VETUSTE_SEUILS) {
+      if (annee < seuil.avantAnnee) {
+        coutM2 += seuil.coutM2
+        break
+      }
     }
-    // RT 2012+ : pas de travaux prévisibles
   } else {
-    // Ni année ni bon DPE → hypothèse prudente
-    coutM2 += 80
+    // Ni année ni bon DPE → hypothèse prudente (deuxième seuil le plus bas)
+    coutM2 += 100
   }
 
-  // Composante DPE (isolation thermique)
-  if (dpe === 'G') coutM2 += 300
-  else if (dpe === 'F') coutM2 += 200
-  else if (dpe === 'E') coutM2 += 80
-  else if (dpe === 'D') coutM2 += 30
-  // DPE A/B/C : pas de surcoût énergie
+  // Composante DPE (isolation thermique) — seuils depuis scoring.config
+  coutM2 += BUDGET_TRAVAUX_DPE[dpe ?? 'NC']
 
   return Math.round(coutM2 * surface)
 }
@@ -246,63 +258,83 @@ function estimerBudgetTravaux(anneeConstruction?: number, dpe?: ClasseDPE, surfa
 function estimerLoyerMensuel(prix: number, codePostal: string): number {
   // Guard: code postal vide ou invalide → fallback moyenne nationale
   if (!codePostal || codePostal.length < 2) {
-    return Math.round(prix * 0.004) // ~0.4% = moyenne nationale
+    return Math.round(prix * RATIO_LOYER_ZONE.moyenneNationale)
   }
 
-  const cp = parseInt(codePostal.substring(0, 2))
+  const dept = codePostal.substring(0, 2)
+  const cp = parseInt(dept)
   
   let ratioMensuel: number
 
-  // Paris
-  if (codePostal.startsWith('75')) {
-    ratioMensuel = 0.0028 // 0.28%
-  }
-  // Petite couronne (92, 93, 94)
-  else if ([92, 93, 94].includes(cp)) {
-    ratioMensuel = 0.0035 // 0.35%
-  }
-  // Grande couronne (77, 78, 91, 95)
-  else if ([77, 78, 91, 95].includes(cp)) {
-    ratioMensuel = 0.004 // 0.40%
-  }
-  // Grandes métropoles (Lyon, Marseille, Bordeaux, Toulouse, Nantes, etc.)
-  else if (
-    codePostal.startsWith('69') || // Lyon
-    codePostal.startsWith('13') || // Marseille
-    codePostal.startsWith('33') || // Bordeaux
-    codePostal.startsWith('31') || // Toulouse
-    codePostal.startsWith('44') || // Nantes
-    codePostal.startsWith('59') || // Lille
-    codePostal.startsWith('67') || // Strasbourg
-    codePostal.startsWith('06') || // Nice
-    codePostal.startsWith('34')    // Montpellier
-  ) {
-    ratioMensuel = 0.0042 // 0.42%
-  }
-  // Villes moyennes  
-  else if (
-    codePostal.startsWith('35') || // Rennes
-    codePostal.startsWith('45') || // Orléans
-    codePostal.startsWith('37') || // Tours
-    codePostal.startsWith('21') || // Dijon
-    codePostal.startsWith('63') || // Clermont
-    codePostal.startsWith('76') || // Rouen
-    codePostal.startsWith('14') || // Caen
-    codePostal.startsWith('29') || // Brest
-    codePostal.startsWith('87')    // Limoges
-  ) {
-    ratioMensuel = 0.005 // 0.50%
-  }
-  // DOM-TOM
-  else if (codePostal.startsWith('97')) {
-    ratioMensuel = 0.0045 // 0.45%
-  }
-  // Reste : petites villes / rural
-  else {
-    ratioMensuel = 0.0055 // 0.55%
+  if (dept === '75') {
+    ratioMensuel = RATIO_LOYER_ZONE.paris
+  } else if ((DEPTS_PETITE_COURONNE as readonly number[]).includes(cp)) {
+    ratioMensuel = RATIO_LOYER_ZONE.petiteCouronne
+  } else if ((DEPTS_GRANDE_COURONNE as readonly number[]).includes(cp)) {
+    ratioMensuel = RATIO_LOYER_ZONE.grandeCouronne
+  } else if ((DEPTS_GRANDES_METROPOLES as readonly string[]).includes(dept)) {
+    ratioMensuel = RATIO_LOYER_ZONE.grandesMetropoles
+  } else if ((DEPTS_VILLES_MOYENNES as readonly string[]).includes(dept)) {
+    ratioMensuel = RATIO_LOYER_ZONE.villesMoyennes
+  } else if (dept === '97') {
+    ratioMensuel = RATIO_LOYER_ZONE.domTom
+  } else {
+    ratioMensuel = RATIO_LOYER_ZONE.rural
   }
 
   return Math.round(prix * ratioMensuel)
+}
+
+/**
+ * Estimation de loyer améliorée v2
+ * Prend en compte : zone géographique, surface, type de bien, DPE, marché DVF
+ * 
+ * @param annonce - L'annonce complète
+ * @param enrichi - Données enrichies (DVF optionnel)
+ * @returns Loyer mensuel estimé en euros
+ */
+export function estimerLoyerMensuelV2(
+  annonce: Annonce,
+  enrichi?: DonneesEnrichiesScoring
+): { loyerEstime: number; methode: 'dvf' | 'ratio' | 'ratio_ajuste'; confiance: number } {
+  // 1. Ratio de base par zone (méthode v1)
+  const loyerBase = estimerLoyerMensuel(annonce.prix, annonce.codePostal)
+  
+  // 2. Ajustements selon caractéristiques du bien
+  let multiplicateur = 1.0
+
+  // Surface : les petites surfaces ont un meilleur rendement locatif
+  if (annonce.surface < 25) multiplicateur *= 1.20  // Studios/T1 : +20%
+  else if (annonce.surface < 40) multiplicateur *= 1.10  // T2 : +10%
+  else if (annonce.surface > 120) multiplicateur *= 0.85 // Très grands : -15%
+  else if (annonce.surface > 80) multiplicateur *= 0.92  // Grands : -8%
+
+  // Type : maisons ont un rendement légèrement inférieur
+  if (annonce.type === 'maison') multiplicateur *= 0.95
+
+  // DPE : les passoires thermiques se louent moins bien (loi Climat)
+  if (annonce.dpe === 'G') multiplicateur *= 0  // Interdit à la location depuis 2025 — loyer = 0
+  else if (annonce.dpe === 'F') multiplicateur *= 0.88 // Interdit dès 2028
+  else if (annonce.dpe === 'E') multiplicateur *= 0.95 // Interdit dès 2034
+  else if (annonce.dpe === 'A' || annonce.dpe === 'B') multiplicateur *= 1.05 // Premium
+
+  // Équipements premium
+  if (annonce.balconTerrasse) multiplicateur *= 1.03
+  if (annonce.parking) multiplicateur *= 1.04
+
+  const loyerAjuste = Math.round(loyerBase * multiplicateur)
+
+  // 3. Si données DVF disponibles, estimation croisée par prix/m² marché
+  if (enrichi?.marche?.success && enrichi.marche.prixM2MedianMarche) {
+    const prixM2Marche = enrichi.marche.prixM2MedianMarche
+    // Rendement brut typique de la zone
+    const loyerBase2 = estimerLoyerMensuel(prixM2Marche * annonce.surface, annonce.codePostal)
+    // Moyenne pondérée : 60% DVF, 40% ratio ajusté
+    const loyerDVF = Math.round(loyerBase2 * multiplicateur * 0.6 + loyerAjuste * 0.4)
+    return { loyerEstime: loyerDVF, methode: 'dvf', confiance: 75 }
+  }
+
+  return { loyerEstime: loyerAjuste, methode: 'ratio_ajuste', confiance: 50 }
 }
 
 // ============================================
@@ -313,7 +345,7 @@ function estimerLoyerMensuel(prix: number, codePostal: string): number {
  * Axe 1 : Prix vs Marché (20%)
  * Compare le prix/m² au prix médian DVF du secteur
  */
-function scorerPrixMarche(
+export function scorerPrixMarche(
   annonce: Annonce,
   enrichi?: DonneesEnrichiesScoring
 ): ResultatAxe & { points: PointAnalysePro[] } {
@@ -333,8 +365,8 @@ function scorerPrixMarche(
   }
 
   const ecart = enrichi.marche.ecartPrixM2
-  // Score linéaire : -30% = 100, 0% = 65, +30% = 0
-  let score = Math.round(65 - (ecart * 1.17))
+  // Score linéaire : -30% = 100, 0% = score neutre, +30% = 0
+  let score = Math.round(SEUILS_PRIX_MARCHE.scoreNeutre - (ecart * SEUILS_PRIX_MARCHE.penteParPourcent))
   score = Math.max(0, Math.min(100, score))
 
   let detail: string
@@ -409,10 +441,35 @@ function scorerPrixMarche(
  * Estimation du rendement brut annuel
  * Pros considèrent : >7% excellent, 5-7% bon, 3-5% moyen, <3% faible
  */
-function scorerRendement(
-  annonce: Annonce
-): ResultatAxe & { points: PointAnalysePro[]; loyerEstime: number; rendementBrut: number } {
-  const loyerEstime = estimerLoyerMensuel(annonce.prix, annonce.codePostal)
+export function scorerRendement(
+  annonce: Annonce,
+  enrichi?: DonneesEnrichiesScoring
+): ResultatAxe & { points: PointAnalysePro[]; loyerEstime: number; rendementBrut: number; methodeLoyer?: string } {
+  // DPE G : interdit à la location depuis 2025 (loi Climat & Résilience)
+  if (annonce.dpe === 'G') {
+    return {
+      axe: 'rendement',
+      label: LABELS_AXES.rendement,
+      score: 0,
+      poids: POIDS_AXES.rendement,
+      disponible: true,
+      detail: 'DPE G — interdit à la location depuis 2025',
+      impact: 'negatif',
+      points: [{
+        texte: 'Location interdite (DPE G)',
+        detail: 'Depuis le 1er janvier 2025, les logements classés G sont interdits à la location (loi Climat & Résilience). Rendement locatif impossible sans rénovation énergétique préalable.',
+        type: 'attention',
+        axe: 'rendement',
+        impact: -50
+      }],
+      loyerEstime: 0,
+      rendementBrut: 0,
+      methodeLoyer: 'interdit_dpe_g'
+    }
+  }
+
+  const v2 = estimerLoyerMensuelV2(annonce, enrichi)
+  const loyerEstime = v2.loyerEstime
   const rendementBrut = ((loyerEstime * 12) / annonce.prix) * 100
 
   // Score : 8%+ = 100, 5% = 70, 3% = 40, 1% = 10
@@ -480,26 +537,38 @@ function scorerRendement(
     impact,
     points,
     loyerEstime,
-    rendementBrut
+    rendementBrut,
+    methodeLoyer: v2.methode
   }
 }
 
 /**
  * Axe 3 : Performance énergétique (12%)
- * Combine le score DPE + coût énergie annuel estimé
+ * Combine DPE + coût énergie + GES (si disponible)
+ * - Avec GES : 40% DPE + 30% coût + 30% GES
+ * - Sans GES : 70% DPE + 30% coût (rétro-compatible)
  */
-function scorerEnergie(
+export function scorerEnergie(
   annonce: Annonce
 ): ResultatAxe & { points: PointAnalysePro[]; coutAnnuel: number } {
   const scoreDpe = SCORE_DPE[annonce.dpe] ?? 40
   const coutM2 = COUT_ENERGIE_M2_AN[annonce.dpe] ?? 20
   const coutAnnuel = Math.round(coutM2 * annonce.surface)
 
-  // Score composite : 70% DPE + 30% coût/m² relatif
-  // Normalisé par m² pour ne pas pénaliser les grandes surfaces
-  // DPE G max = 38€/m²/an → score 0, DPE A = 4€/m²/an → score ~90
-  const scoreCout = Math.round(Math.max(0, Math.min(100, 100 - (coutM2 / 0.38))))
-  const score = Math.round(scoreDpe * 0.7 + scoreCout * 0.3)
+  // Score coût/m² relatif (DPE G max = 38€/m²/an → score 0)
+  const scoreCout = Math.round(Math.max(0, Math.min(100, 100 - (coutM2 / COUT_ENERGIE_MAX_RATIO))))
+
+  // Intégrer le GES si disponible et différent de NC
+  const hasGES = annonce.ges && annonce.ges !== 'NC'
+  let score: number
+  if (hasGES) {
+    const scoreGes = SCORE_GES[annonce.ges!] ?? 40
+    const w = ENERGIE_WEIGHTS.withGES
+    score = Math.round(scoreDpe * w.dpe + scoreCout * w.cout + scoreGes * w.ges)
+  } else {
+    const w = ENERGIE_WEIGHTS.withoutGES
+    score = Math.round(scoreDpe * w.dpe + scoreCout * w.cout)
+  }
 
   const points: PointAnalysePro[] = []
   let detail: string
@@ -568,6 +637,28 @@ function scorerEnergie(
     })
   }
 
+  // Point d'information GES (si disponible)
+  if (hasGES) {
+    const gesClass = annonce.ges!
+    if (['F', 'G'].includes(gesClass)) {
+      points.push({
+        texte: `GES ${gesClass} — fortes émissions carbone`,
+        detail: 'Impact environnemental élevé, peut peser sur la valorisation future',
+        type: 'attention',
+        axe: 'energie',
+        impact: -10
+      })
+    } else if (['A', 'B'].includes(gesClass)) {
+      points.push({
+        texte: `GES ${gesClass} — faibles émissions carbone`,
+        detail: 'Bien compatible avec les normes environnementales futures',
+        type: 'avantage',
+        axe: 'energie',
+        impact: 5
+      })
+    }
+  }
+
   return {
     axe: 'energie',
     label: LABELS_AXES.energie,
@@ -583,14 +674,17 @@ function scorerEnergie(
 
 /**
  * Axe 4 : Emplacement (15%)
- * Score quartier OSM 
+ * Score quartier OSM — HORS transports pour éviter le double-comptage
+ * (les transports sont scorés séparément dans l'axe 5)
+ * 
+ * Utilise les sous-scores individuels : commerces, écoles, santé, espaces verts
  */
-function scorerEmplacement(
+export function scorerEmplacement(
   enrichi?: DonneesEnrichiesScoring
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const points: PointAnalysePro[] = []
 
-  if (!enrichi?.quartier?.success || enrichi.quartier.scoreQuartier === undefined) {
+  if (!enrichi?.quartier?.success) {
     return {
       axe: 'emplacement',
       label: LABELS_AXES.emplacement,
@@ -603,7 +697,24 @@ function scorerEmplacement(
     }
   }
 
-  const scoreQ = enrichi.quartier.scoreQuartier
+  // Compute emplacement score from non-transport sub-scores only
+  // This avoids double-counting with scorerTransports (axe 5)
+  const subScores: Array<{ score: number; poids: number }> = []
+  const q = enrichi.quartier
+  if (q.commerces !== undefined) subScores.push({ score: q.commerces, poids: 30 })
+  if (q.ecoles !== undefined) subScores.push({ score: q.ecoles, poids: 25 })
+  if (q.sante !== undefined) subScores.push({ score: q.sante, poids: 25 })
+  if (q.espaceVerts !== undefined) subScores.push({ score: q.espaceVerts, poids: 20 })
+
+  // Fallback to scoreQuartier if no sub-scores available
+  let scoreQ: number
+  if (subScores.length === 0) {
+    scoreQ = enrichi.quartier.scoreQuartier ?? 50
+  } else {
+    const totalPoids = subScores.reduce((sum, s) => sum + s.poids, 0)
+    scoreQ = Math.round(subScores.reduce((sum, s) => sum + s.score * s.poids, 0) / totalPoids)
+  }
+
   const score = Math.max(0, Math.min(100, scoreQ))
 
   let detail: string
@@ -683,7 +794,7 @@ function scorerEmplacement(
  * Axe 5 : Transports (8%)
  * Sous-score transports du quartier (OpenStreetMap)
  */
-function scorerTransports(
+export function scorerTransports(
   enrichi?: DonneesEnrichiesScoring
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const points: PointAnalysePro[] = []
@@ -764,7 +875,7 @@ function scorerTransports(
  * Axe 6 : État du bien / Travaux (10%)
  * Basé sur l'année de construction + DPE
  */
-function scorerEtatBien(
+export function scorerEtatBien(
   annonce: Annonce
 ): ResultatAxe & { points: PointAnalysePro[]; budgetTravaux: number } {
   const budgetTravaux = estimerBudgetTravaux(
@@ -867,14 +978,18 @@ function scorerEtatBien(
  * Axe 7 : Charges & fiscalité (8%)
  * Charges copro + taxe foncière ramenées au ratio prix
  */
-function scorerCharges(
+export function scorerCharges(
   annonce: Annonce
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const charges = annonce.chargesMensuelles
   const taxe = annonce.taxeFonciere
   const points: PointAnalysePro[] = []
 
-  if (!charges && !taxe) {
+  // Distinguer : undefined = pas de données, 0 = confirmé aucune charge (maison sans copro)
+  const chargesInconnues = charges === undefined
+  const taxeInconnue = taxe === undefined
+
+  if (chargesInconnues && taxeInconnue) {
     return {
       axe: 'charges',
       label: LABELS_AXES.charges,
@@ -959,9 +1074,8 @@ function scorerCharges(
  * Axe 8 : Surface & agencement (5%)
  * Ratio surface/pièces, surface totale, chambres
  */
-function scorerSurface(
-  annonce: Annonce,
-  annonces: Annonce[] // Pour le comparatif
+export function scorerSurface(
+  annonce: Annonce
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const points: PointAnalysePro[] = []
 
@@ -1008,33 +1122,30 @@ function scorerSurface(
     })
   }
 
-  // 2. Position relative dans la comparaison
-  if (annonces.length > 1) {
-    const surfaces = annonces.map(a => a.surface)
-    const maxS = Math.max(...surfaces)
-    const minS = Math.min(...surfaces)
-    const moyS = surfaces.reduce((a, b) => a + b, 0) / surfaces.length
-
-    if (annonce.surface === maxS) {
-      score += 15
-      points.push({
-        texte: 'Plus grande surface de la sélection',
-        detail: `${annonce.surface} m² — ${Math.round((annonce.surface / moyS - 1) * 100)}% de plus que la moyenne`,
-        type: 'avantage',
-        axe: 'surface',
-        impact: 15
-      })
-    } else if (annonce.surface === minS && maxS - minS > 10) {
-      score -= 10
-    }
+  // 2. Surface absolue (bonus/malus via config)
+  if (annonce.surface >= SEUILS_SURFACE.grandeMin) {
+    score += SEUILS_SURFACE.grandeBonus
+    points.push({
+      texte: 'Grande surface',
+      detail: `${annonce.surface} m² — confort d'espace au-dessus de la moyenne`,
+      type: 'avantage',
+      axe: 'surface',
+      impact: 10
+    })
+  } else if (annonce.surface <= SEUILS_SURFACE.petiteMax) {
+    score += SEUILS_SURFACE.petiteMalus
+    points.push({
+      texte: 'Surface très réduite',
+      detail: `${annonce.surface} m² — espace limité`,
+      type: 'attention',
+      axe: 'surface',
+      impact: -10
+    })
   }
 
-  // 3. Nombre de chambres relatif
-  if (annonces.length > 1) {
-    const maxChambres = Math.max(...annonces.map(a => a.chambres))
-    if (annonce.chambres === maxChambres && maxChambres >= 3) {
-      score += 5
-    }
+  // 3. Nombre de chambres (absolu)
+  if (annonce.chambres >= 3) {
+    score += 5
   }
 
   // 4. Orientation (bonus si renseigné et favorable)
@@ -1072,47 +1183,58 @@ function scorerSurface(
 }
 
 /**
- * Axe 9 : Équipements & confort (5%)
+ * Axe 9 : Équipements & confort (4%)
  * Parking, balcon, cave, ascenseur, SDB, étage
+ *
+ * Distingue `undefined` (pas de données → score neutre 50)
+ * de `false` (confirmé absent → reste à la base 40).
  */
-function scorerEquipements(
+export function scorerEquipements(
   annonce: Annonce
 ): ResultatAxe & { points: PointAnalysePro[] } {
   const points: PointAnalysePro[] = []
-  let score = 40 // Base conservatrice
+
+  // Détecter si on a des données sur les booléens équipements
+  const boolFields = [annonce.parking, annonce.balconTerrasse, annonce.cave, annonce.ascenseur]
+  const hasAnyData = boolFields.some(v => v !== undefined)
+
+  // Base : 50 (neutre) si aucune donnée, 40 (conservatrice) si on a des infos
+  let score: number = hasAnyData
+    ? EQUIPEMENTS_SCORING.baseAvecDonnees
+    : EQUIPEMENTS_SCORING.baseIndetermine
 
   const equips: string[] = []
-  if (annonce.parking) { score += 15; equips.push('parking') }
-  if (annonce.balconTerrasse) { score += 12; equips.push('balcon/terrasse') }
-  if (annonce.cave) { score += 8; equips.push('cave') }
-  if (annonce.ascenseur) { score += 8; equips.push('ascenseur') }
+  if (annonce.parking) { score += EQUIPEMENTS_SCORING.bonus.parking; equips.push('parking') }
+  if (annonce.balconTerrasse) { score += EQUIPEMENTS_SCORING.bonus.balconTerrasse; equips.push('balcon/terrasse') }
+  if (annonce.cave) { score += EQUIPEMENTS_SCORING.bonus.cave; equips.push('cave') }
+  if (annonce.ascenseur) { score += EQUIPEMENTS_SCORING.bonus.ascenseur; equips.push('ascenseur') }
   if (annonce.nbSallesBains && annonce.nbSallesBains >= 2) {
-    score += 8
+    score += EQUIPEMENTS_SCORING.bonus.multiSDB
     equips.push(`${annonce.nbSallesBains} SDB`)
   }
 
   // Malus étage élevé sans ascenseur
   if (annonce.type === 'appartement' && annonce.etage !== undefined) {
-    if (annonce.etage >= 4 && !annonce.ascenseur) {
-      score -= 20
+    if (annonce.etage >= EQUIPEMENTS_SCORING.seuilEtageSansAscenseur && !annonce.ascenseur) {
+      score += EQUIPEMENTS_SCORING.malus.etageEleveSansAscenseur
       points.push({
         texte: `${annonce.etage}e étage sans ascenseur`,
         detail: 'Impact quotidien et sur la revente — décote significative',
         type: 'attention',
         axe: 'equipements',
-        impact: -20
+        impact: EQUIPEMENTS_SCORING.malus.etageEleveSansAscenseur
       })
-    } else if (annonce.etage >= 3 && annonce.ascenseur) {
-      score += 5
+    } else if (annonce.etage >= EQUIPEMENTS_SCORING.seuilEtageAvecAscenseur && annonce.ascenseur) {
+      score += EQUIPEMENTS_SCORING.bonus.etageEleveAvecAscenseur
       points.push({
         texte: 'Étage élevé avec ascenseur',
         detail: 'Luminosité, calme et vue dégagée',
         type: 'avantage',
         axe: 'equipements',
-        impact: 5
+        impact: EQUIPEMENTS_SCORING.bonus.etageEleveAvecAscenseur
       })
     } else if (annonce.etage === 0) {
-      score -= 5
+      score += EQUIPEMENTS_SCORING.malus.rezDeChaussee
     }
   }
 
@@ -1166,7 +1288,7 @@ function scorerEquipements(
  * Axe 10 : Potentiel plus-value (2%)
  * Combinaison : tendance marché + état (travaux = valeur à créer) + quartier
  */
-function scorerPlusValue(
+export function scorerPlusValue(
   annonce: Annonce,
   enrichi?: DonneesEnrichiesScoring,
   budgetTravaux?: number
@@ -1232,6 +1354,104 @@ function scorerPlusValue(
     disponible: hasData,
     detail: hasData ? `Potentiel estimé : ${score}/100` : 'Données insuffisantes',
     impact: score >= 65 ? 'positif' : score >= 40 ? 'neutre' : 'negatif',
+    points
+  }
+}
+
+/**
+ * Axe 11 : Risques naturels (5%)
+ * Basé sur les données Géorisques (API gouvernementale)
+ * Évalue : inondation, séisme, radon, argiles
+ */
+export function scorerRisques(
+  enrichi?: DonneesEnrichiesScoring
+): ResultatAxe & { points: PointAnalysePro[] } {
+  const points: PointAnalysePro[] = []
+
+  if (!enrichi?.risques?.success || enrichi.risques.scoreRisque === undefined) {
+    return {
+      axe: 'risques',
+      label: LABELS_AXES.risques,
+      score: 50,
+      poids: POIDS_AXES.risques,
+      disponible: false,
+      detail: 'Données risques non disponibles',
+      impact: 'neutre',
+      points: []
+    }
+  }
+
+  const scoreRisque = enrichi.risques.scoreRisque
+  const score = Math.max(0, Math.min(100, scoreRisque))
+
+  let detail: string
+  let impact: ResultatAxe['impact']
+
+  if (scoreRisque >= 80) {
+    detail = `Zone sûre (${scoreRisque}/100)`
+    impact = 'positif'
+    points.push({
+      texte: 'Zone à faible risque naturel',
+      detail: `Score sécurité ${scoreRisque}/100 — pas de risque majeur identifié`,
+      type: 'avantage',
+      axe: 'risques',
+      impact: score - 50
+    })
+  } else if (scoreRisque >= 60) {
+    detail = `Risques modérés (${scoreRisque}/100)`
+    impact = 'neutre'
+    const risquesDetail: string[] = []
+    if (enrichi.risques.zoneInondable) risquesDetail.push('zone inondable')
+    if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 2) risquesDetail.push('radon')
+    points.push({
+      texte: 'Vigilance risques naturels',
+      detail: risquesDetail.length > 0
+        ? `Score ${scoreRisque}/100 — vigilance : ${risquesDetail.join(', ')}`
+        : `Score ${scoreRisque}/100 — risques limités, vérifier l'assurance`,
+      type: 'conseil',
+      axe: 'risques',
+      impact: 0
+    })
+  } else if (scoreRisque >= 40) {
+    detail = `Risques significatifs (${scoreRisque}/100)`
+    impact = 'negatif'
+    const risquesDetail: string[] = []
+    if (enrichi.risques.zoneInondable) risquesDetail.push('zone inondable')
+    if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 2) risquesDetail.push(`radon niveau ${enrichi.risques.niveauRadon}`)
+    points.push({
+      texte: 'Risques naturels élevés',
+      detail: risquesDetail.length > 0
+        ? `Score ${scoreRisque}/100 — ${risquesDetail.join(', ')} — impact sur l'assurance et la revente`
+        : `Score ${scoreRisque}/100 — risques identifiés, surcoût assurance probable`,
+      type: 'attention',
+      axe: 'risques',
+      impact: score - 50
+    })
+  } else {
+    detail = `Zone très exposée (${scoreRisque}/100)`
+    impact = 'negatif'
+    const risquesDetail: string[] = []
+    if (enrichi.risques.zoneInondable) risquesDetail.push('zone inondable')
+    if (enrichi.risques.niveauRadon && enrichi.risques.niveauRadon >= 3) risquesDetail.push(`radon niveau ${enrichi.risques.niveauRadon}`)
+    points.push({
+      texte: 'Zone à haut risque naturel',
+      detail: risquesDetail.length > 0
+        ? `Score ${scoreRisque}/100 — ${risquesDetail.join(', ')} — impact fort sur assurance et valeur`
+        : `Score ${scoreRisque}/100 — zone très exposée, étudier les diagnostics obligatoires`,
+      type: 'attention',
+      axe: 'risques',
+      impact: score - 50
+    })
+  }
+
+  return {
+    axe: 'risques',
+    label: LABELS_AXES.risques,
+    score,
+    poids: POIDS_AXES.risques,
+    disponible: true,
+    detail,
+    impact,
     points
   }
 }
@@ -1386,31 +1606,50 @@ function genererPointsComparatifs(
 
 /**
  * Score professionnel unifié
- * Calcule le score sur les 10 axes avec redistribution des poids
+ * Calcule le score sur les 11 axes avec redistribution des poids
  * si certains axes n'ont pas de données
  */
 export function calculerScorePro(
   annonce: Annonce,
   annonces: Annonce[], // Toutes les annonces pour comparatif
   enrichi?: DonneesEnrichiesScoring,
-  budgetMax?: number | null
+  budgetMax?: number | null,
+  profil?: ProfilScoring | null
 ): ScoreComparateurResult {
   // 1. Scorer chaque axe
   const prixMarche = scorerPrixMarche(annonce, enrichi)
-  const rendement = scorerRendement(annonce)
+  const rendement = scorerRendement(annonce, enrichi)
   const energie = scorerEnergie(annonce)
   const emplacement = scorerEmplacement(enrichi)
   const transports = scorerTransports(enrichi)
   const etatBien = scorerEtatBien(annonce)
   const charges = scorerCharges(annonce)
-  const surface = scorerSurface(annonce, annonces)
+  const risques = scorerRisques(enrichi)
+  const surface = scorerSurface(annonce)
   const equipements = scorerEquipements(annonce)
   const plusValue = scorerPlusValue(annonce, enrichi, etatBien.budgetTravaux)
 
   const tousAxes = [
     prixMarche, rendement, energie, emplacement, transports,
-    etatBien, charges, surface, equipements, plusValue
+    etatBien, charges, risques, surface, equipements, plusValue
   ]
+
+  // 1b. Appliquer les multiplicateurs du profil si fourni
+  if (profil && Object.keys(profil.multiplicateurs).length > 0) {
+    for (const axe of tousAxes) {
+      const mult = profil.multiplicateurs[axe.axe]
+      if (mult !== undefined) {
+        axe.poids = axe.poids * mult
+      }
+    }
+    // Renormaliser à 100%
+    const totalPoids = tousAxes.reduce((s, a) => s + a.poids, 0)
+    if (totalPoids > 0) {
+      for (const axe of tousAxes) {
+        axe.poids = (axe.poids / totalPoids) * 100
+      }
+    }
+  }
 
   // 2. Redistribuer les poids si axes indisponibles
   const axesDisponibles = tousAxes.filter(a => a.disponible)
@@ -1679,19 +1918,20 @@ export function genererSyntheseComparaison(
 // DONNÉES RADAR CHART
 // ============================================
 
-/** Axes affichés dans le radar (regroupement des 10 axes en 6 pour la lisibilité) */
+/** Axes affichés dans le radar (regroupement des 11 axes en 7 pour la lisibilité) */
 export const RADAR_AXES = [
   { key: 'prix', label: 'Prix' },
   { key: 'quartier', label: 'Quartier' },
   { key: 'transports', label: 'Transports' },
   { key: 'energie', label: 'Énergie' },
+  { key: 'risques', label: 'Risques' },
   { key: 'confort', label: 'Confort' },
   { key: 'budget', label: 'Budget' },
 ] as const
 
 /**
  * Convertit un ScoreComparateurResult en données pour le RadarChart
- * Regroupe les 10 axes en 6 pour la lisibilité visuelle
+ * Regroupe les 11 axes en 7 pour la lisibilité visuelle
  */
 export function scoreToRadarData(result: ScoreComparateurResult): Array<{ label: string; value: number; disponible: boolean }> {
   const getAxe = (axe: AxeScoring) => result.axes.find(a => a.axe === axe)
@@ -1704,6 +1944,7 @@ export function scoreToRadarData(result: ScoreComparateurResult): Array<{ label:
     { label: 'quartier', value: scoreOuAbsent('emplacement'), disponible: axeDispo('emplacement') },
     { label: 'transports', value: scoreOuAbsent('transports'), disponible: axeDispo('transports') },
     { label: 'energie', value: scoreOuAbsent('energie'), disponible: axeDispo('energie') },
+    { label: 'risques', value: scoreOuAbsent('risques'), disponible: axeDispo('risques') },
     { label: 'confort', value: moyennePonderee([
       { score: getAxe('etatBien')?.score ?? 50, poids: axeDispo('etatBien') ? 2 : 0 },
       { score: getAxe('equipements')?.score ?? 50, poids: axeDispo('equipements') ? 1.5 : 0 },
@@ -1723,6 +1964,6 @@ function moyennePonderee(items: Array<{ score: number; poids: number }>): number
   return poids > 0 ? Math.round(total / poids) : 50
 }
 
-// Export des constantes pour l'UI
-export { COUT_ENERGIE_M2_AN, LABELS_AXES, POIDS_AXES }
+// Re-export des constantes pour l'UI (importées de @/config/scoring.config)
+export { COUT_ENERGIE_M2_AN, DESCRIPTIONS_AXES, LABELS_AXES, POIDS_AXES }
 

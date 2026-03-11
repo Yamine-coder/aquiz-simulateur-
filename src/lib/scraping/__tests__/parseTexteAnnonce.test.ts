@@ -548,3 +548,124 @@ describe('compterChampsExtraits', () => {
     expect(count).toBe(0)
   })
 })
+
+// ============================================
+// TESTS FIXES P0/P1 — NOUVELLES COUVERTURES
+// ============================================
+
+describe('négation équipements — format "équipement : Non"', () => {
+  it('détecte "Ascenseur : Non" comme absence', () => {
+    const r = parseTexteAnnonce('Appartement 250 000 € 55 m² Ascenseur : non')
+    expect(r.ascenseur).toBe(false)
+  })
+
+  it('détecte "Parking : Non" comme absence', () => {
+    const r = parseTexteAnnonce('Appartement 300 000 € 65 m² Parking : non')
+    expect(r.parking).toBe(false)
+  })
+
+  it('détecte "Cave : Non" comme absence', () => {
+    const r = parseTexteAnnonce('Appartement 200 000 € 45 m² Cave : non')
+    expect(r.cave).toBe(false)
+  })
+
+  it('détecte "Balcon : Non" comme absence', () => {
+    const r = parseTexteAnnonce('Appartement 200 000 € 45 m² Balcon : non')
+    expect(r.balconTerrasse).toBe(false)
+  })
+})
+
+describe('type de bien — détection étendue', () => {
+  it('détecte villa', () => {
+    const r = parseTexteAnnonce('Villa 5 pièces 180 m² 750 000 €')
+    expect(r.type).toBe('maison')
+  })
+
+  it('détecte pavillon', () => {
+    const r = parseTexteAnnonce('Pavillon de plain-pied 4 pièces 350 000 €')
+    expect(r.type).toBe('maison')
+  })
+
+  it('détecte chalet', () => {
+    const r = parseTexteAnnonce('Chalet 3 pièces 95 m² 420 000 €')
+    expect(r.type).toBe('maison')
+  })
+
+  it('détecte propriété', () => {
+    const r = parseTexteAnnonce('Propriété de charme 8 pièces 250 m² 890 000 €')
+    expect(r.type).toBe('maison')
+  })
+
+  it('détecte corps de ferme', () => {
+    const r = parseTexteAnnonce('Corps de ferme rénové 6 pièces 200 m² 450 000 €')
+    expect(r.type).toBe('maison')
+  })
+
+  it('détecte studio comme appartement', () => {
+    const r = parseTexteAnnonce('Studio 28 m² 180 000 €')
+    expect(r.type).toBe('appartement')
+  })
+
+  it('défaut: appartement si aucun type détecté', () => {
+    const r = parseTexteAnnonce('3 pièces 65 m² 350 000 €')
+    expect(r.type).toBe('appartement')
+  })
+})
+
+describe('extraction URL dans texte collé', () => {
+  it('extrait URL leboncoin', () => {
+    const r = parseTexteAnnonce('Voir sur https://www.leboncoin.fr/ventes_immobilieres/123456789.htm prix 250 000 €')
+    expect((r as Record<string, unknown>).url).toContain('leboncoin.fr')
+  })
+
+  it('extrait URL seloger', () => {
+    const r = parseTexteAnnonce('https://www.seloger.com/annonces/achat/appartement/paris/123456.htm 350 000 €')
+    expect((r as Record<string, unknown>).url).toContain('seloger.com')
+  })
+
+  it('extrait URL laforet', () => {
+    const r = parseTexteAnnonce('https://www.laforet.com/acheter/listing/123 appartement 250 000 €')
+    expect((r as Record<string, unknown>).url).toContain('laforet.com')
+  })
+
+  it('extrait URL orpi', () => {
+    const r = parseTexteAnnonce('https://www.orpi.com/annonce-vente/123 maison 450 000 €')
+    expect((r as Record<string, unknown>).url).toContain('orpi.com')
+  })
+})
+
+describe('DPE extraction — patterns avancés', () => {
+  it('extrait "Consommation énergie primaire : D"', () => {
+    const r = parseTexteAnnonce('Bien 350 000 € 65 m² Consommation d\'énergie : D')
+    expect(r.dpe).toBe('D')
+  })
+
+  it('extrait "Bilan énergétique : C"', () => {
+    const r = parseTexteAnnonce('Appartement 250 000 € Bilan énergétique : C')
+    expect(r.dpe).toBe('C')
+  })
+})
+
+describe('GES extraction — patterns avancés', () => {
+  it('extrait "Bilan carbone : E"', () => {
+    const r = parseTexteAnnonce('Maison 450 000 € Bilan carbone : E')
+    expect(r.ges).toBe('E')
+  })
+})
+
+describe('charges extraction — seuil 1200€', () => {
+  it('charges 600€/mois ne sont PAS divisées par 12', () => {
+    const r = parseTexteAnnonce('Charges mensuelles : 600 €')
+    expect(r.chargesMensuelles).toBe(600)
+  })
+
+  it('charges 3600€ sans contexte sont divisées par 12 (annuel)', () => {
+    const r = parseTexteAnnonce('Charges 3600 €')
+    expect(r.chargesMensuelles).toBe(300)
+  })
+
+  it('charges de copro annuelles détectées et converties', () => {
+    const r = parseTexteAnnonce('Charges de copropriété 2400 € par an')
+    expect(r.chargesMensuelles).toBe(200)
+  })
+})

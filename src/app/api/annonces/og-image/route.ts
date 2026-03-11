@@ -38,22 +38,39 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Autres portails : Fetch léger du <head> ──
+    // 150KB pour couvrir les sites Next.js/SPA où __NEXT_DATA__ est plus loin
     const response = await fetch(url, {
       headers: {
         'User-Agent': randomUA(),
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'fr-FR,fr;q=0.9',
-        'Range': 'bytes=0-51200',
+        'Referer': new URL(url).origin + '/',
+        'Range': 'bytes=0-153600',
       },
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(8000),
       redirect: 'follow',
     })
 
-    if (!response.ok && response.status !== 206) {
+    // Si le serveur refuse le Range (416) ou renvoie une erreur, retenter sans Range
+    let html: string
+    if (response.status === 416) {
+      const retryResponse = await fetch(url, {
+        headers: {
+          'User-Agent': randomUA(),
+          'Accept': 'text/html,application/xhtml+xml',
+          'Accept-Language': 'fr-FR,fr;q=0.9',
+          'Referer': new URL(url).origin + '/',
+        },
+        signal: AbortSignal.timeout(8000),
+        redirect: 'follow',
+      })
+      if (!retryResponse.ok) return NextResponse.json({ imageUrl: null })
+      html = await retryResponse.text()
+    } else if (!response.ok && response.status !== 206) {
       return NextResponse.json({ imageUrl: null })
+    } else {
+      html = await response.text()
     }
-
-    const html = await response.text()
 
     // Chercher l'image dans le <head> — ordre de priorité
     const patterns: RegExp[] = [
@@ -111,9 +128,65 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ── __NEXT_DATA__ : sites Next.js (LaForêt, SeLoger neuf, etc.) ──
+    // Le JSON __NEXT_DATA__ contient souvent la galerie complète d'images
+    if (images.length < 3) {
+      const nextDataMatch = html.match(/<script[^>]+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)
+      if (nextDataMatch?.[1]) {
+        try {
+          // Extraire toutes les URLs d'images du JSON __NEXT_DATA__
+          const imgUrlRegex = /"(https?:\/\/[^"]+\.(?:jpg|jpeg|png|webp)(?:\?[^"]*)?)"/gi
+          let m: RegExpExecArray | null
+          while ((m = imgUrlRegex.exec(nextDataMatch[1])) !== null) {
+            let imgUrl = m[1]
+            // Ignorer les URLs de tracking/pixel/logo
+            if (/logo|icon|avatar|sprite|pixel|tracking|badge|button|loader|spinner/i.test(imgUrl)) continue
+            // Décoder les URLs Next.js /_next/image?url=ENCODED
+            if (imgUrl.includes('/_next/image')) {
+              try {
+                const parsed = new URL(imgUrl)
+                const orig = parsed.searchParams.get('url')
+                if (orig?.startsWith('http')) imgUrl = orig
+              } catch { /* ignorer */ }
+            }
+            if (!images.includes(imgUrl)) {
+              images.push(imgUrl)
+              if (images.length >= 20) break
+            }
+          }
+        } catch { /* JSON parse error — silencieux */ }
+      }
+    }
+
+    // ── Fallback pour Next.js : chercher les URLs media CDN dans tout le HTML ──
+    // LaForêt utilise media.laforet.com, Century21 utilise cdn.century21.fr, etc.
+    if (images.length < 2) {
+      const cdnPatterns = /https?:\/\/(?:media\.laforet\.com|cdn\.century21\.fr|photos\.orpi\.com|img\.[a-z-]+\.com|photos\.iadfrance\.fr|media[0-9]*\.[a-z-]+\.(?:com|fr))\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'<>]*)?/gi
+      let cdnMatch: RegExpExecArray | null
+      while ((cdnMatch = cdnPatterns.exec(html)) !== null) {
+        const cdnUrl = cdnMatch[0]
+        if (!images.includes(cdnUrl)) {
+          images.push(cdnUrl)
+          if (images.length >= 20) break
+        }
+      }
+    }
+
+    // Dédupliquer et décoder les URLs /_next/image restantes
+    const cleanImages = [...new Set(images.map(u => {
+      if (u.includes('/_next/image')) {
+        try {
+          const parsed = new URL(u)
+          const orig = parsed.searchParams.get('url')
+          if (orig?.startsWith('http')) return orig
+        } catch { /* ignorer */ }
+      }
+      return u
+    }))]
+
     return NextResponse.json({
-      imageUrl: images[0] || null,
-      images: images.length > 1 ? images : undefined,
+      imageUrl: cleanImages[0] || null,
+      images: cleanImages.length > 1 ? cleanImages : undefined,
     })
   } catch {
     return NextResponse.json({ imageUrl: null })
@@ -127,22 +200,23 @@ export async function POST(request: NextRequest) {
 async function tryLeBonCoinImages(url: string): Promise<{ imageUrl: string; images?: string[] } | null> {
   try {
     // Extraire l'ID de l'annonce depuis l'URL
-    const idMatch = url.match(/\/(\d{8,12})(?:\?|$|#)/) || url.match(/\/(\d{8,12})/)
+    const idMatch = url.match(/\/(\d{8,12})(?:[/?#]|$)/) || url.match(/\/(\d{8,12})/)
     if (!idMatch) return null
 
     const adId = idMatch[1]
-    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
-      headers: {
+    const ogLbcHeaders: Record<string, string> = {
         'User-Agent': randomUA(),
         'Accept': 'application/json',
         'Accept-Language': 'fr-FR,fr;q=0.9',
         'Referer': 'https://www.leboncoin.fr/',
         'Origin': 'https://www.leboncoin.fr',
-        'api_key': process.env.LEBONCOIN_API_KEY || '',
         'Sec-Fetch-Dest': 'empty',
         'Sec-Fetch-Mode': 'cors',
         'Sec-Fetch-Site': 'same-site',
-      },
+    }
+    if (process.env.LEBONCOIN_API_KEY) ogLbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
+    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
+      headers: ogLbcHeaders,
       signal: AbortSignal.timeout(8000),
     })
 

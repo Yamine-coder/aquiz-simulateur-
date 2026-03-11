@@ -68,6 +68,9 @@ export interface TransportProche {
   typeTransport: string
   nom: string
   distance: number
+  /** Coordonnées GPS de la station */
+  lat?: number
+  lon?: number
   /** Temps de marche estimé (minutes, ~4.5 km/h) */
   walkMin?: number
   /** Numéros/noms de lignes (ex: ["1", "4", "7"]) */
@@ -89,6 +92,35 @@ export interface AnalyseQuartier {
   transportsProches?: TransportProche[]
   verdict?: 'excellent' | 'bon' | 'moyen' | 'faible'
   message?: string
+  /** Comptages bruts de POIs par catégorie (rayon 800m) */
+  counts?: {
+    transport: number
+    commerce: number
+    education: number
+    sante: number
+    loisirs: number
+    vert: number
+  }
+}
+
+/** Informations clés de la commune */
+export interface CommuneInfos {
+  success: boolean
+  nomCommune?: string
+  population?: number | null
+  surfaceKm2?: number | null
+  densitePopulation?: number | null
+  revenuMensuel?: number | null
+  ensoleillement?: number | null
+  departement?: string
+  /** Comptages POI commune-entière (Overpass / OSM) */
+  counts?: {
+    education: number | null
+    commerce: number | null
+    sante: number | null
+    transport: number | null
+    loisirs: number | null
+  } | null
 }
 
 export interface AnalyseComplete {
@@ -96,6 +128,7 @@ export interface AnalyseComplete {
   marche: AnalyseMarche
   risques: AnalyseRisques
   quartier: AnalyseQuartier
+  communeInfos: CommuneInfos
   scoreGlobal: number // 0-100
   recommandation: 'fortement_recommande' | 'recommande' | 'prudence' | 'deconseille'
   points: {
@@ -165,16 +198,18 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
   }
   
   // 2. Lancer les 3 analyses en parallèle
-  const [marcheResult, risquesResult, quartierResult] = await Promise.all([
+  const [marcheResult, risquesResult, quartierResult, communeResult] = await Promise.all([
     analyserMarche(bien),
     latitude && longitude ? analyserRisques(latitude, longitude) : Promise.resolve(null),
-    latitude && longitude ? analyserQuartier(latitude, longitude) : Promise.resolve(null)
+    latitude && longitude ? analyserQuartier(latitude, longitude) : Promise.resolve(null),
+    bien.codePostal ? fetchCommuneInfos(bien.codePostal) : Promise.resolve(null),
   ])
   
   // 3. Construire les résultats
   const marche = marcheResult || { success: false }
   const risques = risquesResult || { success: false }
   const quartier = quartierResult || { success: false }
+  const communeInfos = communeResult || { success: false }
   
   // 4. Calculer le score global et les recommandations
   const { scoreGlobal, recommandation, points } = calculerScoreGlobal(
@@ -199,6 +234,7 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
     marche,
     risques,
     quartier,
+    communeInfos,
     scoreGlobal,
     recommandation,
     points,
@@ -388,7 +424,7 @@ async function analyserQuartier(
         return { success: false, message: 'Analyse quartier non disponible' }
       }
 
-      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches } = result.data
+      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches, counts } = result.data
 
       // Verdict
       let verdict: AnalyseQuartier['verdict']
@@ -414,7 +450,8 @@ async function analyserQuartier(
         espaceVerts,
         transportsProches: transportsProches ?? [],
         verdict,
-        message
+        message,
+        counts: counts ?? undefined,
       }
 
     } catch (error) {
@@ -427,6 +464,36 @@ async function analyserQuartier(
     }
   }
   return { success: false, message: 'Analyse quartier non disponible après retries' }
+}
+
+// ============================================
+// COMMUNE INFOS (geo.api.gouv.fr via API route)
+// ============================================
+
+async function fetchCommuneInfos(codePostal: string): Promise<CommuneInfos> {
+  try {
+    const response = await fetch(`/api/analyse/commune-infos?codePostal=${codePostal}`)
+    const result = await response.json()
+
+    if (!result.success || !result.data) {
+      return { success: false }
+    }
+
+    return {
+      success: true,
+      nomCommune: result.data.nomCommune,
+      population: result.data.population,
+      surfaceKm2: result.data.surfaceKm2,
+      densitePopulation: result.data.densitePopulation,
+      revenuMensuel: result.data.revenuMensuel,
+      ensoleillement: result.data.ensoleillement,
+      departement: result.data.departement,
+      counts: result.data.counts ?? null,
+    }
+  } catch (error) {
+    console.error('Erreur commune infos:', error)
+    return { success: false }
+  }
 }
 
 // ============================================

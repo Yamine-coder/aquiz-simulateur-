@@ -39,7 +39,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet'
 import { calculerFaisabilite } from '@/lib/comparateur/faisabilite'
-import { genererSyntheseComparaison, scoreToRadarData, type ScoreComparateurResult } from '@/lib/comparateur/scoreComparateur'
+import { genererSyntheseComparaison, scoreToRadarData } from '@/lib/comparateur/scoreComparateur'
 import {
     calculerStatistiques,
     getAnnoncesFiltrees,
@@ -54,12 +54,9 @@ import {
     ArrowLeft,
     ArrowRight,
     BarChart3,
-    Brain,
     Check,
     CheckSquare,
     ChevronLeft,
-    ClipboardCheck,
-    Coins,
     FileDown,
     Grid3X3,
     Heart,
@@ -74,17 +71,17 @@ import {
     RotateCcw,
     Scale,
     ScanSearch,
+    Share2,
     ShieldCheck,
     Sparkles,
     Square,
-    Target,
     Trash2,
     TrendingUp,
-    Trophy,
     X
 } from 'lucide-react'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 
 // ============================================
 // HELPERS
@@ -95,8 +92,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // ============================================
 
 export default function ComparateurPage() {
-  // Stores
-  const comparateur = useComparateurStore()
+  // Stores — shallow selector to avoid re-renders on unrelated state changes
+  const comparateur = useComparateurStore(
+    useShallow(s => ({
+      annonces: s.annonces,
+      annonceSelectionnees: s.annonceSelectionnees,
+      filtres: s.filtres,
+      tri: s.tri,
+      budgetMax: s.budgetMax,
+      ajouterAnnonce: s.ajouterAnnonce,
+      modifierAnnonce: s.modifierAnnonce,
+      setBudgetMax: s.setBudgetMax,
+      supprimerAnnonce: s.supprimerAnnonce,
+      supprimerPlusieurs: s.supprimerPlusieurs,
+      setTri: s.setTri,
+      setFiltres: s.setFiltres,
+      toggleSelection: s.toggleSelection,
+      dupliquerAnnonce: s.dupliquerAnnonce,
+      toggleFavori: s.toggleFavori,
+      deselectionnerTout: s.deselectionnerTout,
+    }))
+  )
   const { resultats, parametresModeA, parametresModeB } = useSimulateurStore()
   
   // États locaux
@@ -116,6 +132,7 @@ export default function ComparateurPage() {
   const syntheseIARef = useRef(syntheseIA)
   useEffect(() => { syntheseIARef.current = syntheseIA }, [syntheseIA])
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'liste' | 'comparaison'>('liste')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [filtresOpen, setFiltresOpen] = useState(false)
@@ -134,6 +151,12 @@ export default function ComparateurPage() {
   const annoncesSelectionnees = getAnnoncesSelectionnees(comparateur)
   const selCount = annoncesSelectionnees.length
   const nbFavoris = useMemo(() => comparateur.annonces.filter(a => a.favori).length, [comparateur.annonces])
+
+  /** Map pré-calculée des faisabilités — évite de recalculer dans chaque AnnonceCard + CarteAnnonces */
+  const faisabilitesMap = useMemo(
+    () => new Map(comparateur.annonces.map(a => [a.id, calculerFaisabilite(a.prix, comparateur.budgetMax, a.anneeConstruction)])),
+    [comparateur.annonces, comparateur.budgetMax]
+  )
 
   const statsSelection = useMemo(
     () => calculerStatistiques(annoncesSelectionnees),
@@ -194,7 +217,7 @@ export default function ComparateurPage() {
         console.log('[PDF] Synthèse IA non reçue du composant, appel API direct...')
         try {
           const classementTmp = genererSyntheseComparaison(
-            scoresForEmail as unknown as ScoreComparateurResult[]
+            scoresForEmail
           )
           const classementMapTmp = new Map(classementTmp.classement.map(c => [c.annonceId, c.rang]))
 
@@ -270,7 +293,7 @@ export default function ComparateurPage() {
 
       // Synthèse déterministe à partir des scores
       const synthese = genererSyntheseComparaison(
-        scoresForEmail as unknown as ScoreComparateurResult[]
+        scoresForEmail
       )
 
       // Classer les annonces
@@ -281,7 +304,7 @@ export default function ComparateurPage() {
         const score = scoresForEmail.find(s => s.annonceId === a.id)
         const rang = classementMap.get(a.id) ?? 99
         const radarData = score 
-          ? scoreToRadarData(score as unknown as ScoreComparateurResult) 
+          ? scoreToRadarData(score) 
           : []
 
         return {
@@ -318,7 +341,7 @@ export default function ComparateurPage() {
             axe: ax.axe,
             label: ax.label,
             score: ax.score,
-            poids: (ax as unknown as { poids: number }).poids ?? 10,
+            poids: ax.poids ?? 10,
             disponible: ax.disponible,
             detail: ax.detail,
             impact: ax.impact,
@@ -328,8 +351,8 @@ export default function ComparateurPage() {
           enrichissement: score?.enrichissement ? {
             marche: score.enrichissement.marche ? {
               ...score.enrichissement.marche,
-              evolution12Mois: (score.enrichissement.marche as Record<string, unknown>).evolution12Mois as number | undefined,
-              nbTransactions: (score.enrichissement.marche as Record<string, unknown>).nbTransactions as number | undefined,
+              evolution12Mois: score.enrichissement.marche.evolution12Mois,
+              nbTransactions: score.enrichissement.marche.nbTransactions,
             } : undefined,
             risques: score.enrichissement.risques ? {
               ...score.enrichissement.risques,
@@ -340,7 +363,9 @@ export default function ComparateurPage() {
               ...score.enrichissement.quartier,
               sante: (score.enrichissement.quartier as Record<string, unknown>).sante as number | undefined,
               espaceVerts: (score.enrichissement.quartier as Record<string, unknown>).espaceVerts as number | undefined,
+              counts: (score.enrichissement.quartier as Record<string, unknown>).counts as { transport: number; commerce: number; education: number; sante: number; loisirs: number; vert: number } | undefined,
             } : undefined,
+            communeInfos: score.enrichissement.communeInfos ?? undefined,
           } : undefined,
           radarData,
           rang,
@@ -568,8 +593,11 @@ export default function ComparateurPage() {
         {/* Bottom row: tabs + filter/sort */}
         <div className="flex items-center justify-between px-3 pb-2 gap-2">
           {/* Tabs */}
-          <div className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-lg shrink-0">
+          <div role="tablist" aria-label="Navigation comparateur" className="flex items-center gap-0.5 bg-gray-100 p-0.5 rounded-lg shrink-0">
             <button
+              role="tab"
+              aria-selected={activeTab === 'liste'}
+              aria-controls="tabpanel-liste"
               onClick={() => setActiveTab('liste')}
               className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
                 activeTab === 'liste'
@@ -584,6 +612,9 @@ export default function ComparateurPage() {
               }`}>{comparateur.annonces.length}</span>
             </button>
             <button
+              role="tab"
+              aria-selected={activeTab === 'comparaison'}
+              aria-controls="tabpanel-comparaison"
               onClick={() => setActiveTab('comparaison')}
               className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all ${
                 activeTab === 'comparaison'
@@ -622,6 +653,8 @@ export default function ComparateurPage() {
                   <SelectItem value="prix-desc">Prix ↓</SelectItem>
                   <SelectItem value="prixM2-asc">€/m² ↑</SelectItem>
                   <SelectItem value="surface-desc">Surface ↓</SelectItem>
+                  <SelectItem value="pieces-desc">Pièces ↓</SelectItem>
+                  <SelectItem value="dpe-asc">DPE A → G</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -641,7 +674,7 @@ export default function ComparateurPage() {
 
       {/* ═══ HEADER (desktop card + tabs) ═══ */}
       <div className="hidden sm:block sticky top-0 z-30 bg-white border-b border-gray-100">
-        <div className={`mx-auto px-3 sm:px-5 py-2 sm:py-3 transition-all duration-300 ${activeTab === 'comparaison' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+        <div className={`mx-auto px-3 sm:px-5 py-2 sm:py-3 transition-all duration-300 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
           <div className="sm:rounded-2xl sm:ring-1 sm:ring-gray-200/80 sm:shadow-sm sm:overflow-hidden">
 
             {/* Haut : identité + actions */}
@@ -741,8 +774,11 @@ export default function ComparateurPage() {
             <div className="px-3 py-1.5 md:px-4 md:py-2.5 bg-gray-50/80 border-t border-gray-100">
               <div className="flex items-center justify-between gap-1.5 sm:gap-2">
                 {/* Onglets — pills */}
-                <div className="flex items-center gap-0.5 bg-white p-0.5 rounded-xl border border-aquiz-gray-lighter shrink-0">
+                <div role="tablist" aria-label="Navigation comparateur" className="flex items-center gap-0.5 bg-white p-0.5 rounded-xl border border-aquiz-gray-lighter shrink-0">
                   <button
+                    role="tab"
+                    aria-selected={activeTab === 'liste'}
+                    aria-controls="tabpanel-liste"
                     onClick={() => setActiveTab('liste')}
                     className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                       activeTab === 'liste'
@@ -757,6 +793,9 @@ export default function ComparateurPage() {
                     }`}>{comparateur.annonces.length}</span>
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={activeTab === 'comparaison'}
+                    aria-controls="tabpanel-comparaison"
                     onClick={() => setActiveTab('comparaison')}
                     className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
                       activeTab === 'comparaison'
@@ -796,18 +835,24 @@ export default function ComparateurPage() {
                         <SelectItem value="prix-desc">Prix ↓</SelectItem>
                         <SelectItem value="prixM2-asc">€/m² ↑</SelectItem>
                         <SelectItem value="surface-desc">Surface ↓</SelectItem>
+                        <SelectItem value="pieces-desc">Pièces ↓</SelectItem>
+                        <SelectItem value="dpe-asc">DPE A → G</SelectItem>
                       </SelectContent>
                     </Select>
 
                     <div className="hidden sm:flex bg-white rounded-lg p-0.5 border border-aquiz-gray-lighter">
                       <button
                         onClick={() => setViewMode('grid')}
+                        aria-label="Vue grille"
+                        aria-pressed={viewMode === 'grid'}
                         className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-aquiz-gray-lightest text-aquiz-black' : 'text-aquiz-gray hover:text-aquiz-black'}`}
                       >
                         <Grid3X3 className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => setViewMode('list')}
+                        aria-label="Vue liste"
+                        aria-pressed={viewMode === 'list'}
                         className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-aquiz-gray-lightest text-aquiz-black' : 'text-aquiz-gray hover:text-aquiz-black'}`}
                       >
                         <List className="h-3.5 w-3.5" />
@@ -834,11 +879,11 @@ export default function ComparateurPage() {
 
       {/* ═══ CONTENU ═══ */}
       <div className="flex-1">
-        <div className={`mx-auto px-3 sm:px-5 py-4 sm:py-6 ${activeTab === 'comparaison' ? 'max-w-7xl' : 'max-w-5xl'}`}>
+        <div className={`mx-auto px-3 sm:px-5 py-4 sm:py-6 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
 
           {/* ─── TAB LISTE ─── */}
           {activeTab === 'liste' && (
-            <>
+            <div id="tabpanel-liste" role="tabpanel" aria-label="Liste des annonces" className="animate-in fade-in slide-in-from-bottom-2 duration-200">
               {/* Budget mobile */}
               {!comparateur.budgetMax && budgetSimulateur && (
                 <div className="sm:hidden mb-4 flex items-center justify-between px-3 py-2 rounded-lg border border-aquiz-gray-lighter">
@@ -880,7 +925,7 @@ export default function ComparateurPage() {
                         annonce={annonce}
                         isSelected={isAnnonceSelected}
                         selectionDisabled={selectionIsFull}
-                        faisabilite={calculerFaisabilite(annonce.prix, comparateur.budgetMax, annonce.anneeConstruction)}
+                        faisabilite={faisabilitesMap.get(annonce.id)}
                         onSelect={() => comparateur.toggleSelection(annonce.id)}
                         onEdit={() => setEditingId(annonce.id)}
                         onDelete={() => setDeleteConfirm({ open: true, ids: [annonce.id], title: annonce.titre })}
@@ -895,12 +940,12 @@ export default function ComparateurPage() {
                   })}
                 </div>
               )}
-            </>
+            </div>
           )}
 
           {/* ─── TAB COMPARAISON ─── */}
           {activeTab === 'comparaison' && (
-            <>
+            <div id="tabpanel-comparaison" role="tabpanel" aria-label="Comparaison des biens sélectionnés" className="animate-in fade-in slide-in-from-bottom-2 duration-200">
               {annoncesSelectionnees.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-aquiz-gray-lighter py-16 px-6 text-center">
                   <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-5">
@@ -942,20 +987,36 @@ export default function ComparateurPage() {
                         <span className="hidden sm:inline">Réinitialiser</span>
                       </button>
                       {scoresForEmail.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const el = document.getElementById('pdf-gate')
-                            if (!el) return
-                            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            el.classList.add('animate-pulse-highlight')
-                            setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                          }}
-                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
-                        >
-                          <FileDown className="w-3.5 h-3.5" />
-                          Mon rapport PDF
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(window.location.href)
+                                setLinkCopied(true)
+                                setTimeout(() => setLinkCopied(false), 2000)
+                              } catch { /* fallback */ }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray-dark text-xs font-medium hover:bg-aquiz-gray-lightest active:scale-[0.97] transition-all duration-200"
+                          >
+                            {linkCopied ? <Check className="w-3.5 h-3.5 text-aquiz-green" /> : <Share2 className="w-3.5 h-3.5" />}
+                            {linkCopied ? 'Copié !' : 'Partager'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const el = document.getElementById('pdf-gate')
+                              if (!el) return
+                              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              el.classList.add('animate-pulse-highlight')
+                              setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
+                          >
+                            <FileDown className="w-3.5 h-3.5" />
+                            Mon rapport PDF
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -965,7 +1026,7 @@ export default function ComparateurPage() {
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-gray-lighter">
                       <FileDown className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                       <p className="text-[11px] text-aquiz-gray flex-1">
-                        <span className="font-semibold text-aquiz-black">Rapport PDF disponible</span> — Scoring radar, synthèse IA, conseil négo, checklist visite
+                        <span className="font-semibold text-aquiz-black">Rapport PDF disponible</span> — Analyse complète de vos {annoncesSelectionnees.length} biens en quelques secondes
                       </p>
                       <button
                         type="button"
@@ -1013,115 +1074,66 @@ export default function ComparateurPage() {
 
                         {/* ═══ PDF GATE SECTION (email capture) ═══ */}
                         {scoresForEmail.length > 0 && (() => {
-                          const best = [...scoresForEmail].sort((a, b) => b.scoreGlobal - a.scoreGlobal)[0]
-                          const bestAnnonce = annoncesSelectionnees.find(a => a.id === best?.annonceId)
-                          const alertCount = [
-                            ...annoncesSelectionnees.filter(a => a.dpe === 'F' || a.dpe === 'G'),
-                            ...scoresForEmail.filter(s => s.enrichissement?.marche?.ecartPrixM2 !== undefined && (s.enrichissement?.marche?.ecartPrixM2 ?? 0) > 10),
-                            ...scoresForEmail.filter(s => s.enrichissement?.risques?.scoreRisque !== undefined && (s.enrichissement?.risques?.scoreRisque ?? 100) < 50),
-                          ].length
                           return (
-                          <div id="pdf-gate" className="mt-4 sm:mt-6">
-                            <div className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                              <div className="px-5 py-5">
-                                <div className="flex items-center gap-3 mb-3">
-                                  <div className="w-10 h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                                    <FileDown className="w-5 h-5 text-aquiz-green" />
-                                  </div>
-                                  <div>
-                                    <h3 className="font-bold text-sm text-aquiz-black">
-                                      {pdfEmailSent ? 'Rapport comparatif téléchargé !' : 'Rapport comparatif complet en PDF'}
-                                    </h3>
-                                    <p className="text-aquiz-gray text-xs">
-                                      {pdfEmailSent
-                                        ? 'Vous pouvez le re-télécharger à tout moment.'
-                                        : `${annoncesSelectionnees.length} biens analysés — ${annoncesSelectionnees.length + 2} pages d'analyse professionnelle`}
-                                    </p>
-                                  </div>
+                          <div id="pdf-gate" className="mt-6 sm:mt-8">
+                            <div className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
+                              {/* Header */}
+                              <div className="flex items-start gap-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                                  <FileDown className="w-6 h-6 text-aquiz-green" />
                                 </div>
+                                <div className="flex-1">
+                                  <h3 className="font-bold text-base text-aquiz-black">
+                                    {pdfEmailSent ? 'Comparatif téléchargé !' : 'Télécharger le comparatif complet'}
+                                  </h3>
+                                  <p className="text-aquiz-gray text-xs mt-0.5">
+                                    {pdfEmailSent
+                                      ? 'Vous pouvez le re-télécharger à tout moment.'
+                                      : `${annoncesSelectionnees.length + 2} pages · Classement, scoring 10 axes, marché, risques & conseils personnalisés`}
+                                  </p>
+                                </div>
+                              </div>
 
-                                {!pdfEmailSent && (
-                                  <>
-                                    {/* Teaser dynamique compact */}
-                                    {(bestAnnonce || alertCount > 0) && (
-                                      <div className="flex items-center gap-3 mb-3 px-3 py-2 rounded-lg bg-slate-50 border border-aquiz-gray-lighter/60">
-                                        {bestAnnonce && (
-                                          <span className="text-[11px] text-aquiz-gray">
-                                            Meilleur score : <span className="font-bold text-aquiz-green">{best.scoreGlobal}/100</span>
-                                          </span>
-                                        )}
-                                        {bestAnnonce && alertCount > 0 && <span className="text-aquiz-gray-lighter">·</span>}
-                                        {alertCount > 0 && (
-                                          <span className="text-[11px] text-aquiz-gray">
-                                            <span className="font-semibold text-amber-600">{alertCount}</span> alerte{alertCount > 1 ? 's' : ''} détectée{alertCount > 1 ? 's' : ''}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-
-                                    {/* Content grid */}
-                                    <div className="grid grid-cols-2 gap-2 mb-4">
-                                      {[
-                                        { Icon: Trophy, label: 'Classement + verdicts', color: 'text-amber-500' },
-                                        { Icon: Target, label: 'Scoring 10 axes / bien', color: 'text-aquiz-green' },
-                                        { Icon: Brain, label: 'Synthèse AQUIZ IA', color: 'text-violet-500' },
-                                        { Icon: Coins, label: 'Conseil négo chiffré', color: 'text-emerald-600' },
-                                        { Icon: ShieldCheck, label: 'Marché & risques', color: 'text-blue-500' },
-                                        { Icon: ClipboardCheck, label: 'Checklist visite', color: 'text-aquiz-green' },
-                                      ].map((item, i) => (
-                                        <div key={i} className="flex items-center gap-2 bg-emerald-50 rounded-lg px-3 py-2">
-                                          <item.Icon className={`w-3.5 h-3.5 shrink-0 ${item.color}`} />
-                                          <span className="text-[11px] text-aquiz-black/80">{item.label}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
-
-                                {pdfEmailSent ? (
+                              {/* Action */}
+                              {pdfEmailSent ? (
+                                <button
+                                  type="button"
+                                  disabled={pdfLoading}
+                                  onClick={async () => {
+                                    setPdfLoading(true)
+                                    try { await generateComparateurPDF() } finally { setPdfLoading(false) }
+                                  }}
+                                  className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                                >
+                                  {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
+                                  {pdfLoading ? 'Génération…' : 'Re-télécharger mon comparatif'}
+                                </button>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <div className="relative flex-1">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                                    <input
+                                      type="email"
+                                      value={pdfEmailValue}
+                                      onChange={e => setPdfEmailValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                                      placeholder="Votre email"
+                                      className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                                    />
+                                  </div>
                                   <button
                                     type="button"
-                                    disabled={pdfLoading}
-                                    onClick={async () => {
-                                      setPdfLoading(true)
-                                      try { await generateComparateurPDF() } finally { setPdfLoading(false) }
-                                    }}
-                                    className="w-full h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
+                                    disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
+                                    onClick={handleSendPdfEmail}
+                                    className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
                                   >
-                                    {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                    {pdfLoading ? 'Génération…' : 'Re-télécharger mon rapport'}
+                                    {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                                    {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
                                   </button>
-                                ) : (
-                                  <div className="space-y-2">
-                                    <div className="flex gap-2">
-                                      <div className="relative flex-1">
-                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
-                                        <input
-                                          type="email"
-                                          value={pdfEmailValue}
-                                          onChange={e => setPdfEmailValue(e.target.value)}
-                                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                                          placeholder="Votre email"
-                                          className="w-full h-10 sm:h-11 pl-9 sm:pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
-                                        />
-                                      </div>
-                                      <button
-                                        type="button"
-                                        disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
-                                        onClick={handleSendPdfEmail}
-                                        className="h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-4 sm:px-5 transition-colors shrink-0 flex items-center gap-2"
-                                      >
-                                        {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                        {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
-                                      </button>
-                                    </div>
-                                    <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
-                                      <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
-                                      <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
+                                </div>
+                              )}
+
+
                             </div>
                           </div>
                           )
@@ -1146,7 +1158,7 @@ export default function ComparateurPage() {
 
                 </div>
               )}
-            </>
+            </div>
           )}
 
         </div>
@@ -1205,7 +1217,7 @@ export default function ComparateurPage() {
 
       {/* ═══ FLOATING SELECTION BAR ═══ */}
       {!manageMode && selCount > 0 && activeTab === 'liste' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] sm:w-auto animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div role="status" aria-live="polite" className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] sm:w-auto animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="flex items-center justify-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-aquiz-black text-white shadow-xl shadow-black/20">
             <div className="w-7 h-7 rounded-lg bg-aquiz-green flex items-center justify-center shrink-0">
               <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
@@ -1219,6 +1231,7 @@ export default function ComparateurPage() {
             <div className="w-px h-5 bg-white/20" />
             <button
               onClick={() => comparateur.deselectionnerTout()}
+              aria-label="Désélectionner tous les biens"
               className="text-xs text-white/60 hover:text-white transition-colors whitespace-nowrap"
             >
               Effacer
@@ -1302,6 +1315,8 @@ export default function ComparateurPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+
     </div>
   )
 }

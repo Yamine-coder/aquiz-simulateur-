@@ -21,6 +21,7 @@ import type { Annonce, ClasseDPE, NouvelleAnnonce } from '@/types/annonces'
 import { COULEURS_DPE } from '@/types/annonces'
 import { ArrowDown, ArrowDownLeft, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Check, ChevronDown, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 export type EditableFieldType = 'number' | 'text' | 'boolean' | 'dpe' | 'orientation'
 
@@ -95,6 +96,72 @@ const ORIENTATION_OPTIONS = [
   { value: 'Nord-Ouest', short: 'NO', Icon: ArrowUpLeft },
 ] as const
 
+/**
+ * Sous-composant : popover flottant en position fixed, rendu via createPortal.
+ * Recalcule sa position sur scroll/resize pour suivre la cellule ancre.
+ */
+function FixedPicker({ getPos, onDismiss, children }: { getPos: () => { top: number; left: number }; onDismiss?: () => void; children: React.ReactNode }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Calcul initial + recalcul sur scroll/resize, avec ajustement viewport
+  useEffect(() => {
+    const update = () => {
+      const raw = getPos()
+      // Ajuster si le picker déborde du viewport (utilise la taille connue du picker)
+      const el = ref.current
+      if (el) {
+        const w = el.offsetWidth
+        const h = el.offsetHeight
+        const vw = window.innerWidth
+        const vh = window.innerHeight
+        let left = raw.left
+        let top = raw.top
+        // translate(-50%,-50%) décale de moitié
+        if (left + w / 2 > vw - 8) left = vw - 8 - w / 2
+        if (left - w / 2 < 8) left = 8 + w / 2
+        if (top + h / 2 > vh - 8) top = vh - 8 - h / 2
+        if (top - h / 2 < 8) top = 8 + h / 2
+        setPos({ top, left })
+      } else {
+        setPos(raw)
+      }
+    }
+    update()
+
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Fermer si on clique en dehors
+  useEffect(() => {
+    if (!onDismiss) return
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onDismiss()
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onDismiss])
+
+  if (!pos) return null
+  return (
+    <div
+      ref={ref}
+      className="fixed z-9999 bg-white rounded-xl border border-aquiz-gray-lighter/80 shadow-lg p-1.5 animate-in fade-in-0 zoom-in-95 duration-150 whitespace-nowrap"
+      style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -50%)' }}
+    >
+      {children}
+    </div>
+  )
+}
+
 export function EditableCell({
   annonceId,
   field,
@@ -109,7 +176,11 @@ export function EditableCell({
   const [justSaved, setJustSaved] = useState<'saved' | 'cleared' | false>(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  /** Empêche le blur de sauvegarder quand on clique sur Annuler */
+  const cancelledRef = useRef(false)
   const modifierAnnonce = useComparateurStore((s) => s.modifierAnnonce)
+  /** Ref sur l'ancre pour calculer la position du picker flottant */
+  const anchorRef = useRef<HTMLSpanElement>(null)
 
   const isEmpty = rawValue === undefined || rawValue === null
 
@@ -130,6 +201,19 @@ export function EditableCell({
     return () => clearTimeout(timeout)
   }, [isEditing, fieldType])
 
+  // ─── Calculer la position du picker flottant à la demande ─
+  const getPickerPos = useCallback(() => {
+    const anchor = anchorRef.current
+    if (!anchor) return { top: 0, left: 0 }
+    // Remonter au <td> parent pour centrer le picker sur la cellule
+    const td = anchor.closest('td')
+    const rect = td ? td.getBoundingClientRect() : anchor.getBoundingClientRect()
+    return {
+      top: rect.top + rect.height / 2,
+      left: rect.left + rect.width / 2,
+    }
+  }, [])
+
   /** Démarre l'édition */
   const startEditing = useCallback(
     (initialValue?: string) => {
@@ -137,6 +221,7 @@ export function EditableCell({
         initialValue ??
           (!isEmpty && fieldType !== 'boolean' && fieldType !== 'dpe' && fieldType !== 'orientation' ? String(rawValue) : ''),
       )
+      cancelledRef.current = false
       setIsEditing(true)
     },
     [isEmpty, rawValue, fieldType],
@@ -195,7 +280,10 @@ export function EditableCell({
     [fieldType, annonceId, field, modifierAnnonce, flash],
   )
 
-  const cancel = useCallback(() => setIsEditing(false), [])
+  const cancel = useCallback(() => {
+    cancelledRef.current = true
+    setIsEditing(false)
+  }, [])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -273,38 +361,59 @@ export function EditableCell({
 
   // ─── DPE / GES : sélecteur custom en grille de lettres ─────
   if (fieldType === 'dpe') {
-    if (isEmpty || isEditing) {
+    if (isEditing) {
       return (
         <div className="relative" ref={containerRef}>
-          <div className="bg-white rounded-xl border border-aquiz-gray-lighter/80 shadow-lg p-2 animate-in fade-in-0 zoom-in-95 duration-150">
-            <div className="flex items-center gap-1">
-              {DPE_OPTIONS.map((opt) => (
+          {/* Ancre invisible pour calculer la position */}
+          <span ref={anchorRef} className="text-aquiz-gray-light text-xs">…</span>
+          {/* Picker rendu dans un portal pour échapper overflow */}
+          {createPortal(
+            <FixedPicker getPos={getPickerPos} onDismiss={cancel}>
+              <div className="flex items-center gap-1">
+                {DPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => save(opt)}
+                    className={`
+                      w-8 h-8 rounded-lg text-xs font-bold text-white
+                      flex items-center justify-center
+                      ${COULEURS_DPE[opt]}
+                      ${!isEmpty && String(rawValue) === opt ? 'ring-2 ring-offset-1 ring-aquiz-black scale-110' : 'opacity-75 hover:opacity-100 hover:scale-105'}
+                      active:scale-95 transition-all duration-150 cursor-pointer
+                    `}
+                    title={`Classe ${opt}`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+                {/* Annuler */}
                 <button
-                  key={opt}
-                  onClick={() => save(opt)}
-                  className={`
-                    w-8 h-8 rounded-lg text-xs font-bold text-white
-                    flex items-center justify-center
-                    ${COULEURS_DPE[opt]}
-                    ${!isEmpty && String(rawValue) === opt ? 'ring-2 ring-offset-1 ring-aquiz-black scale-110' : 'opacity-75 hover:opacity-100 hover:scale-105'}
-                    active:scale-95 transition-all duration-150 cursor-pointer
-                  `}
-                  title={`Classe ${opt}`}
+                  onClick={cancel}
+                  className="ml-1 w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-90 transition-all"
+                  title="Annuler"
                 >
-                  {opt}
+                  <X className="w-3.5 h-3.5 text-aquiz-gray" />
                 </button>
-              ))}
-              {/* Annuler */}
-              <button
-                onClick={cancel}
-                className="ml-1 w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-90 transition-all"
-                title="Annuler"
-              >
-                <X className="w-3.5 h-3.5 text-aquiz-gray" />
-              </button>
-            </div>
-          </div>
+              </div>
+            </FixedPicker>,
+            document.body,
+          )}
         </div>
+      )
+    }
+    // Dismissed + vide → bouton "Ajouter"
+    if (isEmpty) {
+      return (
+        <button
+          onClick={() => startEditing('')}
+          className="group/add inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-aquiz-gray-lighter/80 bg-aquiz-gray-lightest/30 hover:border-aquiz-green/50 hover:bg-aquiz-green/5 hover:shadow-sm active:scale-95 transition-all"
+          title="Ajouter manuellement"
+        >
+          <Plus className="w-3.5 h-3.5 text-aquiz-gray-light group-hover/add:text-aquiz-green transition-colors" />
+          <span className="text-[11px] text-aquiz-gray-light group-hover/add:text-aquiz-green font-medium transition-colors">
+            Ajouter
+          </span>
+        </button>
       )
     }
     // Valeur existante → clic pour modifier + supprimer au hover
@@ -333,49 +442,70 @@ export function EditableCell({
     )
   }
 
-  // ─── Orientation : sélecteur inline en ligne ───────────────
+  // ─── Orientation : sélecteur flottant (portal fixed) ───────────────
   if (fieldType === 'orientation') {
-    if (isEmpty || isEditing) {
+    if (isEditing) {
       return (
         <div className="relative" ref={containerRef}>
-          <div className="bg-white rounded-xl border border-aquiz-gray-lighter/80 shadow-lg p-1.5 animate-in fade-in-0 zoom-in-95 duration-150">
-            <div className="flex items-center gap-0.5">
-              {ORIENTATION_OPTIONS.map((opt) => {
-                const isSelected = !isEmpty && String(rawValue) === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => {
-                      modifierAnnonce(annonceId, { [field]: opt.value } as Partial<NouvelleAnnonce>)
-                      setIsEditing(false)
-                      flash('saved')
-                    }}
-                    className={`
-                      flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-lg min-w-7.5
-                      ${isSelected
-                        ? 'bg-aquiz-green text-white shadow-sm'
-                        : 'text-aquiz-gray hover:bg-aquiz-green/10 hover:text-aquiz-green'
-                      }
-                      active:scale-90 transition-all duration-150 cursor-pointer
-                    `}
-                    title={opt.value}
-                  >
-                    <opt.Icon className="w-3.5 h-3.5" />
-                    <span className="text-[9px] font-bold leading-none">{opt.short}</span>
-                  </button>
-                )
-              })}
-              {/* Annuler */}
-              <button
-                onClick={cancel}
-                className="ml-0.5 w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-90 transition-all shrink-0"
-                title="Annuler"
-              >
-                <X className="w-3.5 h-3.5 text-aquiz-gray" />
-              </button>
-            </div>
-          </div>
+          {/* Ancre invisible pour calculer la position */}
+          <span ref={anchorRef} className="text-aquiz-gray-light text-xs">…</span>
+          {/* Picker rendu dans un portal pour échapper overflow */}
+          {createPortal(
+            <FixedPicker getPos={getPickerPos} onDismiss={cancel}>
+              <div className="flex items-center gap-0.5">
+                {ORIENTATION_OPTIONS.map((opt) => {
+                  const isSelected = !isEmpty && String(rawValue) === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => {
+                        modifierAnnonce(annonceId, { [field]: opt.value } as Partial<NouvelleAnnonce>)
+                        setIsEditing(false)
+                        flash('saved')
+                      }}
+                      className={`
+                        flex flex-col items-center gap-0.5 px-1.5 py-1.5 rounded-lg min-w-7.5
+                        ${isSelected
+                          ? 'bg-aquiz-green text-white shadow-sm'
+                          : 'text-aquiz-gray hover:bg-aquiz-green/10 hover:text-aquiz-green'
+                        }
+                        active:scale-90 transition-all duration-150 cursor-pointer
+                      `}
+                      title={opt.value}
+                    >
+                      <opt.Icon className="w-3.5 h-3.5" />
+                      <span className="text-[9px] font-bold leading-none">{opt.short}</span>
+                    </button>
+                  )
+                })}
+                {/* Annuler */}
+                <button
+                  onClick={cancel}
+                  className="ml-0.5 w-7 h-7 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 active:scale-90 transition-all shrink-0"
+                  title="Annuler"
+                >
+                  <X className="w-3.5 h-3.5 text-aquiz-gray" />
+                </button>
+              </div>
+            </FixedPicker>,
+            document.body,
+          )}
         </div>
+      )
+    }
+    // Vide → bouton "Ajouter"
+    if (isEmpty) {
+      return (
+        <button
+          onClick={() => startEditing('')}
+          className="group/add inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-aquiz-gray-lighter/80 bg-aquiz-gray-lightest/30 hover:border-aquiz-green/50 hover:bg-aquiz-green/5 hover:shadow-sm active:scale-95 transition-all"
+          title="Ajouter manuellement"
+        >
+          <Plus className="w-3.5 h-3.5 text-aquiz-gray-light group-hover/add:text-aquiz-green transition-colors" />
+          <span className="text-[11px] text-aquiz-gray-light group-hover/add:text-aquiz-green font-medium transition-colors">
+            Ajouter
+          </span>
+        </button>
       )
     }
     // Valeur existante → clic pour modifier + supprimer
@@ -410,14 +540,29 @@ export function EditableCell({
       <div className="inline-flex items-center gap-1.5 bg-white rounded-xl border border-aquiz-gray-lighter/80 shadow-lg px-2.5 py-1.5 animate-in fade-in-0 zoom-in-95 duration-150" ref={containerRef}>
         <input
           ref={inputRef}
-          type={fieldType === 'number' ? 'number' : 'text'}
+          type="text"
+          inputMode={fieldType === 'number' ? 'decimal' : 'text'}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            if (fieldType === 'number') {
+              // Accept only digits, dots, commas, spaces (for thousands separator)
+              const filtered = e.target.value.replace(/[^0-9.,\s]/g, '')
+              setInputValue(filtered)
+            } else {
+              setInputValue(e.target.value)
+            }
+          }}
           onKeyDown={handleKeyDown}
+          onBlur={() => {
+            // Skip if cancel was clicked
+            if (cancelledRef.current) {
+              cancelledRef.current = false
+              return
+            }
+            if (inputValue.trim()) save(inputValue)
+          }}
           placeholder={placeholder || 'Valeur'}
           className="w-20 text-center text-sm font-medium bg-transparent border-0 outline-none text-aquiz-black placeholder:text-aquiz-gray-light/60"
-          min={fieldType === 'number' ? 0 : undefined}
-          step={fieldType === 'number' ? 'any' : undefined}
         />
         {suffix && (
           <span className="text-[10px] text-aquiz-gray/60 font-medium shrink-0">{suffix}</span>

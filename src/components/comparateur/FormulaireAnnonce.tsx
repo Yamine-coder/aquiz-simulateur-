@@ -5,6 +5,7 @@
  * Coller le contenu d'une annonce → extraction automatique des données
  */
 
+import SearchAdresse from '@/components/carte/SearchAdresse'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -114,7 +115,11 @@ export function FormulaireAnnonce({
   /** Images supplémentaires extraites (carousel) */
   const extractedImagesRef = useRef<string[]>([])
   const extractedCoordsRef = useRef<{ latitude?: number; longitude?: number }>({})
+  /** Champs extraits non affichés dans le formulaire mais transmis à l'annonce */
+  const extractedEtagesTotalRef = useRef<number | undefined>(undefined)
+  const extractedAdresseRef = useRef<string | undefined>(undefined)
   const [activeTab, setActiveTab] = useState<'url' | 'coller' | 'manuel'>(editMode ? 'manuel' : initialTab)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   
   const {
     register,
@@ -182,12 +187,14 @@ export function FormulaireAnnonce({
     if (data.anneeConstruction) setValue('anneeConstruction', toNumber(data.anneeConstruction) as number)
     if (data.nbSallesBains) setValue('nbSallesBains', toNumber(data.nbSallesBains) as number)
     if (data.orientation) setValue('orientation', toStr(data.orientation) as string)
-    // Coordonnées GPS (non affichées dans le formulaire, stockées pour l'analyse)
+    // Champs non affichés dans le formulaire, stockés pour l'annonce
     const lat = toNumber(data.latitude)
     const lng = toNumber(data.longitude)
     if (lat && lng) {
       extractedCoordsRef.current = { latitude: lat, longitude: lng }
     }
+    if (data.etagesTotal !== undefined) extractedEtagesTotalRef.current = toNumber(data.etagesTotal)
+    if (data.adresse) extractedAdresseRef.current = toStr(data.adresse)
   }
 
   // ===== EXTRACTION DEPUIS URL (via API + Jina Reader) =====
@@ -271,7 +278,7 @@ export function FormulaireAnnonce({
     }
     
     // Privilégier les images depuis l'API (haute résolution) quand on a une URL
-    const targetUrl = assistantUrl
+    const targetUrl = assistantUrl || data.url
     if (targetUrl) {
       try {
         const res = await fetch('/api/annonces/og-image', {
@@ -315,6 +322,7 @@ export function FormulaireAnnonce({
   
   // ===== SOUMISSION =====
   const onFormSubmit = (data: AnnonceFormData) => {
+    setValidationErrors([])
     // Nettoyer les valeurs NaN des champs optionnels
     const cleanNumber = (val: number | null | undefined): number | undefined => {
       if (val === null || val === undefined || Number.isNaN(val)) return undefined
@@ -338,9 +346,49 @@ export function FormulaireAnnonce({
       orientation: data.orientation || undefined,
       latitude: extractedCoordsRef.current.latitude,
       longitude: extractedCoordsRef.current.longitude,
+      etagesTotal: extractedEtagesTotalRef.current,
+      adresse: extractedAdresseRef.current,
     } as NouvelleAnnonce)
   }
   
+  // Labels lisibles pour les champs du formulaire
+  const FIELD_LABELS: Record<string, string> = {
+    prix: 'Prix',
+    surface: 'Surface',
+    type: 'Type de bien',
+    pieces: 'Pièces',
+    chambres: 'Chambres',
+    ville: 'Ville',
+    codePostal: 'Code postal',
+    dpe: 'DPE',
+    etage: 'Étage',
+    chargesMensuelles: 'Charges',
+    taxeFonciere: 'Taxe foncière',
+    url: 'URL',
+    imageUrl: 'Image',
+    description: 'Description',
+    anneeConstruction: 'Année construction',
+    nbSallesBains: 'Salles de bains',
+    orientation: 'Orientation',
+    ges: 'GES',
+  }
+
+  const onFormError = (fieldErrors: Record<string, unknown>) => {
+    const msgs: string[] = []
+    for (const [key, err] of Object.entries(fieldErrors)) {
+      const label = FIELD_LABELS[key] || key
+      const msg = (err as { message?: string })?.message
+      msgs.push(msg ? `${label} : ${msg}` : `${label} est invalide`)
+    }
+    setValidationErrors(msgs)
+    // Scroll vers le premier champ en erreur
+    const firstKey = Object.keys(fieldErrors)[0]
+    if (firstKey) {
+      const el = document.getElementById(firstKey) || document.querySelector(`[name="${firstKey}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }
+
   return (
     <div className="space-y-3">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
@@ -442,44 +490,45 @@ export function FormulaireAnnonce({
         {!editMode && <TabsContent value="coller" className="space-y-3 mt-3">
           <div className="space-y-3">
             
-            {/* ── Mode Assistant : guidage étape par étape quand le scraping a échoué ── */}
+            {/* ── Mode Assistant : guidage compact quand le scraping a échoué ── */}
             {assistantMode && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-amber-500 flex items-center justify-center text-white text-xs font-bold">!</div>
-                  <p className="text-sm font-semibold text-amber-900">Récupération en 10 secondes</p>
+              <div className="bg-amber-50/60 border border-amber-200/60 rounded-lg px-3.5 py-3 space-y-2">
+                <div className="flex items-center gap-2 text-amber-800">
+                  <Zap className="h-3.5 w-3.5 text-amber-500" />
+                  <p className="text-xs font-semibold">Récupération rapide</p>
                 </div>
-                
-                <div className="space-y-2.5 text-xs text-amber-800">
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-                    <div>
-                      L&apos;annonce s&apos;est ouverte dans un nouvel onglet.{' '}
+                <ol className="text-xs text-amber-900/80 space-y-1.5 pl-0.5">
+                  <li className="flex gap-2 items-baseline">
+                    <span className="text-[10px] font-bold text-amber-500">1.</span>
+                    <span>
+                      Ouvrez l&apos;annonce{' '}
                       {assistantUrl && (
                         <button
                           type="button"
                           onClick={() => window.open(assistantUrl, '_blank', 'noopener,noreferrer')}
-                          className="inline-flex items-center gap-0.5 text-amber-700 underline underline-offset-2 hover:text-amber-900 font-medium"
+                          className="inline-flex items-center gap-0.5 text-amber-600 hover:text-amber-800 underline underline-offset-2 font-medium"
                         >
-                          Rouvrir <ExternalLink className="h-3 w-3" />
+                          dans un nouvel onglet <ExternalLink className="h-2.5 w-2.5" />
                         </button>
                       )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-                    <p>
-                      Sur la page de l&apos;annonce, appuyez sur{' '}
-                      <kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+A</kbd>{' '}
+                    </span>
+                  </li>
+                  <li className="flex gap-2 items-baseline">
+                    <span className="text-[10px] font-bold text-amber-500">2.</span>
+                    <span>
+                      <kbd className="px-1 py-px bg-white rounded border border-amber-200/80 text-[10px] font-mono">Ctrl+A</kbd>{' '}
                       puis{' '}
-                      <kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+C</kbd>
-                    </p>
-                  </div>
-                  <div className="flex gap-2.5 items-start">
-                    <span className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                    <p>Revenez ici et collez dans la zone ci-dessous (<kbd className="px-1 py-0.5 bg-white/70 rounded border border-amber-300 text-[10px] font-mono">Ctrl+V</kbd>)</p>
-                  </div>
-                </div>
+                      <kbd className="px-1 py-px bg-white rounded border border-amber-200/80 text-[10px] font-mono">Ctrl+C</kbd>
+                    </span>
+                  </li>
+                  <li className="flex gap-2 items-baseline">
+                    <span className="text-[10px] font-bold text-amber-500">3.</span>
+                    <span>
+                      Collez ci-dessous{' '}
+                      <kbd className="px-1 py-px bg-white rounded border border-amber-200/80 text-[10px] font-mono">Ctrl+V</kbd>
+                    </span>
+                  </li>
+                </ol>
               </div>
             )}
             
@@ -570,7 +619,7 @@ export function FormulaireAnnonce({
                 }
               }}
               autoFocus={assistantMode}
-              className={`min-h-24 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20 ${assistantMode ? 'ring-2 ring-amber-300/50 border-amber-300' : ''}`}
+              className={`min-h-24 text-sm rounded-xl border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-aquiz-green/20 ${assistantMode ? 'border-amber-200 focus:border-amber-400 focus:ring-amber-200/30' : ''}`}
             />
             
             <Button
@@ -627,7 +676,7 @@ export function FormulaireAnnonce({
         </TabsContent>}
         
         {/* ===== TAB SAISIE MANUELLE ===== */}        <TabsContent value="manuel" className={editMode ? 'flex-none' : 'mt-3'}>
-          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5">
+          <form onSubmit={handleSubmit(onFormSubmit, onFormError)} className="space-y-5">
             
             {/* ═══════════ SECTION 1 : Informations essentielles ═══════════ */}
             <div className="rounded-xl border border-aquiz-gray-lighter overflow-hidden">
@@ -766,6 +815,42 @@ export function FormulaireAnnonce({
                 <span className="text-sm font-semibold text-aquiz-black">Localisation</span>
               </div>
               <div className="p-5">
+                {/* Recherche d'adresse avec autocomplétion */}
+                <div className="mb-4">
+                  <Label className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium mb-1.5 block">
+                    Rechercher une adresse
+                  </Label>
+                  <SearchAdresse
+                    onSelect={({ lat, lng, label }) => {
+                      // Extraire ville et code postal du label
+                      const parts = label.split(',').map(s => s.trim())
+                      const lastPart = parts[parts.length - 1] || ''
+                      const cpMatch = lastPart.match(/(\d{5})/)
+                      if (cpMatch) {
+                        setValue('codePostal', cpMatch[1])
+                        // Ville = ce qui est après le code postal ou avant
+                        const villeMatch = lastPart.replace(cpMatch[0], '').trim()
+                        if (villeMatch) setValue('ville', villeMatch)
+                      }
+                      // Ville depuis l'avant-dernière partie si nécessaire
+                      if (!watch('ville') && parts.length >= 2) {
+                        setValue('ville', parts[parts.length - 2] || parts[0])
+                      }
+                      // Stocker les coordonnées
+                      extractedCoordsRef.current = { latitude: lat, longitude: lng }
+                      // Stocker l'adresse complète
+                      if (parts.length > 1) {
+                        extractedAdresseRef.current = parts.slice(0, -1).join(', ')
+                      } else {
+                        extractedAdresseRef.current = label
+                      }
+                    }}
+                    placeholder="Taper une adresse, ville ou code postal…"
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-aquiz-gray mt-1">Remplit automatiquement ville, code postal et coordonnées GPS</p>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="ville" className="text-[11px] text-aquiz-gray uppercase tracking-wide font-medium">
@@ -989,6 +1074,17 @@ export function FormulaireAnnonce({
             </details>
             
             {/* ═══════════ BOUTON ═══════════ */}
+            {validationErrors.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 space-y-1">
+                <div className="flex items-center gap-2 font-semibold">
+                  <AlertCircle className="h-4 w-4" />
+                  Veuillez corriger les erreurs suivantes :
+                </div>
+                <ul className="list-disc pl-5 space-y-0.5 text-xs">
+                  {validationErrors.map((msg, i) => <li key={i}>{msg}</li>)}
+                </ul>
+              </div>
+            )}
             <div className="flex gap-3 pt-4 mt-2 border-t border-aquiz-gray-lighter">
               {onCancel && (
                 <Button type="button" variant="outline" onClick={onCancel} className="flex-1 h-11 rounded-xl border-aquiz-gray-lighter text-aquiz-gray hover:text-aquiz-black text-sm">

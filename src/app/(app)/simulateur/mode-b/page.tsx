@@ -83,6 +83,13 @@ export default function ModeBPage() {
   const [dureeAns, setDureeAns] = useState(20)
   const [tauxInteret, setTauxInteret] = useState(3.5)
 
+  // Invalider le cache enrichissement quand les données clés changent
+  // (évite de re-télécharger un rapport avec l'ancienne ville)
+  useEffect(() => {
+    setCachedEnrichissement(null)
+    setPdfEmailSent(false)
+  }, [prixBien, codePostal, nomCommune, typeBien, typeLogement, apport, dureeAns, tauxInteret])
+
   // Calculs en temps réel
   const calculs = useMemo(() => {
     // Frais de notaire
@@ -1728,87 +1735,62 @@ export default function ModeBPage() {
 
               {/* CTA Bonus — Recevez votre étude personnalisée PDF (email capture) */}
               <div id="pdf-gate" className="mt-4 sm:mt-6">
-                <div className="rounded-xl overflow-hidden bg-white border border-aquiz-gray-lighter" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.06)' }}>
-                  <div className="px-4 py-4 sm:px-5 sm:py-5">
-                    <div className="flex items-center gap-2.5 sm:gap-3 mb-3">
-                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                        <FileDown className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-green" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-[13px] sm:text-sm text-aquiz-black leading-tight">
-                          {pdfEmailSent ? 'Étude personnalisée téléchargée !' : 'Votre étude de faisabilité en PDF'}
-                        </h3>
-                        <p className="text-aquiz-gray text-[11px] sm:text-xs leading-tight mt-0.5">
-                          {pdfEmailSent ? 'Vous pouvez la re-télécharger à tout moment.' : 'Tout pour savoir si ce bien est à votre portée — en un document.'}
-                        </p>
-                      </div>
+                <div className="rounded-2xl border border-aquiz-gray-lighter/60 bg-gradient-to-br from-white to-emerald-50/40 p-5 sm:p-6 shadow-sm">
+                  {/* Header */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                      <FileDown className="w-6 h-6 text-aquiz-green" />
                     </div>
-
-                    {!pdfEmailSent && (
-                      <div className="grid grid-cols-2 gap-2 mb-4">
-                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
-                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                          <span className="text-[11px] text-aquiz-black/80">Revenus requis détaillés</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
-                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                          <span className="text-[11px] text-aquiz-black/80">Scores quartier (9 critères)</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
-                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                          <span className="text-[11px] text-aquiz-black/80">Analyse IA + économie estimée</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-emerald-50 rounded-lg px-2.5 sm:px-3 py-2">
-                          <Check className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                          <span className="text-[11px] text-aquiz-black/80">Surface estimée + marché local</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {pdfEmailSent ? (
-                      <Button
-                        type="button"
-                        disabled={pdfLoading}
-                        onClick={async () => {
-                          setPdfLoading(true)
-                          try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
-                        }}
-                        className="w-full h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                      >
-                        {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                        {pdfLoading ? 'Génération…' : 'Re-télécharger mon étude'}
-                      </Button>
-                    ) : (
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
-                            <input
-                              type="email"
-                              value={pdfEmailValue}
-                              onChange={e => setPdfEmailValue(e.target.value)}
-                              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
-                              placeholder="Votre email"
-                              className="w-full h-10 sm:h-11 pl-9 sm:pl-10 pr-3 rounded-xl bg-slate-50 text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            disabled={pdfEmailLoading || !pdfEmailValue.includes('@')}
-                            onClick={handleSendPdfEmail}
-                            className="h-10 sm:h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-bold rounded-xl px-4 sm:px-5 transition-colors shrink-0 flex items-center gap-2"
-                          >
-                            {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                            {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
-                          </Button>
-                        </div>
-                        <div className="flex items-center justify-center gap-4 text-[10px] text-aquiz-gray">
-                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Gratuit, instantané</span>
-                          <span className="flex items-center gap-1"><Check className="w-3 h-3 text-aquiz-green" />Aucun spam</span>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex-1">
+                      <h3 className="font-bold text-base text-aquiz-black">
+                        {pdfEmailSent ? 'Étude de faisabilité téléchargée !' : 'Télécharger votre étude de faisabilité'}
+                      </h3>
+                      <p className="text-aquiz-gray text-xs mt-0.5">
+                        {pdfEmailSent
+                          ? 'Vous pouvez la re-télécharger à tout moment.'
+                          : '6 pages · Faisabilité, revenus requis, scores quartier & analyse IA'}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Action */}
+                  {pdfEmailSent ? (
+                    <button
+                      type="button"
+                      disabled={pdfLoading}
+                      onClick={async () => {
+                        setPdfLoading(true)
+                        try { await generatePDF(cachedEnrichissement ?? undefined) } finally { setPdfLoading(false) }
+                      }}
+                      className="w-full h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2.5 transition-colors shadow-sm"
+                    >
+                      {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <FileDown className="w-4 h-4 text-white" />}
+                      {pdfLoading ? 'Génération…' : 'Re-télécharger mon étude'}
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-aquiz-gray/40" />
+                        <input
+                          type="email"
+                          value={pdfEmailValue}
+                          onChange={e => setPdfEmailValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendPdfEmail() } }}
+                          placeholder="Votre email"
+                          className="w-full h-12 pl-9 sm:pl-10 pr-3 rounded-xl bg-white text-aquiz-black placeholder:text-aquiz-gray/50 text-sm border border-aquiz-gray-lighter focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20 focus:outline-none transition-colors"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
+                        onClick={handleSendPdfEmail}
+                        className="h-12 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-bold rounded-xl px-5 sm:px-6 transition-colors shrink-0 flex items-center gap-2"
+                      >
+                        {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                        {pdfEmailLoading ? 'Analyse…' : 'Recevoir'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
