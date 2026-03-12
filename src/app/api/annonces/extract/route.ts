@@ -2500,7 +2500,9 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
     })
     
     if (!response.ok) {
-      console.warn(`ScrapingBee HTTP ${response.status} pour ${source || url}`)
+      const errBody = await response.text().catch(() => '')
+      const isQuotaExceeded = errBody.includes('limit reached') || response.status === 429
+      console.warn(`ScrapingBee HTTP ${response.status} pour ${source || url}${isQuotaExceeded ? ' ⚠️ QUOTA MENSUEL ÉPUISÉ' : ''}: ${errBody.substring(0, 120)}`)
       return null
     }
     
@@ -2509,6 +2511,26 @@ async function tryScrapingBee(url: string, source: string | null): Promise<Extra
     
     // Pipeline centralisé
     const data: Record<string, unknown> = extractFromHTML(html, url)
+    
+    // Pour les SPA, compléter avec le parsing texte (le HTML seul est bruité)
+    const spaSites = ['leboncoin', 'bienici', 'seloger']
+    if (source !== null && spaSites.includes(source)) {
+      // Extraire le texte visible du HTML (strip tags)
+      const textContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+      const textData = parseTexteAnnonce(textContent)
+      const textRecord = textData as unknown as Record<string, unknown>
+      const mdPriorityFields = ['prix', 'codePostal', 'type', 'ville', 'dpe']
+      for (const [key, value] of Object.entries(textRecord)) {
+        if (value === undefined || value === null || value === 'NC') continue
+        const htmlMissing = data[key] === undefined || data[key] === null || data[key] === 'NC'
+        if (htmlMissing || mdPriorityFields.includes(key)) {
+          data[key] = value
+        }
+      }
+    }
     
     if (!data.prix && !data.surface) return null
     
@@ -2662,16 +2684,17 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
       },
       body: JSON.stringify({
         url,
-        formats: ['markdown', 'html', 'metadata'],
+        formats: ['markdown', 'html'],
         onlyMainContent: false,  // On veut tout le HTML pour JSON-LD
         timeout: 15000,
         waitFor: 2000,           // Attendre 2s pour le JS
       }),
-      signal: AbortSignal.timeout(20000),
+      signal: AbortSignal.timeout(25000),
     })
     
     if (!response.ok) {
-      console.warn('Firecrawl HTTP error:', response.status)
+      const errText = await response.text().catch(() => '')
+      console.warn('Firecrawl HTTP error:', response.status, errText.substring(0, 200))
       return null
     }
     
@@ -2685,19 +2708,44 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
     
     let dataRecord: Record<string, unknown> = { url }
     
+    // Pour les SPA (LeBonCoin, Bien'ici…), le HTML rendu contient du bruit React/Next.js
+    // qui perturbe extractFromHTML (faux prix, faux code postal, faux type).
+    // Le markdown Firecrawl est nettoyé et structuré → source plus fiable pour ces sites.
+    const spaSites = ['leboncoin', 'bienici', 'seloger']
+    const isSPA = source !== null && spaSites.includes(source)
+    
     // Pipeline centralisé sur le HTML si disponible
     if (htmlContent && htmlContent.length > 200) {
       dataRecord = extractFromHTML(htmlContent, url)
+    }
+    
+    // LeBonCoin SPA : le DPE est rendu en HTML avec la lettre active en h-sz-24
+    // (les lettres inactives sont h-sz-16). Extraire DPE + GES.
+    if (htmlContent && isSPA) {
+      const dpeGesMatches = [...htmlContent.matchAll(/h-sz-24[^>]*>\s*([A-G])\s*</gi)]
+      if (dpeGesMatches.length >= 1 && (!dataRecord.dpe || dataRecord.dpe === 'NC')) {
+        dataRecord.dpe = dpeGesMatches[0][1].toUpperCase()
+      }
+      if (dpeGesMatches.length >= 2 && (!dataRecord.ges || dataRecord.ges === 'NC')) {
+        dataRecord.ges = dpeGesMatches[1][1].toUpperCase()
+      }
     }
     
     // Compléter avec le parsing texte du markdown (Firecrawl-spécifique)
     if (texte.length >= 50) {
       const textData = parseTexteAnnonce(texte)
       const textRecord = textData as unknown as Record<string, unknown>
-      // Fusionner sans écraser les données HTML/JSON-LD
+      
+      // Champs critiques où le markdown est plus fiable que le HTML pour les SPA
+      const mdPriorityFields = isSPA
+        ? ['prix', 'codePostal', 'type', 'titre', 'ville']
+        : []
+      
       for (const [key, value] of Object.entries(textRecord)) {
-        if (value !== undefined && value !== null && (dataRecord[key] === undefined || dataRecord[key] === null || dataRecord[key] === 'NC')) {
-          if (value === 'NC') continue
+        if (value === undefined || value === null || value === 'NC') continue
+        const htmlMissing = dataRecord[key] === undefined || dataRecord[key] === null || dataRecord[key] === 'NC'
+        // Pour les SPA : les champs prioritaires du markdown ÉCRASENT le HTML
+        if (htmlMissing || mdPriorityFields.includes(key)) {
           dataRecord[key] = value
         }
       }

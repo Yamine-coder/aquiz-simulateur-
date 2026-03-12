@@ -51,6 +51,9 @@ function nettoyerTexte(texte: string): string {
   return texte
     .replace(/\r\n/g, '\n')
     .replace(/\t/g, ' ')
+    // Normaliser tous les espaces Unicode (insécables, fines, etc.) en espace standard
+    // Couvre: \u00A0 (NBSP), \u202F (NNBSP), \u2007 (figure space), \u2009 (thin), etc.
+    .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2002\u2003\u2004\u2005\u2006\u2008]/g, ' ')
     .replace(/ {2,}/g, ' ')
     .trim()
 }
@@ -299,7 +302,26 @@ function extraireChambres(texte: string): number | undefined {
 }
 
 function extraireType(texte: string): TypeBienAnnonce {
+  // 1. Patterns contextuels (label + valeur : le plus fiable)
+  const contextPatterns = [
+    // "Type de bien\n\nAppartement" (LeBonCoin markdown multiline)
+    /type\s*(?:de\s*)?bien\s*[:\n]\s*\[?\s*(appartement|maison|studio|loft|duplex|villa|pavillon)/i,
+    // "Type : Appartement"
+    /type\s*:\s*(appartement|maison|studio|loft|duplex|villa|pavillon)\b/i,
+  ]
+  for (const p of contextPatterns) {
+    const m = texte.match(p)
+    if (m) {
+      const val = m[1].toLowerCase()
+      if (/maison|villa|pavillon/.test(val)) return 'maison'
+      return 'appartement'
+    }
+  }
+
+  // 2. Détection générique — exclure le bruit de navigation ("Maison & Jardin", etc.)
   const lower = texte.toLowerCase()
+    .replace(/maison\s*&\s*jardin/g, '')
+    .replace(/maison\s*et\s*jardin/g, '')
   // Maison a priorité dans la détection (plus spécifique)
   if (/\bmaison\b|\bvilla\b|\bpavillon\b|\bcorps\s+de\s+ferme\b|\blongère|\bchalet\b|\bpropriété/.test(lower)) return 'maison'
   // Si on mentionne explicitement un type d'appartement
@@ -634,6 +656,8 @@ function extraireEtagesTotal(texte: string): number | undefined {
     // "2ème étage sur 5" (SeLoger format — no "étages" word after the total)
     /\d+(?:er?|e|ème)?\s*étage\s+sur\s+(\d+)/i,
     /(?:nombre\s*d'?étages?|étages?\s*total)\s*:?\s*(\d+)/i,
+    // LeBonCoin markdown : "Nombre d'étages dans l'immeuble\n\n11"
+    /nombre\s*d['’]?[ée]tages?\s+(?:dans\s+l['’]?immeuble)?[\s:]*(\d+)/i,
     // "8/9 étages" generic
     /\d+\s*\/\s*(\d+)\s*étages?/i,
     // "Étage : 5 / 8" — étage courant / total
@@ -782,6 +806,8 @@ function extraireDescription(texte: string): string | undefined {
 
 function extraireEtage(texte: string): number | undefined {
   const patterns = [
+    // LeBonCoin markdown multiline : "Étage de votre bien\n\n9" ou "Étage\n\n5"
+    /[ée]tage\s+(?:de\s+)?(?:votre\s+|ce\s+|le\s+)?bien[\s:]*\n\s*\n?\s*(\d+)/i,
     // [ \t]* au lieu de \s* pour ne pas croiser les lignes
     // ("Chambres : 2\nÉtage" → empêche de capturer 2)
     /(\d+)(?:er?|e|ème)?[ \t]*étage/i,
@@ -802,6 +828,8 @@ function extraireEtage(texte: string): number | undefined {
 
 function extraireCharges(texte: string): number | undefined {
   const patterns = [
+    // LeBonCoin markdown : "Charges annuelles de copropriété\n\n2 880 € par / an"
+    /charges?\s+annuelles?\s+(?:de\s+)?copropri[ée]t[ée][\s:]*\n?\s*(\d[\d\s]*)\s*€/i,
     /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)?\s*(?:\/\s*(?:an|mois))?/i,
     /charges?\s*mensuelles?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
     /provisions?\s*sur\s*charges?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
@@ -881,10 +909,16 @@ function extraireEquipements(texte: string) {
 }
 
 function extraireTitre(texte: string): string | undefined {
-  // Prendre la première ligne non vide qui ressemble à un titre
+  // 1. Markdown H1 heading (Firecrawl)
+  const h1Match = texte.match(/^#\s+(.+)$/m)
+  if (h1Match && /appartement|maison|studio|loft|duplex|villa|pièces?|chambres?|T\d|F\d/i.test(h1Match[1]) && h1Match[1].length < 200) {
+    return h1Match[1].trim().substring(0, 200)
+  }
+
+  // 2. Prendre la première ligne non vide qui ressemble à un titre
   const lignes = texte.split('\n').map(l => l.trim()).filter(l => l.length > 0)
   
-  for (const ligne of lignes.slice(0, 10)) {
+  for (const ligne of lignes.slice(0, 15)) {
     // Cherche une ligne qui contient des mots-clés immobiliers
     if (/appartement|maison|studio|loft|duplex|villa|pièces?|chambres?|T\d|F\d/i.test(ligne) && ligne.length < 200) {
       return ligne.substring(0, 200)
