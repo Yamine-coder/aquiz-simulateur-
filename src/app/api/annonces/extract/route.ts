@@ -67,54 +67,6 @@ const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouest
 
 /** Sites protégés par anti-bot lourd (DataDome, Cloudflare) ou SPA → Playwright en priorité */
 const SITES_CHROME_FIRST = ['logic-immo', 'foncia', 'nexity']
-
-/**
- * Fetch via proxy ScrapingBee sur Vercel (IP datacenter bloquées par les sites immo).
- * En local → fetch normal. Sur Vercel → route via ScrapingBee render_js=false (~10 crédits).
- * Permet aux appels API JSON (LeBonCoin, SeLoger) de fonctionner depuis Vercel.
- */
-async function proxyFetch(
-  url: string,
-  options?: {
-    headers?: Record<string, string>
-    timeoutMs?: number
-    usePremiumProxy?: boolean
-  }
-): Promise<Response> {
-  const scrapingBeeKey = process.env.SCRAPINGBEE_API_KEY
-
-  // En local ou sans clé ScrapingBee → fetch direct
-  if (!IS_VERCEL || !scrapingBeeKey) {
-    return fetch(url, {
-      headers: options?.headers,
-      signal: AbortSignal.timeout(options?.timeoutMs ?? 10000),
-    })
-  }
-
-  // Sur Vercel → proxy via ScrapingBee (IP résidentielle FR)
-  const params = new URLSearchParams({
-    api_key: scrapingBeeKey,
-    url,
-    render_js: 'false',
-    premium_proxy: String(options?.usePremiumProxy ?? true),
-    country_code: 'fr',
-  })
-
-  // Forward custom headers via le mécanisme Spb- de ScrapingBee
-  const proxyHeaders: Record<string, string> = {}
-  if (options?.headers) {
-    params.set('forward_headers', 'true')
-    for (const [key, value] of Object.entries(options.headers)) {
-      proxyHeaders[`Spb-${key}`] = value
-    }
-  }
-
-  console.log(`🔀 proxyFetch via ScrapingBee: ${url.substring(0, 80)}`)
-  return fetch(`https://app.scrapingbee.com/api/v1/?${params}`, {
-    headers: Object.keys(proxyHeaders).length > 0 ? proxyHeaders : undefined,
-    signal: AbortSignal.timeout(options?.timeoutMs ?? 15000),
-  })
-}
 export async function POST(request: NextRequest) {
   // ── Global cascade timeout (55s — under Vercel's 60s Pro limit) ──
   const GLOBAL_TIMEOUT_MS = 55_000
@@ -292,34 +244,48 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // NIVEAU 1 : APIs internes (GRATUIT, JSON, le plus fiable)
     // Chaque grand site FR a une API propriétaire qu'on appelle directement
     // → Bypass total des protections anti-bot
+    //
+    // ⚠️ Sur Vercel, les IP datacenter AWS sont bloquées par les grands
+    // sites (LeBonCoin, SeLoger, PAP…). Les appels API échouent ou
+    // retournent des pages challenge → on skip directement à ScrapingBee
+    // (Level 5) qui utilise des IP résidentielles + Chrome rendering.
     // ═══════════════════════════════════════════════════════
-    if (source === 'seloger') {
-      extractionResult = await trySeLogerAPI(url)
+    const isPremiumSite = source !== null && PREMIUM_PROXY_SITES.includes(source)
+    const vercelSkipToScrapingBee = IS_VERCEL && isPremiumSite
+    
+    if (vercelSkipToScrapingBee) {
+      console.log(`⚡ Vercel: ${source} → skip niveaux 1-4, direct ScrapingBee (IP datacenter bloquée)`)
     }
-    if (!extractionResult && source === 'leboncoin') {
-      extractionResult = await tryLeBonCoinAPI(url)
-    }
-    if (!extractionResult && source === 'bienici') {
-      extractionResult = await tryBienIciAPI(url)
-    }
-    if (!extractionResult && source === 'laforet') {
-      extractionResult = await tryLaforetAPI(url)
-    }
-    if (!extractionResult && source === 'orpi') {
-      extractionResult = await tryOrpiAPI(url)
-    }
-    if (!extractionResult && source === 'century21') {
-      extractionResult = await tryCentury21(url)
-    }
-    if (!extractionResult && (source === 'guyhoquet' || source === 'stephaneplaza')) {
-      extractionResult = await tryAgenceHTML(url, source)
+    
+    if (!vercelSkipToScrapingBee) {
+      if (source === 'seloger') {
+        extractionResult = await trySeLogerAPI(url)
+      }
+      if (!extractionResult && source === 'leboncoin') {
+        extractionResult = await tryLeBonCoinAPI(url)
+      }
+      if (!extractionResult && source === 'bienici') {
+        extractionResult = await tryBienIciAPI(url)
+      }
+      if (!extractionResult && source === 'laforet') {
+        extractionResult = await tryLaforetAPI(url)
+      }
+      if (!extractionResult && source === 'orpi') {
+        extractionResult = await tryOrpiAPI(url)
+      }
+      if (!extractionResult && source === 'century21') {
+        extractionResult = await tryCentury21(url)
+      }
+      if (!extractionResult && (source === 'guyhoquet' || source === 'stephaneplaza')) {
+        extractionResult = await tryAgenceHTML(url, source)
+      }
     }
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 1.5 : Chrome stealth (pour sites très protégés sans API)
     // Uniquement Logic-Immo et sites DataDome/Cloudflare sans API connue
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && source && SITES_CHROME_FIRST.includes(source)) {
+    if (!extractionResult && !vercelSkipToScrapingBee && source && SITES_CHROME_FIRST.includes(source)) {
       extractionResult = await tryPlaywrightChrome(url, source)
       triedChrome = true
     }
@@ -327,21 +293,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // SeLoger Neuf fast-fail en amont (L225-235) → pas besoin de retry Chrome ici
     
     // ── Délai aléatoire entre stratégies ──
-    if (!extractionResult) await randomDelay(500, 1500)
-    
-    // ══════════════════════════════════════════════════════════════
-    // FAST-TRACK VERCEL : sur Vercel, les IP datacenter (AWS) sont
-    // bloquées par LeBonCoin, SeLoger, PAP, etc. Les niveaux 2-4
-    // (fetch direct, Jina, Google Cache, Playwright) échoueront
-    // aussi → on saute directement à ScrapingBee (Level 5) pour
-    // ne pas gaspiller 30s de timeout inutile.
-    // ══════════════════════════════════════════════════════════════
-    const isPremiumSite = source !== null && PREMIUM_PROXY_SITES.includes(source)
-    const skipIntermediateLevels = IS_VERCEL && isPremiumSite && !extractionResult
-    
-    if (skipIntermediateLevels) {
-      console.log(`⚡ Vercel fast-track: ${source} → skip niveaux 2-4, direct ScrapingBee`)
-    }
+    if (!extractionResult && !vercelSkipToScrapingBee) await randomDelay(500, 1500)
     
     // ── Circuit breaker : si ce domaine bloque trop, on skip les fetch directs ──
     const circuitOpen = isDomainCircuitOpen(url)
@@ -351,17 +303,17 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Fonctionne pour tout site sans protection anti-bot :
     // Century21, ParuVendu, agences indépendantes, etc.
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !circuitOpen && !skipIntermediateLevels) {
+    if (!extractionResult && !circuitOpen && !vercelSkipToScrapingBee) {
       extractionResult = await tryDirectFetch(url, source)
     }
     
     // ── Délai aléatoire ──
-    if (!extractionResult && !skipIntermediateLevels) await randomDelay(500, 1500)
+    if (!extractionResult && !vercelSkipToScrapingBee) await randomDelay(500, 1500)
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 3 : Jina Reader (extraction texte IA, gratuit)
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !skipIntermediateLevels) {
+    if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await tryJinaReader(url, source)
     }
     
@@ -369,26 +321,26 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // NIVEAU 4 : Fallbacks gratuits
     // Google Cache → Playwright fallback → Proxies → Archive.org
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !skipIntermediateLevels) {
+    if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await tryGoogleCache(url, source)
     }
     
-    if (!extractionResult && !triedChrome && !skipIntermediateLevels) {
+    if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee) {
       await randomDelay(1000, 2500)
       extractionResult = await tryPlaywrightChrome(url, source)
     }
     
-    if (!extractionResult && !skipIntermediateLevels) {
+    if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await tryFreeProxies(url, source)
     }
     
-    if (!extractionResult && !skipIntermediateLevels) {
+    if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await tryArchiveOrg(url, source)
     }
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 5 : Services payants (optionnels, dernier recours)
-    // Sur Vercel + sites premium : c'est le premier fallback réel
+    // Sur Vercel + sites premium : c'est le SEUL niveau exécuté
     // ═══════════════════════════════════════════════════════
     if (!extractionResult) {
       extractionResult = await tryScrapingBee(url, source)
@@ -972,10 +924,9 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
         'Sec-Fetch-Site': 'same-site',
     }
     if (process.env.LEBONCOIN_API_KEY) lbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
-    const response = await proxyFetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
+    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
       headers: lbcHeaders,
-      timeoutMs: 15000,
-      usePremiumProxy: true,
+      signal: AbortSignal.timeout(10000),
     })
     
     if (!response.ok) {
@@ -1038,10 +989,9 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
             'Origin': 'https://www.leboncoin.fr',
         }
         if (process.env.LEBONCOIN_API_KEY) fbHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
-        const response = await proxyFetch(endpoint, {
+        const response = await fetch(endpoint, {
           headers: fbHeaders,
-          timeoutMs: 15000,
-          usePremiumProxy: true,
+          signal: AbortSignal.timeout(10000),
         })
 
         if (response.ok) {
@@ -1123,12 +1073,11 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
     }
 
     // ── Endpoint listings classique (SeLoger, pas SeLoger Neuf) ──
-    const response = await proxyFetch(
+    const response = await fetch(
       `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`,
       {
-        headers: baseHeaders as Record<string, string>,
-        timeoutMs: 15000,
-        usePremiumProxy: true,
+        headers: baseHeaders,
+        signal: AbortSignal.timeout(12000),
       }
     )
 
@@ -1185,7 +1134,7 @@ async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | 
       return null
     }
 
-    const response = await proxyFetch(
+    const response = await fetch(
       `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`,
       {
         headers: {
@@ -1195,8 +1144,7 @@ async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | 
           'X-App-Version': '12.2.0',
           'X-Device-Type': 'android',
         },
-        timeoutMs: 15000,
-        usePremiumProxy: true,
+        signal: AbortSignal.timeout(12000),
       }
     )
 
@@ -1210,15 +1158,14 @@ async function trySeLogerAPIFallback(url: string): Promise<ExtractionResponse | 
 
     // Strategy B : Essayer l'endpoint /api/v2/ (parfois disponible)
     try {
-      const v2Response = await proxyFetch(
+      const v2Response = await fetch(
         `https://api-seloger.svc.groupe-seloger.com/api/v2/listings/${adId}`,
         {
           headers: {
             'User-Agent': androidUA,
             'Accept': 'application/json',
           },
-          timeoutMs: 12000,
-          usePremiumProxy: true,
+          signal: AbortSignal.timeout(8000),
         }
       )
       if (v2Response.ok) {
