@@ -70,7 +70,7 @@ const annonceSchema = z.object({
   notes: z.string().max(1000).optional(),
   imageUrl: z.string().url().optional().or(z.literal('')),
   ges: z.enum(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'NC'] as const).optional(),
-  description: z.string().max(1000).optional(),
+  description: z.string().max(10_000).optional(),
   anneeConstruction: z.union([z.number().min(1800).max(2030), z.nan()]).optional().nullable(),
   nbSallesBains: z.union([z.number().min(0).max(10), z.nan()]).optional().nullable(),
   orientation: z.string().max(30).optional(),
