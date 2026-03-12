@@ -1336,58 +1336,62 @@ function ModeAPageContent() {
                           </div>
                         </div>
                         
-                        {/* Taux d'intérêt — mis en avant */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-1.5">
-                            <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt estimé</Label>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
-                                  <Info className="w-4 h-4" />
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="center" collisionPadding={16} className="max-w-72 text-xs leading-relaxed">
-                                <p className="font-semibold mb-1.5">Taux moyens constatés (janv. 2026)</p>
-                                <ul className="space-y-1">
-                                  <li><strong>3.0%</strong> — Profil premium : CDI cadre, revenus élevés, apport 20%+</li>
-                                  <li><strong>3.2%</strong> — Très bon profil : CDI stable, bon apport</li>
-                                  <li><strong>3.5%</strong> — Taux moyen du marché (tous profils)</li>
-                                  <li><strong>3.8%</strong> — Profil standard : peu d&apos;apport ou CDD</li>
-                                  <li><strong>4.0%</strong> — Profil à risques : intérimaire, découverts</li>
-                                </ul>
-                                <p className="mt-1.5 text-aquiz-gray">Source : Observatoire Crédit Logement / CSA</p>
-                              </TooltipContent>
-                            </Tooltip>
+                        {/* Taux d'intérêt — jauge colorée comme Mode B */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-1.5">
+                              <Label className="text-sm font-medium text-aquiz-gray-dark">Taux d&apos;intérêt estimé</Label>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
+                                    <Info className="w-4 h-4" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" align="center" collisionPadding={16} className="max-w-72 text-xs leading-relaxed">
+                                  <p className="font-semibold mb-1.5">Taux moyens constatés (T1 2026)</p>
+                                  <ul className="space-y-1">
+                                    <li><strong>3.0%</strong> — Profil premium : CDI cadre, revenus élevés, apport 20%+</li>
+                                    <li><strong>3.2%</strong> — Très bon profil : CDI stable, bon apport</li>
+                                    <li><strong>3.5%</strong> — Taux moyen du marché (tous profils)</li>
+                                    <li><strong>3.8%</strong> — Profil standard : peu d&apos;apport ou CDD</li>
+                                    <li><strong>4.0%</strong> — Profil à risques : intérimaire, découverts</li>
+                                  </ul>
+                                  <p className="mt-1.5 text-aquiz-gray">Source : Observatoire Crédit Logement / CSA</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </div>
+                            <span className={`text-sm font-bold tabular-nums px-2.5 py-1 rounded-md ${
+                              tauxInteret <= 3.2 ? 'bg-emerald-50 text-emerald-700' :
+                              tauxInteret <= 3.5 ? 'bg-aquiz-green/10 text-aquiz-green' :
+                              tauxInteret <= 3.7 ? 'bg-amber-50 text-amber-700' :
+                              'bg-red-50 text-red-600'
+                            }`}>{tauxInteret.toFixed(1)}%</span>
                           </div>
-                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2">
-                            {[
-                              { value: '3.0', label: '3.0%', sub: 'Excellent' },
-                              { value: '3.2', label: '3.2%', sub: 'Très bon' },
-                              { value: '3.5', label: '3.5%', sub: 'Moyen' },
-                              { value: '3.8', label: '3.8%', sub: 'Standard' },
-                              { value: '4.0', label: '4.0%', sub: 'Risque' },
-                            ].map((t) => (
-                              <button
-                                key={t.value}
-                                type="button"
-                                onClick={() => setValue('tauxInteret', parseFloat(t.value))}
-                                className={`relative p-2 sm:p-3 rounded-xl border-2 text-center transition-all ${
-                                  tauxInteret.toFixed(1) === t.value
-                                    ? 'border-aquiz-green bg-aquiz-green/5 shadow-sm'
-                                    : 'border-aquiz-gray-lighter hover:border-aquiz-gray-light bg-white'
-                                }`}
-                              >
-                                <span className="block text-sm sm:text-base font-bold text-aquiz-black">{t.label}</span>
-                                <span className="block text-[9px] sm:text-[10px] text-aquiz-gray mt-0.5">{t.sub}</span>
-                                {tauxInteret.toFixed(1) === t.value && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-aquiz-green rounded-full flex items-center justify-center">
-                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </button>
-                            ))}
+                          <div className="relative">
+                            <div
+                              className="absolute inset-0 h-1.5 top-1/2 -translate-y-1/2 rounded-full pointer-events-none"
+                              style={{ background: 'linear-gradient(to right, #059669, #34d399, #fbbf24, #f87171)' }}
+                            />
+                            {/* Marqueur taux moyen 3.5% */}
+                            <div className="absolute top-1/2 -translate-y-1/2 pointer-events-none" style={{ left: '50%' }}>
+                              <div className="w-0.5 h-4 bg-aquiz-gray-dark/40 rounded-full -translate-x-1/2" />
+                            </div>
+                            <Slider
+                              value={[tauxInteret * 10]}
+                              onValueChange={(v) => setValue('tauxInteret', v[0] / 10)}
+                              min={30}
+                              max={40}
+                              step={1}
+                              className="w-full **:data-[slot=slider-track]:bg-transparent **:data-[slot=slider-range]:bg-transparent"
+                            />
+                          </div>
+                          <div className="flex justify-between items-start text-xs">
+                            <span className="text-emerald-600 font-medium">3.0%</span>
+                            <span className="text-aquiz-gray text-[10px] -mt-0.5 flex flex-col items-center">
+                              <span>▲</span>
+                              <span>Taux moyen 3.5%</span>
+                            </span>
+                            <span className="text-red-500 font-medium">4.0%</span>
                           </div>
                         </div>
                         

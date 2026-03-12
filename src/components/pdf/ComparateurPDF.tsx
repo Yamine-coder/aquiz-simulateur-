@@ -950,6 +950,9 @@ export function ComparateurPDF({
   apport,
 }: ComparateurPDFProps) {
   void _bm
+  // Fallback taux / durée si l'utilisateur n'a pas rempli de simulation
+  const effectiveTaux = tauxInteret ?? 3.5
+  const effectiveDuree = dureeAns ?? 20
   const sorted = [...annonces].sort((a, b) => a.rang - b.rang)
   const n = sorted.length
   const best = sorted[0]
@@ -1180,11 +1183,11 @@ export function ComparateurPDF({
               { label: 'Surface', values: sorted.map(a => `${a.surface} m²`), highlightMax: sorted.map(a => a.surface) },
               { label: 'Prix / m²', values: sorted.map(a => `${fmt(a.prixM2)} €/m²`), highlightMin: sorted.map(a => a.prixM2) },
               { label: 'Pièces', values: sorted.map(a => `${a.pieces} pièces`) },
-              ...(tauxInteret !== undefined && dureeAns ? [{
-                label: `Mensualité (${dureeAns} ans)`,
-                values: sorted.map(a => `${fmt(calculerMensualite(a.prix, apport || 0, tauxInteret, dureeAns))} €/mois`),
-                highlightMin: sorted.map(a => calculerMensualite(a.prix, apport || 0, tauxInteret, dureeAns)),
-              }] : []),
+              {
+                label: `Mensualité (${effectiveDuree} ans)`,
+                values: sorted.map(a => `${fmt(calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree))} €/mois`),
+                highlightMin: sorted.map(a => calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree)),
+              },
             ].map((row, idx) => {
               const minVal = row.highlightMin ? Math.min(...row.highlightMin) : undefined
               const maxVal = (row as Record<string, unknown>).highlightMax ? Math.max(...((row as Record<string, unknown>).highlightMax as number[])) : undefined
@@ -1263,7 +1266,7 @@ export function ComparateurPDF({
             </View>
 
             {/* Rendement locatif row */}
-            {sorted.some(a => a.estimations?.rendementBrut) && (
+            {sorted.some(a => a.estimations?.rendementBrut != null) && (
               <View style={{
                 flexDirection: 'row',
                 paddingVertical: 7,
@@ -1276,9 +1279,13 @@ export function ComparateurPDF({
                 </View>
                 {sorted.map(a => (
                   <View key={a.id} style={{ flex: 1, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: a.estimations?.rendementBrut ? C.greenDark : C.grayLight }}>
-                      {a.estimations?.rendementBrut ? `${a.estimations.rendementBrut.toFixed(1)} %` : '—'}
-                    </Text>
+                    {a.dpe === 'G' ? (
+                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.red }}>Interdit (G)*</Text>
+                    ) : (
+                      <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: (a.estimations?.rendementBrut ?? 0) > 0 ? C.greenDark : C.grayLight }}>
+                        {a.estimations?.rendementBrut != null ? `${a.estimations.rendementBrut.toFixed(1)} %` : '—'}
+                      </Text>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1365,449 +1372,192 @@ export function ComparateurPDF({
       </Page>
 
       {/* ══════════════════════════════════════════
-          PAGES 2+N — ANALYSE DÉTAILLÉE PAR BIEN
+          PAGE — ANALYSE DÉTAILLÉE (toutes les annonces)
           ══════════════════════════════════════════ */}
-      {sorted.map((annonce, pageIdx) => {
-        const avantages = annonce.points.filter(p => p.type === 'avantage')
-        const attentions = annonce.points.filter(p => p.type === 'attention')
+      <Page size="A4" style={s.pageWithFixedHeader}>
+        <FixedHeader logoUrl={logoUrl} nbBiens={n} />
+        <View style={[s.content, { marginTop: 52 }]}>
 
-        return (
-          <Page key={annonce.id} size="A4" style={s.pageWithFixedHeader}>
-            <FixedHeader logoUrl={logoUrl} nbBiens={n} />
-            <View style={[s.content, { marginTop: 52 }]}>
+          <View style={{ marginTop: 4 }}>
+            <SectionTitle title="3. ANALYSE DÉTAILLÉE" />
+          </View>
 
-              <View style={{ marginTop: 6 }}>
-                <SectionTitle title={`3. ANALYSE DÉTAILLÉE — BIEN N°${pageIdx + 1}`} />
-              </View>
+          {sorted.map((annonce, idx) => {
+            const avantages = annonce.points.filter(p => p.type === 'avantage').slice(0, 3)
+            const attentions = annonce.points.filter(p => p.type === 'attention').slice(0, 3)
 
-              {/* ── Header bien : carte bordée ── */}
-              <View style={{
-                marginTop: 6,
+            // Build transport lines map (Mode B style — inline pastilles)
+            const transportLinesMap: Record<string, string[]> = {}
+            if (annonce.enrichissement?.quartier?.transportsProches) {
+              for (const tp of annonce.enrichissement.quartier.transportsProches) {
+                if (!tp.lignes || tp.lignes.length === 0) continue
+                if (tp.typeTransport === 'bus' || tp.typeTransport === 'velo') continue
+                const cleaned = tp.lignes
+                  .map(l => l.split(':')[0].split(' ')[0].trim())
+                  .filter(Boolean)
+                const uniq = [...new Set(cleaned)]
+                for (const l of uniq) {
+                  if (!transportLinesMap[tp.typeTransport]) transportLinesMap[tp.typeTransport] = []
+                  if (!transportLinesMap[tp.typeTransport].includes(l)) transportLinesMap[tp.typeTransport].push(l)
+                }
+              }
+            }
+            const hasTransportLines = Object.keys(transportLinesMap).length > 0
+
+            return (
+              <View key={annonce.id} style={{
+                marginTop: idx > 0 ? 8 : 4,
                 backgroundColor: C.white,
-                borderRadius: 6,
+                borderRadius: 5,
                 borderWidth: 1,
                 borderColor: C.grayBorder,
                 overflow: 'hidden',
-              }}>
-                {/* Barre supérieure colorée */}
-                <View style={{ height: 3, backgroundColor: getScoreColor(annonce.scoreGlobal) }} />
+              }} wrap={false}>
+                {/* Color bar top */}
+                <View style={{ height: 2.5, backgroundColor: getScoreColor(annonce.scoreGlobal) }} />
 
-                <View style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 12,
-                }}>
-                  {/* Score circle */}
-                  <View style={{ alignItems: 'center', position: 'relative', flexShrink: 0 }}>
-                    <View style={{
-                      width: 46,
-                      height: 46,
-                      borderRadius: 23,
-                      borderWidth: 2.5,
-                      borderColor: getScoreColor(annonce.scoreGlobal),
-                      backgroundColor: getScoreBg(annonce.scoreGlobal),
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      <Text style={{ fontSize: 20, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal) }}>
-                        {annonce.scoreGlobal}
-                      </Text>
-                      <Text style={{ fontSize: 5, color: getScoreColor(annonce.scoreGlobal), marginTop: -2 }}>/100</Text>
-                    </View>
-                    <View style={{
-                      position: 'absolute',
-                      top: -3,
-                      right: -3,
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: annonce.rang === 1 ? C.green : C.gray,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      borderWidth: 1.5,
-                      borderColor: C.white,
-                    }}>
-                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>
-                        {annonce.rang}
-                      </Text>
-                    </View>
+                {/* ── Header compact: rang + titre + prix ── */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 7, paddingBottom: 5 }}>
+                  {/* Rang badge */}
+                  <View style={{
+                    width: 18, height: 18, borderRadius: 9,
+                    backgroundColor: getScoreColor(annonce.scoreGlobal),
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>{annonce.rang}</Text>
                   </View>
-
+                  {/* Title + ville */}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
                       {cleanTitle(annonce)} — {cleanVille(annonce.ville)} ({annonce.codePostal})
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 }}>
-                      <Text style={{ fontSize: 7, color: C.gray }}>
-                        Score AQUIZ : {annonce.scoreGlobal} / 100
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                      <Text style={{ fontSize: 6, color: C.gray }}>
+                        {annonce.surface} m² · {annonce.pieces} p · {fmt(annonce.prixM2)} EUR/m²
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                        <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
-                        <Text style={{ fontSize: 7, color: C.gray }}>{fmt(annonce.prixM2)} EUR/m2</Text>
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
                       <View style={{
                         backgroundColor: getOpportuniteBg(annonce.scoreGlobal),
-                        borderRadius: 3,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
+                        borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1,
                       }}>
-                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: getOpportuniteColor(annonce.scoreGlobal) }}>
-                          Indice opportunite : {getOpportuniteLabel(annonce.scoreGlobal)}
+                        <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: getOpportuniteColor(annonce.scoreGlobal) }}>
+                          {getOpportuniteLabel(annonce.scoreGlobal)}
                         </Text>
                       </View>
                     </View>
                   </View>
-                </View>
-              </View>
-
-              {/* ── Points forts + Points de vigilance ── */}
-              <View style={{
-                marginTop: 8,
-                backgroundColor: C.white,
-                borderRadius: 6,
-                borderWidth: 1,
-                borderColor: C.grayBorder,
-                overflow: 'hidden',
-              }}>
-                <View style={{ flexDirection: 'row' }}>
-                  {/* Points forts */}
-                  <View style={{
-                    flex: 1,
-                    padding: 10,
-                    borderRightWidth: 1,
-                    borderRightColor: C.grayBorder,
-                  }}>
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 6 }}>
-                      Points forts
+                  {/* Score + Price */}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
+                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal), marginTop: 1 }}>
+                      Score : {annonce.scoreGlobal}/100
                     </Text>
-                    {avantages.slice(0, 5).map((p, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 5, marginBottom: 4 }}>
-                        <Text style={{ fontSize: 7.5, color: C.green }}>+</Text>
-                        <Text style={{ fontSize: 7, color: C.black, flex: 1, lineHeight: 1.5 }}>{p.texte}</Text>
+                  </View>
+                </View>
+
+                {/* ── Points forts + vigilance (2 columns, compact) ── */}
+                <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                  <View style={{ flex: 1, padding: 6, borderRightWidth: 0.5, borderRightColor: C.grayBorder }}>
+                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 3 }}>Points forts</Text>
+                    {avantages.map((p, i) => (
+                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 2 }}>
+                        <Text style={{ fontSize: 6, color: C.green }}>+</Text>
+                        <Text style={{ fontSize: 5.5, color: C.black, flex: 1, lineHeight: 1.4 }}>{p.texte}</Text>
                       </View>
                     ))}
-                    {avantages.length === 0 && (
-                      <Text style={{ fontSize: 6.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun point fort identifie</Text>
-                    )}
+                    {avantages.length === 0 && <Text style={{ fontSize: 5.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun</Text>}
                   </View>
-                  {/* Points de vigilance */}
-                  <View style={{ flex: 1, padding: 10 }}>
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: '#92400e', marginBottom: 6 }}>
-                      Points de vigilance
-                    </Text>
-                    {attentions.slice(0, 5).map((p, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 5, marginBottom: 4 }}>
-                        <Text style={{ fontSize: 7.5, color: C.orange }}>!</Text>
-                        <Text style={{ fontSize: 7, color: C.black, flex: 1, lineHeight: 1.5 }}>{p.texte}</Text>
+                  <View style={{ flex: 1, padding: 6 }}>
+                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#92400e', marginBottom: 3 }}>Vigilance</Text>
+                    {attentions.map((p, i) => (
+                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 2 }}>
+                        <Text style={{ fontSize: 6, color: C.orange }}>!</Text>
+                        <Text style={{ fontSize: 5.5, color: C.black, flex: 1, lineHeight: 1.4 }}>{p.texte}</Text>
                       </View>
                     ))}
-                    {attentions.length === 0 && (
-                      <Text style={{ fontSize: 6.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun point de vigilance</Text>
-                    )}
+                    {attentions.length === 0 && <Text style={{ fontSize: 5.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun</Text>}
                   </View>
                 </View>
-              </View>
 
-              {/* ── Avis AQUIZ — carte style synthèse ── */}
-              {annonce.conseilPerso && (
-                <View style={{
-                  marginTop: 8,
-                  backgroundColor: C.white,
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: C.grayBorder,
-                  overflow: 'hidden',
-                }}>
-                  <View style={{
-                    backgroundColor: C.grayBg,
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderBottomWidth: 1,
-                    borderBottomColor: C.grayBorder,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}>
-                    <View style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: 8,
-                      backgroundColor: C.green,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
-                    </View>
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black }}>Avis AQUIZ</Text>
-                  </View>
-                  <View style={{ padding: 12 }}>
-                    <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.7 }}>
-                      {annonce.conseilPerso}
-                    </Text>
-                  </View>
-                </View>
-              )}
+                {/* ── Chiffres clés commune + transport pastilles ── */}
+                {(() => {
+                  const ci = annonce.enrichissement?.communeInfos
+                  const counts = ci?.counts ?? annonce.enrichissement?.quartier?.counts
+                  const items: { label: string; value: string }[] = []
 
-              {/* ── Chiffres clés commune (pleine largeur) ── */}
-              {(annonce.enrichissement?.communeInfos?.success || annonce.enrichissement?.communeInfos?.counts || annonce.enrichissement?.quartier?.counts) && (() => {
-                const ci = annonce.enrichissement?.communeInfos
-                // Préférer les counts commune-entière, fallback sur quartier (800m)
-                const counts = annonce.enrichissement?.communeInfos?.counts ?? annonce.enrichissement?.quartier?.counts
-                const items: { label: string; value: string }[] = []
+                  if (ci?.revenuMensuel) items.push({ label: 'Revenu médian', value: `${fmt(ci.revenuMensuel)} EUR/mois` })
+                  if (counts?.education) items.push({ label: 'Écoles', value: `${counts.education}` })
+                  if (counts?.commerce) items.push({ label: 'Commerces', value: `${counts.commerce}` })
+                  if (counts?.sante) items.push({ label: 'Santé', value: `${counts.sante}` })
+                  if (counts?.loisirs) items.push({ label: 'Loisirs', value: `${counts.loisirs}` })
+                  if (counts?.transport) items.push({ label: 'Transports', value: `${counts.transport}` })
 
-                if (ci?.revenuMensuel) items.push({ label: 'Revenu médian', value: `${fmt(ci.revenuMensuel)} EUR / mois` })
-                if (counts?.education) items.push({ label: 'Écoles et crèches', value: `${counts.education}` })
-                if (ci?.densitePopulation) items.push({ label: 'Densité de pop.', value: `${fmt(ci.densitePopulation)} hab / km²` })
-                if (counts?.commerce) items.push({ label: 'Commerces', value: `${counts.commerce}` })
-                if (counts?.transport) {
-                  const surfKm2 = ci?.surfaceKm2
-                  if (surfKm2 && surfKm2 > 0) {
-                    const density = Math.round(counts.transport / surfKm2)
-                    items.push({ label: 'Transport', value: `${density} stations / km²` })
-                  } else {
-                    items.push({ label: 'Transport', value: `${counts.transport} arrêts` })
-                  }
-                }
-                if (counts?.sante) items.push({ label: 'Santé', value: `${counts.sante}` })
-                if (ci?.ensoleillement) items.push({ label: 'Ensoleillement', value: `${fmt(ci.ensoleillement)} h / an` })
-                if (counts?.loisirs) items.push({ label: 'Terrains de sport', value: `${counts.loisirs}` })
+                  const hasChiffres = items.length > 0
+                  if (!hasChiffres && !hasTransportLines) return null
 
-                if (items.length === 0) return null
-
-                // Pad to even number for clean 2-column layout
-                const padded = items.length % 2 !== 0
-                  ? [...items, null]
-                  : items
-
-                return (
-                  <View style={{
-                    marginTop: 8,
-                    backgroundColor: C.white,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: C.grayBorder,
-                    overflow: 'hidden',
-                  }}>
-                    <View style={{
-                      backgroundColor: C.grayBg,
-                      paddingVertical: 6,
-                      paddingHorizontal: 12,
-                      borderBottomWidth: 1,
-                      borderBottomColor: C.grayBorder,
-                    }}>
-                      <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                        Chiffres clés de la commune{ci?.nomCommune ? ` — ${ci.nomCommune}` : ''}
+                  return (
+                    <View style={{ paddingHorizontal: 7, paddingVertical: 4, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: 2 }}>
+                        Chiffres clés{ci?.nomCommune ? ` — ${ci.nomCommune}` : ''}
                       </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', padding: 6, gap: 5 }}>
-                      {padded.map((item, idx) => {
-                        if (!item) {
-                          return <View key={idx} style={{ width: '48.5%' as unknown as number }} />
-                        }
-                        return (
-                        <View key={idx} style={{
-                          width: '48.5%' as unknown as number,
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          borderWidth: 1,
-                          borderColor: C.grayBorder,
-                          borderRadius: 5,
-                          paddingVertical: 5,
-                          paddingHorizontal: 8,
-                          backgroundColor: C.white,
-                        }}>
-                          {/* Label */}
-                          <Text style={{ fontSize: 6, color: C.gray, flex: 1 }}>{item.label}</Text>
-                          {/* Value */}
-                          <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black, flexShrink: 0 }}>{item.value}</Text>
-                        </View>
-                        )
-                      })}
-                    </View>
-                  </View>
-                )
-              })()}
-
-              {/* ── Transports proches — résumé + groupé par type ── */}
-              {annonce.enrichissement?.quartier?.transportsProches && annonce.enrichissement.quartier.transportsProches.length > 0 && (() => {
-                const allTp = annonce.enrichissement!.quartier!.transportsProches!.slice(0, 8)
-                const scoreTransport = annonce.enrichissement!.quartier!.transports
-                const totalStations = annonce.enrichissement?.communeInfos?.counts?.transport ?? annonce.enrichissement?.quartier?.counts?.transport
-
-                // Group by type, keep order: metro > rer > train > tram > bus > velo
-                const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus', 'velo'] as const
-                const grouped = new Map<string, typeof allTp>()
-                allTp.forEach(tp => {
-                  const key = tp.typeTransport
-                  if (!grouped.has(key)) grouped.set(key, [])
-                  grouped.get(key)!.push(tp)
-                })
-                const sortedGroups = typeOrder
-                  .filter(t => grouped.has(t))
-                  .map(t => ({ type: t, items: grouped.get(t)! }))
-                const closestMin = Math.min(...allTp.map(tp => tp.walkMin ?? Math.max(1, Math.round(tp.distance / 75))))
-
-                return (
-                  <View style={{
-                    marginTop: 8,
-                    backgroundColor: C.white,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: C.grayBorder,
-                    overflow: 'hidden',
-                  }}>
-                    {/* Header with score */}
-                    <View style={{
-                      backgroundColor: C.grayBg,
-                      paddingVertical: 5,
-                      paddingHorizontal: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: C.grayBorder,
-                    }}>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                        Transports proches
-                      </Text>
-                    </View>
-
-                    {/* Summary banner */}
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      paddingVertical: 4,
-                      paddingHorizontal: 10,
-                      backgroundColor: '#f0f9ff',
-                      borderBottomWidth: 0.5,
-                      borderBottomColor: C.grayBorder,
-                    }}>
-                      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        {sortedGroups.map(g => {
-                          const ts = TRANSPORT_COLORS[g.type] || TRANSPORT_COLORS.bus
-                          return (
-                            <View key={g.type} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                              <View style={{
-                                width: 12, height: 12, borderRadius: g.type === 'metro' ? 6 : 2,
-                                backgroundColor: ts.bg, alignItems: 'center', justifyContent: 'center',
-                              }}>
-                                <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: ts.text }}>{ts.abbr}</Text>
-                              </View>
-                              <Text style={{ fontSize: 6, color: C.black }}>
-                                {g.items.length} {g.items.length > 1 ? (g.type === 'bus' ? 'arrêts' : 'stations') : (g.type === 'bus' ? 'arrêt' : 'station')}
-                              </Text>
-                            </View>
-                          )
-                        })}
-                      </View>
-                      <Text style={{ fontSize: 5.5, color: C.gray }}>
-                        Station la plus proche : {closestMin} min à pied
-                      </Text>
-                    </View>
-
-                    {/* Grouped list */}
-                    {sortedGroups.map((g, gIdx) => {
-                      const ts = TRANSPORT_COLORS[g.type] || TRANSPORT_COLORS.bus
-                      return (
-                        <View key={g.type}>
-                          {/* Type sub-header (subtle) */}
-                          <View style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 4,
-                            paddingVertical: 3,
-                            paddingHorizontal: 10,
-                            backgroundColor: C.white,
-                            ...(gIdx > 0 ? { borderTopWidth: 0.5, borderTopColor: C.grayBorder } : {}),
-                          }}>
-                            <View style={{
-                              width: 3, height: 10, borderRadius: 1,
-                              backgroundColor: ts.bg,
-                            }} />
-                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: ts.bg }}>
-                              {ts.label}
-                            </Text>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                        {items.map((item, i) => (
+                          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.grayBg, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 5, color: C.gray }}>{item.label} : </Text>
+                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{item.value}</Text>
                           </View>
-                          {/* Stations */}
-                          {g.items.map((tp, i) => {
-                            const hasLignes = tp.lignes && tp.lignes.length > 0
-                            const walkTime = tp.walkMin ?? Math.max(1, Math.round(tp.distance / 75))
-                            return (
-                              <View key={i} style={{
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                paddingVertical: 3.5,
-                                paddingHorizontal: 10,
-                                paddingLeft: 17,
-                                backgroundColor: i % 2 === 0 ? C.grayBg : C.white,
-                              }}>
-                                {/* Line badges */}
-                                <View style={{ width: 55, flexDirection: 'row', gap: 2, flexShrink: 0 }}>
-                                  {hasLignes ? (
-                                    tp.lignes!.slice(0, 3).map((l, j) => {
-                                      const lc = getPdfLineColor(tp.typeTransport, l)
-                                      const isRerStyle = tp.typeTransport === 'rer'
-                                      return (
-                                        <View key={j} style={isRerStyle ? {
-                                          width: 14, height: 14, borderRadius: 7,
-                                          backgroundColor: '#fff', borderWidth: 2, borderColor: lc.bg,
-                                          justifyContent: 'center', alignItems: 'center',
-                                        } : {
-                                          minWidth: 14, height: 12,
-                                          borderRadius: tp.typeTransport === 'metro' ? 6 : 2,
-                                          backgroundColor: lc.bg,
-                                          justifyContent: 'center', alignItems: 'center',
-                                          paddingHorizontal: 2,
-                                        }}>
-                                          <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
-                                        </View>
-                                      )
-                                    })
-                                  ) : (
-                                    <View style={{
-                                      minWidth: 14, height: 10,
-                                      borderRadius: g.type === 'bus' ? 5 : 2,
-                                      backgroundColor: ts.bg,
-                                      justifyContent: 'center', alignItems: 'center',
-                                      paddingHorizontal: 3,
-                                    }}>
-                                      <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: ts.text }}>{ts.abbr}</Text>
-                                    </View>
-                                  )}
-                                </View>
-                                {/* Station name */}
-                                <Text style={{ fontSize: 6, color: C.black, flex: 1 }}>{tp.nom}</Text>
-                                {/* Walk time badge */}
-                                <View style={{
-                                  backgroundColor: walkTime <= 5 ? C.greenLight : walkTime <= 10 ? '#fef9c3' : C.grayBg,
-                                  borderRadius: 3,
-                                  paddingHorizontal: 4,
-                                  paddingVertical: 1.5,
-                                }}>
-                                  <Text style={{
-                                    fontSize: 5,
-                                    fontFamily: 'Helvetica-Bold',
-                                    color: walkTime <= 5 ? C.greenDark : walkTime <= 10 ? '#92400e' : C.gray,
-                                  }}>
-                                    {walkTime} min
-                                  </Text>
-                                </View>
-                              </View>
-                            )
-                          })}
-                        </View>
-                      )
-                    })}
-                  </View>
-                )
-              })()}
+                        ))}
+                        {hasTransportLines && transportLinesMap['metro'] && transportLinesMap['metro'].length > 0 && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                            <View style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFF', marginTop: -0.5 }}>M</Text>
+                            </View>
+                            {transportLinesMap['metro'].map(l => {
+                              const lc = getPdfLineColor('metro', l)
+                              return <View key={`m-${l}`} style={{ width: l.length > 2 ? 14 : 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: l.length > 2 ? 4 : 5.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text></View>
+                            })}
+                          </View>
+                        )}
+                        {hasTransportLines && transportLinesMap['rer'] && transportLinesMap['rer'].length > 0 && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                            <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF', letterSpacing: 0.3 }}>RER</Text>
+                            </View>
+                            {transportLinesMap['rer'].map(l => {
+                              const lc = getPdfLineColor('rer', l)
+                              return <View key={`r-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>
+                            })}
+                          </View>
+                        )}
+                        {hasTransportLines && transportLinesMap['train'] && transportLinesMap['train'].length > 0 && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                            <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#1D4A8C', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Train</Text>
+                            </View>
+                            {transportLinesMap['train'].map(l => {
+                              const lc = getPdfLineColor('train', l)
+                              return <View key={`t-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text></View>
+                            })}
+                          </View>
+                        )}
+                        {hasTransportLines && transportLinesMap['tram'] && transportLinesMap['tram'].length > 0 && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
+                            <View style={{ paddingHorizontal: 3, height: 11, borderRadius: 2, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Tram</Text>
+                            </View>
+                            {transportLinesMap['tram'].map(l => <View key={`tr-${l}`} style={{ paddingHorizontal: 2, height: 11, borderRadius: 5.5, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>)}
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })()}
+              </View>
+            )
+          })}
 
-            </View>
-            <Footer logoUrl={logoUrl} />
-          </Page>
-        )
-      })}
+        </View>
+        <Footer logoUrl={logoUrl} />
+      </Page>
 
       {/* ══════════════════════════════════════════
           PAGE — 4. ANALYSE MARCHÉ
@@ -1894,20 +1644,7 @@ export function ComparateurPDF({
                             </Text>
                           </View>
                         )}
-                        {m?.nbTransactions !== undefined && m.nbTransactions > 0 && (
-                          <View style={{
-                            backgroundColor: C.grayBg,
-                            borderRadius: 4,
-                            paddingVertical: 3,
-                            paddingHorizontal: 8,
-                            alignItems: 'center',
-                          }}>
-                            <Text style={{ fontSize: 5, color: C.grayLight }}>Transactions</Text>
-                            <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                              {m.nbTransactions}
-                            </Text>
-                          </View>
-                        )}
+
                       </View>
                     </View>
 
@@ -2009,71 +1746,7 @@ export function ComparateurPDF({
               })
             })()}
 
-            {/* ── Per-bien analysis cards ── */}
-            <View style={{
-              marginTop: 12,
-              backgroundColor: C.white,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: C.grayBorder,
-              overflow: 'hidden',
-            }}>
-              <View style={{
-                paddingVertical: 5,
-                paddingHorizontal: 12,
-                backgroundColor: '#f0f1f3',
-                borderBottomWidth: 1,
-                borderBottomColor: C.grayBorder,
-              }}>
-                <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.gray }}>
-                  Analyse par bien
-                </Text>
-              </View>
-              {sorted.map((a, bIdx) => {
-                const am = a.enrichissement?.marche
-                const ecart = am?.ecartPrixM2 ?? 0
-                return (
-                  <View key={`c-${a.id}`} style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: 7,
-                    paddingHorizontal: 12,
-                    backgroundColor: bIdx % 2 === 0 ? C.white : '#fafbfc',
-                    ...(bIdx < sorted.length - 1 ? { borderBottomWidth: 0.5, borderBottomColor: C.grayBorder } : {}),
-                    gap: 8,
-                  }}>
-                    {/* Rang pastille — neutral */}
-                    <View style={{
-                      width: 20, height: 20, borderRadius: 10,
-                      backgroundColor: C.gray,
-                      alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}>
-                      <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
-                    </View>
-                    {/* Analysis text */}
-                    <View style={{ flex: 1, gap: 1 }}>
-                      <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black, lineHeight: 1.3 }}>
-                        {a.type === 'maison' ? 'Maison' : 'Appt.'} {a.surface} m² — {cleanVille(a.ville)}
-                      </Text>
-                      <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.3 }}>
-                        {am?.success ? (
-                          ecart <= -15
-                            ? `Prix nettement sous le marché (${Math.abs(ecart).toFixed(0)}% sous la médiane). Excellente opportunité.`
-                            : ecart <= -5
-                              ? `Prix attractif, ${Math.abs(ecart).toFixed(0)}% sous la médiane du secteur.`
-                              : ecart <= 5
-                                ? 'Positionnement cohérent avec le marché local.'
-                                : ecart <= 15
-                                  ? `Prix ${ecart.toFixed(0)}% au-dessus de la médiane. Marge de négociation possible.`
-                                  : `Prix élevé (+${ecart.toFixed(0)}%). Vigilance recommandée.`
-                        ) : 'Données de marché insuffisantes.'}
-                      </Text>
-                    </View>
-                  </View>
-                )
-              })}
-            </View>
+
 
             {/* Disclaimer */}
             <View style={{ flex: 1 }} />
@@ -2122,7 +1795,7 @@ export function ComparateurPDF({
               <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 60, textAlign: 'right' }}>Coût total</Text>
               <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 58, textAlign: 'right' }}>Val. 5 ans</Text>
               <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Potentiel</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 52, textAlign: 'right' }}>Mensualité</Text>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 52, textAlign: 'right' }}>Mensualité**</Text>
               <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Rendt brut</Text>
             </View>
 
@@ -2135,9 +1808,7 @@ export function ComparateurPDF({
               const evolution = a.enrichissement?.marche?.evolution12Mois
               const valeur5Ans = estimerValeur5Ans(a.prix, evolution)
               const potentiel = ((valeur5Ans - coutTotal) / coutTotal * 100)
-              const mensualite = tauxInteret !== undefined && dureeAns
-                ? calculerMensualite(a.prix, apport || 0, tauxInteret, dureeAns)
-                : undefined
+              const mensualite = calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree)
 
               return (
                 <View key={a.id} style={{
@@ -2183,14 +1854,30 @@ export function ComparateurPDF({
                     </View>
                   </View>
                   <Text style={{ fontSize: 7.5, color: C.black, width: 52, textAlign: 'right' }}>
-                    {mensualite ? `${fmt(mensualite)} €` : '—'}
+                    {mensualite > 0 ? `${fmt(mensualite)} €` : '—'}
                   </Text>
-                  <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: a.estimations?.rendementBrut ? C.black : C.grayLight, width: 48, textAlign: 'right' }}>
-                    {a.estimations?.rendementBrut ? `${a.estimations.rendementBrut.toFixed(1)}%` : '—'}
-                  </Text>
+                  {a.dpe === 'G' ? (
+                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.red, width: 48, textAlign: 'right' }}>Interdit*</Text>
+                  ) : (
+                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: (a.estimations?.rendementBrut ?? 0) > 0 ? C.black : C.grayLight, width: 48, textAlign: 'right' }}>
+                      {a.estimations?.rendementBrut != null ? `${a.estimations.rendementBrut.toFixed(1)}%` : '—'}
+                    </Text>
+                  )}
                 </View>
               )
             })}
+          </View>
+
+          {/* Footnotes */}
+          <View style={{ marginTop: 4, paddingHorizontal: 14, gap: 2 }}>
+            {sorted.some(a => a.dpe === 'G') && (
+              <Text style={{ fontSize: 6, color: C.gray }}>
+                * Location interdite pour les DPE G depuis le 1er janvier 2025 (loi Climat & Résilience)
+              </Text>
+            )}
+            <Text style={{ fontSize: 6, color: C.gray }}>
+              ** Mensualité estimée : taux {effectiveTaux.toFixed(1)} %, {effectiveDuree} ans{apport ? `, apport ${fmt(apport)} €` : ', hors apport'}{!tauxInteret && !dureeAns ? ' (hypothèses par défaut — personnalisez via le simulateur AQUIZ)' : ''}
+            </Text>
           </View>
 
           {/* Detail cards per bien */}
@@ -2203,9 +1890,7 @@ export function ComparateurPDF({
               const fraisNotaire = Math.round(a.prix * (isNeuf ? 0.025 : 0.075))
               const budgetTravaux = a.estimations?.budgetTravauxEstime || 0
               const coutTotal = a.prix + fraisNotaire + budgetTravaux
-              const mensualite = tauxInteret !== undefined && dureeAns
-                ? calculerMensualite(a.prix, apport || 0, tauxInteret, dureeAns)
-                : undefined
+              const mensualite = calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree)
 
               return (
                 <View key={`det-${a.id}`} style={{
@@ -2228,7 +1913,7 @@ export function ComparateurPDF({
                   <Text style={{ fontSize: 7, color: C.gray, flex: 1, lineHeight: 1.4 }}>
                     <Text style={{ fontFamily: 'Helvetica-Bold', color: C.black }}>{cleanTitleShort(a)} : </Text>
                     {fmt(a.prix)} € + {fmt(fraisNotaire)} € notaire{budgetTravaux > 0 ? ` + ${fmt(budgetTravaux)} € travaux` : ''} = {fmt(coutTotal)} €
-                    {mensualite ? ` · Mensualité ${fmt(mensualite)} €/mois (${dureeAns} ans)` : ''}
+                    {mensualite > 0 ? ` · Mensualité ${fmt(mensualite)} €/mois` : ''}
                     {a.estimations?.loyerMensuelEstime ? ` · Loyer estimé ${fmt(a.estimations.loyerMensuelEstime)} €/mois` : ''}
                   </Text>
                 </View>

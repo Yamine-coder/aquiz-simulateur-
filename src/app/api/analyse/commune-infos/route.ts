@@ -8,14 +8,18 @@
  * GET /api/analyse/commune-infos?codePostal=92700
  */
 
+import revenusCommunes from '@/data/revenus-communes.json'
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import { ServerCache } from '@/lib/serverCache'
 import { NextRequest, NextResponse } from 'next/server'
 
 const communeCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 300 })
 
-/** Revenu médian national annuel 2023 (source INSEE Filosofi) */
-const REVENU_MEDIAN_NATIONAL = 23_080
+/** Lookup statique Filosofi 2019 : code INSEE → revenu médian annuel */
+const REVENUS: Record<string, number> = revenusCommunes as Record<string, number>
+
+/** Revenu médian national annuel (source INSEE Filosofi 2019) */
+const REVENU_MEDIAN_NATIONAL = 22_040
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OVERPASS_FALLBACK = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
@@ -99,40 +103,16 @@ export async function GET(request: NextRequest) {
       ? rawDept.code
       : (typeof rawDept === 'string' ? rawDept : codePostal.slice(0, 2))
 
-    // Revenu mensuel estimé (INSEE Filosofi)
-    // Heuristique basée sur la taille de la commune
-    let revenuMensuel: number | null = null
-    try {
-      const inseeRes = await fetch(
-        `${request.nextUrl.origin}/api/analyse/insee-revenus?codePostal=${codePostal}`,
-        { signal: AbortSignal.timeout(6000) }
-      )
-      if (inseeRes.ok) {
-        const inseeData = await inseeRes.json()
-        if (inseeData?.data?.revenuMedian) {
-          revenuMensuel = Math.round(inseeData.data.revenuMedian / 12)
-        }
-      }
-    } catch {
-      // fallback
-    }
-
-    // Fallback revenu
-    if (!revenuMensuel) {
-      const annuel = population && population > 200_000
-        ? REVENU_MEDIAN_NATIONAL * 1.15
-        : population && population > 50_000
-          ? REVENU_MEDIAN_NATIONAL * 1.05
-          : REVENU_MEDIAN_NATIONAL
-      revenuMensuel = Math.round(annuel / 12)
-    }
+    // Revenu mensuel — lookup Filosofi local (pas d'appel API)
+    const codeInsee: string = commune.code
+    const revenuAnnuel = REVENUS[codeInsee] ?? REVENU_MEDIAN_NATIONAL
+    const revenuMensuel = Math.round(revenuAnnuel / 12)
 
     // Ensoleillement
     const ensoleillement = ENSOLEILLEMENT_PAR_DEPT[departement] ?? null
 
     // ── Comptages POI commune-entière (Overpass / OSM) ──
     // Utilise area["ref:INSEE"="CODE"] pour couvrir la commune entière
-    const codeInsee: string = commune.code // Code INSEE commune
     let communeCounts: {
       education: number | null
       commerce: number | null
