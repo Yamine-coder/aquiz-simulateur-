@@ -519,10 +519,28 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
     }
   }
 
-  // Choisir le meilleur match : celui qui apparaît le plus tard dans le texte
-  // (la navigation est en haut, isolerContenuPrincipal a déjà coupé le footer/agent)
+  // Choisir le meilleur match avec scoring :
+  // - +1000 points si un numéro d'arrondissement ("17ème", "1er") est mentionné
+  //   à proximité de la ville et correspond au CP (ex: "Paris 17ème" + "75017")
+  // - +idx pour départager : le plus tardif dans le texte gagne
+  //   (la navigation est en haut, le footer/agent est déjà coupé)
   if (villeCPMatches.length > 0) {
-    const best = villeCPMatches.reduce((a, b) => a.idx > b.idx ? a : b)
+    const scoreMatch = (m: VilleMatch): number => {
+      let score = m.idx
+      // Bonus arrondissement : pour Paris/Lyon/Marseille, vérifier cohérence CP ↔ Nème
+      const dept = m.cp.substring(0, 2)
+      if (['75', '69', '13'].includes(dept)) {
+        const cpArr = parseInt(m.cp.substring(2)) // 75017 → 17
+        // Chercher "Nème" ou "Ner" dans les 30 chars après la ville
+        const after = texte.substring(m.idx, m.idx + m.ville.length + 30)
+        const arrMatch = after.match(/(\d{1,2})\s*(?:er?|[eè]me|ème)/i)
+        if (arrMatch && parseInt(arrMatch[1]) === cpArr) {
+          score += 1000 // Forte cohérence
+        }
+      }
+      return score
+    }
+    const best = villeCPMatches.reduce((a, b) => scoreMatch(a) > scoreMatch(b) ? a : b)
     result.ville = best.ville
     result.codePostal = best.cp
   } else if (premiereVilleSansCP) {

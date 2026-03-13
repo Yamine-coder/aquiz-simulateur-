@@ -111,6 +111,47 @@ async function proxyFetch(
   }
 }
 
+/**
+ * Extrait le code postal depuis l'URL de l'annonce.
+ * Fiable pour les sites qui encodent l'arrondissement dans le slug :
+ * - SeLoger:  /paris-17eme-75/  → 75017
+ * - Bien'ici: /paris-18e-75018/ → 75018
+ * - Générique: tout segment contenant un CP 5 chiffres
+ *
+ * Pour Paris (75), Lyon (69), Marseille (13), reconstruit le CP
+ * depuis le numéro d'arrondissement dans le slug.
+ */
+function extraireCPDepuisUrl(url: string): string | undefined {
+  try {
+    const pathname = new URL(url).pathname.toLowerCase()
+
+    // Pattern 1 : "paris-17eme-75" / "lyon-3eme-69" / "marseille-8eme-13"
+    //             "paris-1er-75"
+    const arrMatch = pathname.match(
+      /\/(paris|lyon|marseille)-(\d{1,2})(?:er?|[eè]me)-(\d{2})\//
+    )
+    if (arrMatch) {
+      const num = parseInt(arrMatch[2])
+      const dept = arrMatch[3]
+      if (num >= 1 && num <= 20 && ['75', '69', '13'].includes(dept)) {
+        return `${dept}${String(num).padStart(3, '0')}`
+      }
+    }
+
+    // Pattern 2 : CP 5 chiffres déjà dans le slug (Bien'ici : "paris-18e-75018")
+    const cpMatch = pathname.match(/\/[a-z0-9-]+-(\d{5})\//)
+    if (cpMatch) {
+      const cp = cpMatch[1]
+      const dept = parseInt(cp.substring(0, 2))
+      if (dept >= 1 && dept <= 98) return cp
+    }
+
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function POST(request: NextRequest) {
   // ── Global cascade timeout (55s — under Vercel's 60s Pro limit) ──
   const GLOBAL_TIMEOUT_MS = 55_000
@@ -436,6 +477,25 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       }, { status: 502 })
     }
     
+    // ===== CORRIGER CODE POSTAL DEPUIS L'URL =====
+    // L'URL est la source la plus fiable pour les arrondissements (Paris/Lyon/Marseille).
+    // Le parsing texte peut capturer un mauvais CP (ex: 75001 au lieu de 75017
+    // à cause d'une section "prix au m²" dans le markdown).
+    const urlCP = extraireCPDepuisUrl(url)
+    if (urlCP && extractionResult.data.codePostal) {
+      const parsedCP = extractionResult.data.codePostal as string
+      const urlDept = urlCP.substring(0, 2)
+      const parsedDept = parsedCP.substring(0, 2)
+      // Corriger uniquement si même département (éviter de casser un CP correct
+      // pour un site inconnu) et si l'arrondissement diffère
+      if (urlDept === parsedDept && urlCP !== parsedCP) {
+        console.log(`📍 CP corrigé depuis URL: ${parsedCP} → ${urlCP}`)
+        extractionResult.data.codePostal = urlCP
+      }
+    } else if (urlCP && !extractionResult.data.codePostal) {
+      extractionResult.data.codePostal = urlCP
+    }
+
     // ===== ENRICHIR AVEC IMAGE SI MANQUANTE =====
     if (!extractionResult.data.imageUrl) {
       const imageUrl = await fetchOgImage(url)
