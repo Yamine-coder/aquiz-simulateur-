@@ -70,8 +70,21 @@ function nettoyerTexte(texte: string): string {
 function isolerContenuPrincipal(texte: string): string {
   let cleaned = texte
 
+  // ══ STRIP SeLoger mega-menu ══
+  // Le markdown Firecrawl de SeLoger commence par un énorme menu de navigation
+  // (~260 lignes) contenant "Prix de l'immobilier", "Acheter", "Louer", etc.
+  // qui déclencherait les coupures trop tôt. On le supprime avant d'appliquer les coupures.
+  // Pattern : le menu se termine juste avant le prix de l'annonce (image agence + "XXX €")
+  const selogerNavEnd = cleaned.match(
+    /\[Déposer une annonce\][^\n]*\n+(?=!\[)/i
+  )
+  if (selogerNavEnd?.index !== undefined && selogerNavEnd.index < 8000) {
+    cleaned = cleaned.substring(selogerNavEnd.index + selogerNavEnd[0].length)
+  }
+
   // ══ COUPER TOUT CE QUI SUIT ces marqueurs ══
-  // Les sections "similaires" contiennent d'autres prix/DPE qui perturbent le parsing
+  // Les sections "annonces similaires", prix de marché, footer, etc.
+  // contiennent des prix/DPE d'AUTRES biens qui polluent le parsing.
   const coupures: RegExp[] = [
     // LeBonCoin / portails
     /\bannonces?\s+similaires?\b/i,
@@ -87,8 +100,17 @@ function isolerContenuPrincipal(texte: string): string {
     /\bestim(?:er|ez|ation)\s+(?:votre|ce|du|le)\s+(?:prix|bien)\b/i,
     /\bprix\s+(?:au\s+)?m[²2]\s+(?:dans|du|de\s+(?:ce|la|l[\u2019']))\b/i,
     /\bhistorique\s+des?\s+prix\b/i,
-    /\bprix\s+(?:de\s+)?l[\u2019']?immobilier\b/i,
+    // SeLoger-safe: seulement "Prix de l'immobilier" précédé de "##" (section de la page)
+    // Le même texte dans le nav a été supprimé par le strip ci-dessus.
+    /^##\s+prix\s+(?:de\s+)?l[\u2019']?immobilier\b/im,
+    // Fallback : "Prix de l'immobilier" non en début de ligne mais après le contenu principal
+    /\bprix\s+dans\s+la\s+r[ée]gion\b/i,
     /\b[ée]volution\s+des?\s+prix\b/i,
+    // SeLoger : section financement / simulation contient des prix parasites
+    /\b##\s+D[ée]tails\s+du\s+prix\b/i,
+    // SeLoger : formulaire de contact en fin de page
+    /\benvie\s+de\s+visiter\b/i,
+    /\bune\s+question\s+sur\s+ce\s+bien\b/i,
     // Footer
     /\bmentions?\s+l[ée]gales?\b/i,
     /\bconditions?\s+g[ée]n[ée]rales?\s+d[\u2019']?utilisation\b/i,
@@ -100,6 +122,8 @@ function isolerContenuPrincipal(texte: string): string {
     /\bles?\s+annonces?\s+de\s+ce\s+pro\b/i,
     // NOTE: NE PAS mettre "Sécurisez votre achat" ni "Contacter le vendeur" ici !
     // Ils apparaissent AVANT les caractéristiques et équipements sur LeBonCoin.
+    // NOTE: "Contacter l'agence" est aussi AVANT les caractéristiques sur SeLoger,
+    // donc on ne le met PAS ici non plus.
 
     // ── Sections agent / conseiller / agence ──
     // Ces sections contiennent le nom + adresse postale de l'agent/agence
@@ -107,7 +131,8 @@ function isolerContenuPrincipal(texte: string): string {
     // Ex: LaForêt "Votre conseiller Dominique Frélaud 33260" au lieu de Colombes
     /\bvotre\s+conseill[eè]re?\b/i,
     /\bvotre\s+(?:agent|interlocuteur|interlocutrice|consultant)\b/i,
-    /\bcontacter\s+l[\u2019']?(?:agence|agent|conseill)/i,
+    // "Contacter" n'est plus un cutoff car sur SeLoger il apparaît AVANT
+    // les caractéristiques, le DPE et les équipements.
     /\bl[\u2019']?agence\s+(?:lafor[eêèé]t|orpi|century\s*21|guy\s*hoquet|iad|capifrance|safti|foncia|nexity|stéphane\s+plaza|era\s+immobilier|square\s+habitat)\b/i,
     /\bagence\s+(?:immobili[eè]re|partenaire)\b/i,
     /\bnos\s+agents?\b/i,
@@ -120,7 +145,9 @@ function isolerContenuPrincipal(texte: string): string {
     /\b[eé]crire?\s+(?:à\s+)?l[\u2019']?(?:agence|agent|conseill)/i,
     /\bt[ée]l[ée]phone\s*:\s*(?:\+33|0[1-9])/i,
     // Sections honoraires/mandat (contiennent souvent l'adresse de l'agence)
-    /\bhonoraires?\s+(?:d[\u2019']?agence|charge|ttc|ht)\b/i,
+    // Doit être en début de ligne pour éviter de couper sur "Honoraires charge vendeur"
+    // qui apparaît inline dans les descriptions SeLoger.
+    /(?:^|\n)\s*#{0,3}\s*honoraires?\s+(?:d[\u2019']?agence|ttc|ht)\b/im,
     /\bbarème\s+(?:d[\u2019']?)?honoraires?\b/i,
   ]
 
@@ -790,6 +817,8 @@ function extraireDescription(texte: string): string | undefined {
   const descLines: string[] = []
   
   for (const ligne of lignes) {
+    // Ignorer les lignes qui sont des liens markdown, images, ou headings
+    if (/^\[.*\]\(.*\)$/.test(ligne) || /^!\[/.test(ligne) || /^#{1,3}\s/.test(ligne)) continue
     // Lignes de 50+ chars avec des mots-clés immobiliers
     if (ligne.length >= 50 && ligne.length <= 2000 &&
         /appartement|maison|séjour|cuisine|chambre|salle|lumineu|calme|proche|quartier|situé|idéal|rénov|état|vue|jardin|parking|cave|balcon|terrasse|étage|résidence|copropriété|bien|immeuble/i.test(ligne)) {
@@ -896,13 +925,20 @@ function extraireEquipements(texte: string) {
   }
 
   const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/, /ascenseur\s*:\s*non/]
-  const NEG_BALCON = [/sans\s+(?:balcon|terrasse)/, /pas\s+d['’e]?\s*(?:balcon|terrasse)/, /aucun\s+(?:balcon|terrasse)/, /balcon\s*:\s*non/, /terrasse\s*:\s*non/]
+  const NEG_BALCON_ONLY = [/sans\s+balcon/, /pas\s+d['’e]?\s*balcon/, /aucun\s+balcon/, /balcon\s*:\s*non/]
+  const NEG_TERRASSE_ONLY = [/sans\s+terrasse/, /pas\s+d['’e]?\s*terrasse/, /aucune?\s+terrasse/, /terrasse\s*:\s*non/]
   const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/, /parking\s*:\s*non/, /garage\s*:\s*non/]
   const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/, /cave\s*:\s*non/]
 
+  // balconTerrasse : SeLoger peut avoir "Pas de balcon" ET "Terrasse" séparément.
+  // Chaque élément (balcon, terrasse, loggia) est vérifié indépendamment.
+  const hasBalcon = presente(/\bbalcon\b/, NEG_BALCON_ONLY)
+  const hasTerrasse = presente(/\bterrasse\b/, NEG_TERRASSE_ONLY)
+  const hasLoggia = /\bloggia\b/.test(lower)
+
   return {
     ascenseur: presente(/\bascenseur\b/, NEG_ASCENSEUR),
-    balconTerrasse: presente(/\bbalcon\b|\bterrasse\b|\bloggia\b/, NEG_BALCON),
+    balconTerrasse: hasBalcon || hasTerrasse || hasLoggia,
     parking: presente(/\bparking\b|\bgarage\b|\bbox\b|place\s+de\s+stationnement/, NEG_PARKING),
     cave: presente(/\bcave\b/, NEG_CAVE),
   }
@@ -911,8 +947,19 @@ function extraireEquipements(texte: string) {
 function extraireTitre(texte: string): string | undefined {
   // 1. Markdown H1 heading (Firecrawl)
   const h1Match = texte.match(/^#\s+(.+)$/m)
-  if (h1Match && /appartement|maison|studio|loft|duplex|villa|pièces?|chambres?|T\d|F\d/i.test(h1Match[1]) && h1Match[1].length < 200) {
-    return h1Match[1].trim().substring(0, 200)
+  if (h1Match && /appartement|maison|studio|loft|duplex|villa|pièces?|chambres?|T\d|F\d/i.test(h1Match[1])) {
+    // Nettoyer : SeLoger colle le prix + liens dans le H1 (peut faire 600+ chars)
+    let titre = h1Match[1].trim()
+    // Couper avant le premier prix ou lien markdown
+    titre = titre.replace(/\s*\d[\d\s]*€.*$/, '').replace(/\s*\[.*$/, '').trim()
+    if (titre.length >= 5 && titre.length <= 200) return titre
+  }
+
+  // 2. Markdown H2 heading with real estate keywords
+  const h2Match = texte.match(/^##\s+(\d+\s+pièces?)\b/m)
+  if (h2Match) {
+    // SeLoger: "## 4 pièces" — combine with type if available
+    return h2Match[1].trim()
   }
 
   // 2. Prendre la première ligne non vide qui ressemble à un titre
