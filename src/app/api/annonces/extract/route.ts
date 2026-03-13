@@ -67,6 +67,50 @@ const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouest
 
 /** Sites protégés par anti-bot lourd (DataDome, Cloudflare) ou SPA → Playwright en priorité */
 const SITES_CHROME_FIRST = ['logic-immo', 'foncia', 'nexity']
+
+// ═══════════════════════════════════════════════════════
+// PROXY FETCH — Route les requêtes via Railway (IP non-AWS)
+// Utilisé sur Vercel pour bypasser les blocages IP datacenter
+// sans consommer de quota ScrapingBee/Firecrawl.
+// ═══════════════════════════════════════════════════════
+const SCRAPER_URL = process.env.SCRAPER_URL
+const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || ''
+const hasProxy = !!(SCRAPER_URL && SCRAPER_API_KEY)
+
+/**
+ * Exécute un fetch HTTP via le proxy Railway (aquiz-scraper /proxy-fetch).
+ * Retourne la même structure que fetch() : { status, headers, body }.
+ * Si le proxy n'est pas configuré ou échoue, retourne null.
+ */
+async function proxyFetch(
+  url: string,
+  options?: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number }
+): Promise<{ status: number; headers: Record<string, string>; body: unknown } | null> {
+  if (!hasProxy) return null
+  try {
+    const resp = await fetch(`${SCRAPER_URL}/proxy-fetch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SCRAPER_API_KEY}`,
+      },
+      body: JSON.stringify({
+        url,
+        method: options?.method || 'GET',
+        headers: options?.headers || {},
+        body: options?.body,
+        timeout: options?.timeout || 15000,
+      }),
+      signal: AbortSignal.timeout(35000), // proxy overhead
+    })
+    if (!resp.ok) return null
+    return await resp.json() as { status: number; headers: Record<string, string>; body: unknown }
+  } catch (err) {
+    console.warn('proxyFetch error:', err instanceof Error ? err.message : err)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   // ── Global cascade timeout (55s — under Vercel's 60s Pro limit) ──
   const GLOBAL_TIMEOUT_MS = 55_000
@@ -246,23 +290,29 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // → Bypass total des protections anti-bot
     //
     // ⚠️ Sur Vercel, les IP datacenter AWS sont bloquées par les grands
-    // sites (LeBonCoin, SeLoger, PAP…). Les appels API échouent ou
-    // retournent des pages challenge → on skip directement à ScrapingBee
-    // (Level 5) qui utilise des IP résidentielles + Chrome rendering.
+    // sites (LeBonCoin, SeLoger, PAP…). Si un proxy Railway est configuré
+    // (SCRAPER_URL + SCRAPER_API_KEY), les appels API passent par Railway
+    // (IP non-AWS, non bloquées). Sinon, on skip à ScrapingBee (Level 5).
     // ═══════════════════════════════════════════════════════
     const isPremiumSite = source !== null && PREMIUM_PROXY_SITES.includes(source)
-    const vercelSkipToScrapingBee = IS_VERCEL && isPremiumSite
+    // Sur Vercel sans proxy → skip direct à ScrapingBee
+    // Sur Vercel avec proxy → tenter les APIs via proxy d'abord
+    const vercelSkipToScrapingBee = IS_VERCEL && isPremiumSite && !hasProxy
+    const vercelUseProxy = IS_VERCEL && isPremiumSite && hasProxy
     
     if (vercelSkipToScrapingBee) {
-      console.log(`⚡ Vercel: ${source} → skip niveaux 1-4, direct ScrapingBee (IP datacenter bloquée)`)
+      console.log(`⚡ Vercel: ${source} → skip niveaux 1-4, direct ScrapingBee (pas de proxy configuré)`)
+    }
+    if (vercelUseProxy) {
+      console.log(`🔀 Vercel: ${source} → APIs via proxy Railway (${SCRAPER_URL})`)
     }
     
     if (!vercelSkipToScrapingBee) {
       if (source === 'seloger') {
-        extractionResult = await trySeLogerAPI(url)
+        extractionResult = await trySeLogerAPI(url, vercelUseProxy)
       }
       if (!extractionResult && source === 'leboncoin') {
-        extractionResult = await tryLeBonCoinAPI(url)
+        extractionResult = await tryLeBonCoinAPI(url, vercelUseProxy)
       }
       if (!extractionResult && source === 'bienici') {
         extractionResult = await tryBienIciAPI(url)
@@ -340,7 +390,8 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 5 : Services payants (optionnels, dernier recours)
-    // Sur Vercel + sites premium : c'est le SEUL niveau exécuté
+    // Sur Vercel + proxy Railway : atteint seulement si tous les niveaux 1-4 ont échoué
+    // Sur Vercel SANS proxy : c'est le SEUL niveau exécuté pour les sites premium
     // ═══════════════════════════════════════════════════════
     if (!extractionResult) {
       extractionResult = await tryScrapingBee(url, source)
@@ -903,7 +954,7 @@ function countLeBonCoinFields(data: Record<string, unknown>): number {
 // L'API /finder/classified/<id> retourne le JSON complet de l'annonce
 // avec prix, surface, pièces, DPE, GES, chambres, SDB, taxe foncière, etc.
 // ─────────────────────────────────────
-async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> {
+async function tryLeBonCoinAPI(url: string, useProxy = false): Promise<ExtractionResponse | null> {
   try {
     const idMatch = url.match(/\/(\d{8,12})(?:[/?#]|$)/) || url.match(/\/(\d{8,12})/)
     if (!idMatch) {
@@ -924,17 +975,29 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
         'Sec-Fetch-Site': 'same-site',
     }
     if (process.env.LEBONCOIN_API_KEY) lbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
-    const response = await fetch(`https://api.leboncoin.fr/finder/classified/${adId}`, {
-      headers: lbcHeaders,
-      signal: AbortSignal.timeout(10000),
-    })
-    
-    if (!response.ok) {
-      console.warn(`LeBonCoin API HTTP ${response.status} pour annonce ${adId}`)
-      return null
+
+    const apiUrl = `https://api.leboncoin.fr/finder/classified/${adId}`
+    let json: Record<string, unknown>
+
+    if (useProxy) {
+      // ── Via proxy Railway (Vercel → Railway → API LeBonCoin) ──
+      const proxyResult = await proxyFetch(apiUrl, { headers: lbcHeaders, timeout: 10000 })
+      if (!proxyResult || proxyResult.status !== 200) {
+        console.warn(`LeBonCoin API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}`)
+        return null
+      }
+      json = proxyResult.body as Record<string, unknown>
+    } else {
+      const response = await fetch(apiUrl, {
+        headers: lbcHeaders,
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!response.ok) {
+        console.warn(`LeBonCoin API HTTP ${response.status} pour annonce ${adId}`)
+        return null
+      }
+      json = await response.json() as Record<string, unknown>
     }
-    
-    const json = await response.json() as Record<string, unknown>
     
     if (!json.list_id && !json.subject) {
       console.warn('LeBonCoin API: réponse captcha ou invalide')
@@ -949,8 +1012,8 @@ async function tryLeBonCoinAPI(url: string): Promise<ExtractionResponse | null> 
       source: 'leboncoin',
       data,
       fieldsExtracted: fieldsCount,
-      method: 'leboncoin-api',
-      message: `${fieldsCount} données extraites depuis LeBonCoin (API directe)`
+      method: useProxy ? 'leboncoin-api-proxy' : 'leboncoin-api',
+      message: `${fieldsCount} données extraites depuis LeBonCoin (${useProxy ? 'proxy' : 'API directe'})`
     }
   } catch (err) {
     console.warn('LeBonCoin API échoué:', err)
@@ -1030,7 +1093,7 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
 // L'API Groupe SeLoger accepte les requêtes avec le User-Agent de l'app iOS SeLoger
 // Retourne le JSON complet de l'annonce : prix, surface, pièces, DPE, GES, photos, etc.
 // ─────────────────────────────────────
-async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
+async function trySeLogerAPI(url: string, useProxy = false): Promise<ExtractionResponse | null> {
   try {
     // Extraire l'ID de l'annonce depuis l'URL
     // Formats: .../260515181.htm  |  .../238947597/  |  .../238947597#
@@ -1054,7 +1117,7 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
       'SeLoger/12.3.1 (iPhone; iOS 17.5; Scale/3.0)',
     ]
     const appUA = SELOGER_APP_UAS[Math.floor(Math.random() * SELOGER_APP_UAS.length)]
-    const baseHeaders = {
+    const baseHeaders: Record<string, string> = {
       'User-Agent': appUA,
       'Accept': 'application/json',
       'Accept-Language': 'fr-FR',
@@ -1063,32 +1126,36 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
 
     await waitForDomainThrottle(`https://api-seloger.svc.groupe-seloger.com/`)
 
-    // ── Pour les programmes neufs : l'API mobile SeLoger n'a PAS ces données ──
-    // DataDome sur selogerneuf.com vérifie les IPs contre les registres Google/Bing,
-    // donc fake Googlebot UA échoue aussi. On retourne null immédiatement et on
-    // laisse la cascade (Chrome stealth → Jina → Google Cache) prendre le relais.
     if (isNeuf) {
       console.log(`🏗️ SeLoger Neuf: programme ${adId} — skip API, cascade générique`)
       return null
     }
 
-    // ── Endpoint listings classique (SeLoger, pas SeLoger Neuf) ──
-    const response = await fetch(
-      `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`,
-      {
+    const apiUrl = `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`
+
+    let json: Record<string, unknown>
+
+    if (useProxy) {
+      // ── Via proxy Railway (Vercel → Railway → API SeLoger) ──
+      const proxyResult = await proxyFetch(apiUrl, { headers: baseHeaders, timeout: 12000 })
+      if (!proxyResult || proxyResult.status !== 200) {
+        console.warn(`SeLoger API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}`)
+        return null
+      }
+      json = proxyResult.body as Record<string, unknown>
+    } else {
+      // ── Appel direct (local / VPS) ──
+      const response = await fetch(apiUrl, {
         headers: baseHeaders,
         signal: AbortSignal.timeout(12000),
+      })
+      if (!response.ok) {
+        console.warn(`SeLoger API HTTP ${response.status} pour annonce ${adId}`)
+        return null
       }
-    )
-
-    if (!response.ok) {
-      console.warn(`SeLoger API HTTP ${response.status} pour annonce ${adId}`)
-      return null
+      json = await response.json() as Record<string, unknown>
     }
 
-    const json = await response.json() as Record<string, unknown>
-
-    // Vérifier que c'est bien une annonce (pas un redirect/erreur)
     if (!json.id && !json.price && !json.livingArea) {
       console.warn('SeLoger API: réponse invalide pour', adId)
       return null
@@ -1097,7 +1164,6 @@ async function trySeLogerAPI(url: string): Promise<ExtractionResponse | null> {
     return parseSeLogerData(json, url)
   } catch (err) {
     console.warn('SeLoger API échoué:', err instanceof Error ? err.message : err)
-    // Fallback : tenter avec un autre User-Agent mobile
     return await trySeLogerAPIFallback(url)
   }
 }
