@@ -457,13 +457,19 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
   /**
    * Cherche un code postal à proximité d'une occurrence de ville.
    * Retourne le CP si trouvé, sinon undefined.
+   * Exclut les numéros de référence (Ref:, N°, Annonce n°, #).
    */
+  const REF_PREFIX_RE = /(?:r[ée]f(?:[ée]rence)?|n°|annonce|#|id)\s*:?\s*$/i
   const chercherCPProche = (idx: number, villeLen: number): string | undefined => {
     // Après la ville : jusqu'à 80 chars (couvre "Colombes\nDisponible\n92700")
     // \b pour ne pas matcher "12345" dans "123456" (URLs)
     const apres = texte.substring(idx + villeLen, idx + villeLen + 80)
     const cpApres = apres.match(/\b(\d{5})\b/)
-    if (cpApres && isValidCP(cpApres[1])) return cpApres[1]
+    if (cpApres && isValidCP(cpApres[1])) {
+      // Exclure si précédé par un préfixe de référence (Ref: 88504)
+      const contextBefore = texte.substring(Math.max(0, idx + villeLen + (cpApres.index ?? 0) - 20), idx + villeLen + (cpApres.index ?? 0))
+      if (!REF_PREFIX_RE.test(contextBefore)) return cpApres[1]
+    }
     // Avant la ville : jusqu'à 20 chars ("92700 Colombes")
     if (idx >= 5) {
       const avant = texte.substring(Math.max(0, idx - 20), idx)
@@ -478,6 +484,20 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
   const villeCPMatches: VilleMatch[] = []
   let premiereVilleSansCP: { ville: string; idx: number } | undefined
 
+  /** Vérifie que le match est un mot complet (pas "agen" dans "agence") */
+  const isWordBoundary = (idx: number, len: number): boolean => {
+    if (idx > 0) {
+      const before = lower[idx - 1]
+      // Lettres (dont accents) → pas une frontière de mot
+      if (/[a-zà-ÿ]/.test(before)) return false
+    }
+    if (idx + len < lower.length) {
+      const after = lower[idx + len]
+      if (/[a-zà-ÿ]/.test(after)) return false
+    }
+    return true
+  }
+
   for (const v of VILLES) {
     const vLower = v.toLowerCase()
     let searchStart = 0
@@ -485,11 +505,14 @@ function extraireLocalisation(texte: string): { ville?: string; codePostal?: str
       const idx = lower.indexOf(vLower, searchStart)
       if (idx < 0) break
 
-      const cp = chercherCPProche(idx, v.length)
-      if (cp) {
-        villeCPMatches.push({ ville: v, cp, idx })
-      } else if (!premiereVilleSansCP) {
-        premiereVilleSansCP = { ville: v, idx }
+      // Vérifier frontière de mot : "Agen" ne doit pas matcher dans "agence"/"agent"
+      if (isWordBoundary(idx, vLower.length)) {
+        const cp = chercherCPProche(idx, v.length)
+        if (cp) {
+          villeCPMatches.push({ ville: v, cp, idx })
+        } else if (!premiereVilleSansCP) {
+          premiereVilleSansCP = { ville: v, idx }
+        }
       }
 
       searchStart = idx + v.length
