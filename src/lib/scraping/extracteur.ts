@@ -622,11 +622,19 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     if (match) {
       const charges = extraireNombre(match[1])
       if (charges && charges > 0 && charges < 50000) {
-        // Si c'est une charge annuelle (> 500€), convertir en mensuel
-        if (charges > 500) {
+        // Détecter la périodicité depuis le contexte du match
+        const mIdx = html.indexOf(match[0])
+        const ctx = html.slice(Math.max(0, mIdx - 30), mIdx + match[0].length + 30).toLowerCase()
+        const isAnnual = /annuelles?|copropri[eé]t[eé]|par\s*an|\/?\s*an|condoannual/i.test(ctx)
+        const isMonthly = /mensuelles?|par\s*mois|\/?\s*mois/i.test(ctx)
+
+        if (isMonthly) {
+          data.chargesMensuelles = Math.round(charges)
+        } else if (isAnnual) {
           data.chargesMensuelles = Math.round(charges / 12)
         } else {
-          data.chargesMensuelles = charges
+          // Heuristique : > 1200€ sans contexte → probablement annuel
+          data.chargesMensuelles = charges > 1200 ? Math.round(charges / 12) : Math.round(charges)
         }
         break
       }

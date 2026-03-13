@@ -920,8 +920,8 @@ function extraireCharges(texte: string): number | undefined {
         const matchIndex = texte.indexOf(m[0])
         const context = texte.slice(Math.max(0, matchIndex - 30), matchIndex + m[0].length + 30).toLowerCase()
 
-        const isAnnual = /\/\s*an|par\s+an|annuel|\/\s*année|charges?\s*(?:de\s+)?copropriété/i.test(context)
-        const isMonthly = /\/\s*mois|par\s+mois|mensuel/i.test(context)
+        const isAnnual = /\/\s*an|par\s+an|annuelles?|\/\s*année|copropri[eé]t[eé]/i.test(context)
+        const isMonthly = /\/\s*mois|par\s+mois|mensuelles?/i.test(context)
 
         if (isMonthly) return c
         if (isAnnual) return Math.round(c / 12)
