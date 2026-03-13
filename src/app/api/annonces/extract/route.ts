@@ -2863,8 +2863,11 @@ async function tryFirecrawl(url: string, source: string | null): Promise<Extract
       const textRecord = textData as unknown as Record<string, unknown>
       
       // Champs critiques où le markdown est plus fiable que le HTML pour les SPA
+      // chargesMensuelles : le HTML brut contient souvent la valeur annuelle sans
+      // contexte "copropriété" ou "/an" (tags HTML entre label et valeur), alors que
+      // le markdown Firecrawl a le texte "Charges de copropriété 2638 €/an" → détecta annual.
       const mdPriorityFields = isSPA
-        ? ['prix', 'codePostal', 'type', 'titre', 'ville']
+        ? ['prix', 'codePostal', 'type', 'titre', 'ville', 'chargesMensuelles']
         : []
       
       for (const [key, value] of Object.entries(textRecord)) {
