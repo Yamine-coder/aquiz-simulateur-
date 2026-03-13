@@ -1107,17 +1107,20 @@ async function tryLeBonCoinAPI(url: string, useProxy = false): Promise<Extractio
     if (process.env.LEBONCOIN_API_KEY) lbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
 
     const apiUrl = `https://api.leboncoin.fr/finder/classified/${adId}`
-    let json: Record<string, unknown>
+    let json: Record<string, unknown> | null = null
 
     if (useProxy) {
       // ── Via proxy Railway (Vercel → Railway → API LeBonCoin) ──
       const proxyResult = await proxyFetch(apiUrl, { headers: lbcHeaders, timeout: 10000 })
-      if (!proxyResult || proxyResult.status !== 200) {
-        console.warn(`LeBonCoin API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}`)
-        return null
+      if (proxyResult && proxyResult.status === 200) {
+        json = proxyResult.body as Record<string, unknown>
+      } else {
+        console.warn(`LeBonCoin API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}, fallback direct…`)
       }
-      json = proxyResult.body as Record<string, unknown>
-    } else {
+    }
+
+    if (!json) {
+      // ── Appel direct (fallback si proxy KO) ──
       const response = await fetch(apiUrl, {
         headers: lbcHeaders,
         signal: AbortSignal.timeout(10000),
@@ -1263,18 +1266,20 @@ async function trySeLogerAPI(url: string, useProxy = false): Promise<ExtractionR
 
     const apiUrl = `https://api-seloger.svc.groupe-seloger.com/api/v1/listings/${adId}`
 
-    let json: Record<string, unknown>
+    let json: Record<string, unknown> | null = null
 
     if (useProxy) {
       // ── Via proxy Railway (Vercel → Railway → API SeLoger) ──
       const proxyResult = await proxyFetch(apiUrl, { headers: baseHeaders, timeout: 12000 })
-      if (!proxyResult || proxyResult.status !== 200) {
-        console.warn(`SeLoger API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}`)
-        return null
+      if (proxyResult && proxyResult.status === 200) {
+        json = proxyResult.body as Record<string, unknown>
+      } else {
+        console.warn(`SeLoger API via proxy: ${proxyResult?.status ?? 'no response'} pour ${adId}, fallback direct…`)
       }
-      json = proxyResult.body as Record<string, unknown>
-    } else {
-      // ── Appel direct (local / VPS) ──
+    }
+
+    if (!json) {
+      // ── Appel direct (local / VPS / fallback si proxy KO) ──
       const response = await fetch(apiUrl, {
         headers: baseHeaders,
         signal: AbortSignal.timeout(12000),
