@@ -62,6 +62,16 @@ interface ExtractionResponse {
   message: string
 }
 
+/** Entrée du journal d'extraction — une par étape de la cascade */
+interface ExtractionLogEntry {
+  level: string
+  method: string
+  durationMs: number
+  status: 'success' | 'fail' | 'skipped'
+  fieldsExtracted?: number
+  detail?: string
+}
+
 /** Sites pour lesquels ScrapingBee doit activer premium_proxy (DataDome/Cloudflare) */
 const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouestfrance', 'figaro']
 
@@ -107,6 +117,37 @@ async function proxyFetch(
     return await resp.json() as { status: number; headers: Record<string, string>; body: unknown }
   } catch (err) {
     console.warn('proxyFetch error:', err instanceof Error ? err.message : err)
+    return null
+  }
+}
+
+/**
+ * Exécute une étape de la cascade avec chronométrage et journalisation.
+ * Retourne le résultat de l'extraction (ou null si échec).
+ */
+async function runCascadeStep(
+  log: ExtractionLogEntry[],
+  level: string,
+  method: string,
+  fn: () => Promise<ExtractionResponse | null>,
+): Promise<ExtractionResponse | null> {
+  const t0 = performance.now()
+  try {
+    const result = await fn()
+    const durationMs = Math.round(performance.now() - t0)
+    if (result) {
+      log.push({ level, method, durationMs, status: 'success', fieldsExtracted: result.fieldsExtracted })
+      console.log(`✅ [${level}] ${method} → ${result.fieldsExtracted ?? '?'} champs en ${durationMs}ms`)
+    } else {
+      log.push({ level, method, durationMs, status: 'fail' })
+      console.log(`❌ [${level}] ${method} → échec en ${durationMs}ms`)
+    }
+    return result
+  } catch (err) {
+    const durationMs = Math.round(performance.now() - t0)
+    const detail = err instanceof Error ? err.message : String(err)
+    log.push({ level, method, durationMs, status: 'fail', detail })
+    console.log(`❌ [${level}] ${method} → erreur en ${durationMs}ms: ${detail}`)
     return null
   }
 }
@@ -301,11 +342,20 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
         method: `${cached.method} (cache)`,
         message: `${cached.message} [cache]`,
         fromCache: true,
+        extractionLog: [{ level: 'cache', method: 'cache-hit', durationMs: 0, status: 'success' as const, fieldsExtracted: cached.fieldsExtracted }],
+        totalDurationMs: 0,
       })
     }
     
     let extractionResult: ExtractionResponse | null = null
     let triedChrome = false
+    const extractionLog: ExtractionLogEntry[] = []
+    const cascadeStart = performance.now()
+    
+    console.log(`\n🔍 ══════ EXTRACTION CASCADE ══════`)
+    console.log(`📎 URL: ${url}`)
+    console.log(`🏷️  Source: ${source ?? 'inconnue'}`)
+    console.log(`🌐 Env: ${IS_VERCEL ? 'Vercel' : 'local'} | Proxy: ${hasProxy ? 'oui' : 'non'}`)
     
     // ═══════════════════════════════════════════════════════
     // FAST-FAIL : Sites DataDome impossible à scraper côté serveur
@@ -316,12 +366,14 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // ═══════════════════════════════════════════════════════
     if (url.includes('selogerneuf.com')) {
       console.log(`🏗️ SeLoger Neuf: fast-fail → mode assistant pour ${url.substring(0, 80)}`)
+      extractionLog.push({ level: 'N/A', method: 'fast-fail selogerneuf', durationMs: 0, status: 'skipped', detail: 'DataDome' })
       return NextResponse.json({
         success: false,
         error: 'SeLoger Neuf bloque l\'extraction automatique (protection DataDome).',
         hint: 'Copiez le texte de la page depuis votre navigateur',
         protectedSite: true,
         autoFallback: true,
+        extractionLog,
       }, { status: 502 })
     }
     
@@ -343,6 +395,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     if (vercelSkipToScrapingBee) {
       console.log(`⚡ Vercel: ${source} → skip niveaux 1-4, direct ScrapingBee (pas de proxy configuré)`)
+      extractionLog.push({ level: 'N1-N4', method: 'skip (Vercel sans proxy)', durationMs: 0, status: 'skipped' })
     }
     if (vercelUseProxy) {
       console.log(`🔀 Vercel: ${source} → APIs via proxy Railway (${SCRAPER_URL})`)
@@ -350,25 +403,25 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     if (!vercelSkipToScrapingBee) {
       if (source === 'seloger') {
-        extractionResult = await trySeLogerAPI(url, vercelUseProxy)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'SeLoger API', () => trySeLogerAPI(url, vercelUseProxy))
       }
       if (!extractionResult && source === 'leboncoin') {
-        extractionResult = await tryLeBonCoinAPI(url, vercelUseProxy)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'LeBonCoin API', () => tryLeBonCoinAPI(url, vercelUseProxy))
       }
       if (!extractionResult && source === 'bienici') {
-        extractionResult = await tryBienIciAPI(url)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Bien\'ici API', () => tryBienIciAPI(url))
       }
       if (!extractionResult && source === 'laforet') {
-        extractionResult = await tryLaforetAPI(url)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Laforêt API', () => tryLaforetAPI(url))
       }
       if (!extractionResult && source === 'orpi') {
-        extractionResult = await tryOrpiAPI(url)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Orpi API', () => tryOrpiAPI(url))
       }
       if (!extractionResult && source === 'century21') {
-        extractionResult = await tryCentury21(url)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Century21', () => tryCentury21(url))
       }
       if (!extractionResult && (source === 'guyhoquet' || source === 'stephaneplaza')) {
-        extractionResult = await tryAgenceHTML(url, source)
+        extractionResult = await runCascadeStep(extractionLog, 'N1', `Agence HTML (${source})`, () => tryAgenceHTML(url, source))
       }
     }
     
@@ -377,7 +430,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Uniquement Logic-Immo et sites DataDome/Cloudflare sans API connue
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee && source && SITES_CHROME_FIRST.includes(source)) {
-      extractionResult = await tryPlaywrightChrome(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N1.5', `Playwright Chrome (${source})`, () => tryPlaywrightChrome(url, source))
       triedChrome = true
     }
     
@@ -395,7 +448,9 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Century21, ParuVendu, agences indépendantes, etc.
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !circuitOpen && !vercelSkipToScrapingBee) {
-      extractionResult = await tryDirectFetch(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N2', 'Direct Fetch + HTML', () => tryDirectFetch(url, source))
+    } else if (circuitOpen && !vercelSkipToScrapingBee) {
+      extractionLog.push({ level: 'N2', method: 'Direct Fetch', durationMs: 0, status: 'skipped', detail: 'circuit breaker open' })
     }
     
     // ── Délai aléatoire ──
@@ -405,7 +460,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // NIVEAU 3 : Jina Reader (extraction texte IA, gratuit)
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee) {
-      extractionResult = await tryJinaReader(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N3', 'Jina Reader', () => tryJinaReader(url, source))
     }
     
     // ═══════════════════════════════════════════════════════
@@ -413,20 +468,20 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Google Cache → Playwright fallback → Proxies → Archive.org
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee) {
-      extractionResult = await tryGoogleCache(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Google Cache', () => tryGoogleCache(url, source))
     }
     
     if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee) {
       await randomDelay(1000, 2500)
-      extractionResult = await tryPlaywrightChrome(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Playwright Chrome (fallback)', () => tryPlaywrightChrome(url, source))
     }
     
     if (!extractionResult && !vercelSkipToScrapingBee) {
-      extractionResult = await tryFreeProxies(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Free Proxies', () => tryFreeProxies(url, source))
     }
     
     if (!extractionResult && !vercelSkipToScrapingBee) {
-      extractionResult = await tryArchiveOrg(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Archive.org', () => tryArchiveOrg(url, source))
     }
     
     // ═══════════════════════════════════════════════════════
@@ -435,12 +490,25 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Sur Vercel SANS proxy : c'est le SEUL niveau exécuté pour les sites premium
     // ═══════════════════════════════════════════════════════
     if (!extractionResult) {
-      extractionResult = await tryScrapingBee(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N5', 'ScrapingBee', () => tryScrapingBee(url, source))
     }
     if (!extractionResult) {
-      extractionResult = await tryFirecrawl(url, source)
+      extractionResult = await runCascadeStep(extractionLog, 'N5', 'Firecrawl', () => tryFirecrawl(url, source))
     }
     
+    // ===== LOG RÉSUMÉ CASCADE =====
+    const totalDuration = Math.round(performance.now() - cascadeStart)
+    const winner = extractionLog.find(e => e.status === 'success')
+    console.log(`\n📊 ══════ RÉSUMÉ CASCADE ══════`)
+    console.log(`⏱️  Durée totale: ${totalDuration}ms`)
+    console.log(`🏆 Méthode gagnante: ${winner ? `${winner.method} (${winner.level})` : 'AUCUNE'}`)
+    console.log(`📋 Étapes:`)
+    for (const entry of extractionLog) {
+      const icon = entry.status === 'success' ? '✅' : entry.status === 'skipped' ? '⏭️' : '❌'
+      console.log(`   ${icon} [${entry.level}] ${entry.method} — ${entry.durationMs}ms${entry.detail ? ` (${entry.detail})` : ''}`)
+    }
+    console.log(`══════════════════════════════\n`)
+
     // ===== TOUT A ÉCHOUÉ =====
     if (!extractionResult) {
       recordRequest(url, 'blocked')
@@ -474,6 +542,8 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
         hint: 'Copiez le texte de la page depuis votre navigateur',
         protectedSite: isHeavilyProtected,
         autoFallback: true,
+        extractionLog,
+        totalDurationMs: totalDuration,
       }, { status: 502 })
     }
     
@@ -516,7 +586,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       extractionResult.message,
     )
     
-    return NextResponse.json(extractionResult)
+    return NextResponse.json({ ...extractionResult, extractionLog, totalDurationMs: totalDuration })
     
   } catch (error) {
     console.error('Erreur extraction annonce:', error)
