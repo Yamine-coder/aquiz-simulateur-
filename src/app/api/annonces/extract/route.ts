@@ -85,7 +85,7 @@ const SITES_CHROME_FIRST = ['logic-immo', 'foncia', 'nexity']
 // ═══════════════════════════════════════════════════════
 const SCRAPER_URL = process.env.SCRAPER_URL
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || ''
-const hasProxy = !!(SCRAPER_URL && SCRAPER_API_KEY)
+const hasProxy = !!SCRAPER_URL
 
 /**
  * Exécute un fetch HTTP via le proxy Railway (aquiz-scraper /proxy-fetch).
