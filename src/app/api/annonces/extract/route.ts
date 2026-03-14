@@ -359,10 +359,10 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       pathLower.includes('/recherche') ||
       pathLower.includes('/search') ||
       pathLower.includes('/list.htm') ||
-      pathLower.includes('/annonces/') && !pathLower.match(/\/\d{5,}/) && !pathLower.match(/-r\d{5,}/) ||
+      (pathLower.includes('/annonces/') && !pathLower.match(/\d{5,}/) && !pathLower.match(/-r\d{5,}/)) ||
       searchParams.includes('idtypebien=') ||
-      searchParams.includes('tri=') && searchParams.includes('localities=') ||
-      searchParams.includes('category=') && searchParams.includes('locations=')
+      (searchParams.includes('tri=') && searchParams.includes('localities=')) ||
+      (searchParams.includes('category=') && searchParams.includes('locations='))
     )
     if (isSearchPage) {
       return NextResponse.json(
