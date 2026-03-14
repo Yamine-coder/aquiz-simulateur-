@@ -85,8 +85,8 @@ export const RATE_LIMITS = {
   contact: { maxRequests: 5, windowMs: 15 * 60 * 1000 },
   /** Demande de rappel : 3 requêtes / 15 min */
   rappel: { maxRequests: 3, windowMs: 15 * 60 * 1000 },
-  /** Extraction d'annonce : 10 requêtes / 5 min */
-  extract: { maxRequests: 10, windowMs: 5 * 60 * 1000 },
+  /** Extraction d'annonce : 50 requêtes / 5 min (temporarily raised for testing) */
+  extract: { maxRequests: 50, windowMs: 5 * 60 * 1000 },
   /** API analyse (DVF, géorisques, quartier) : 300 requêtes / min (comparateur peut envoyer ~15 req/annonce) */
   analyse: { maxRequests: 300, windowMs: 60 * 1000 },
 } as const
