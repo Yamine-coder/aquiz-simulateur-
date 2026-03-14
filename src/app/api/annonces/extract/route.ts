@@ -76,7 +76,10 @@ interface ExtractionLogEntry {
 const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouestfrance', 'figaro']
 
 /** Sites protégés par anti-bot lourd (DataDome, Cloudflare) ou SPA → Playwright en priorité */
-const SITES_CHROME_FIRST = ['logic-immo', 'foncia', 'nexity']
+const SITES_CHROME_FIRST = ['pap', 'logic-immo', 'foncia', 'nexity']
+
+/** Sites dont les APIs sont bloquées sur IPs datacenter → skip N2 Direct Fetch, N4 Playwright/Proxies */
+const SITES_DATACENTER_BLOCKED = ['pap']
 
 // ═══════════════════════════════════════════════════════
 // PROXY FETCH — Route les requêtes via Railway (IP non-AWS)
@@ -280,25 +283,53 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     }
 
     // ── Protection SSRF : résolution DNS pour bloquer le rebinding ──
+    const isPrivateIPv4 = (ip: string) =>
+      ip.startsWith('127.') ||
+      ip.startsWith('10.') ||
+      ip.startsWith('0.') ||
+      ip.startsWith('169.254.') ||
+      ip.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+
+    const isPrivateIPv6 = (ip: string) => {
+      const lower = ip.toLowerCase()
+      // Loopback ::1, link-local fe80::, unique local fc00::/fd00::, IPv4-mapped ::ffff:x.x.x.x
+      if (lower === '::1' || lower.startsWith('fe80:') || lower.startsWith('fc00:') || lower.startsWith('fd00:')) return true
+      // IPv4-mapped IPv6 (::ffff:10.0.0.1)
+      const v4Mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+      if (v4Mapped && isPrivateIPv4(v4Mapped[1])) return true
+      return false
+    }
+
     try {
-      const addresses = await dns.resolve4(hostname)
-      const isPrivateIP = addresses.some(ip =>
-        ip.startsWith('127.') ||
-        ip.startsWith('10.') ||
-        ip.startsWith('0.') ||
-        ip.startsWith('169.254.') ||
-        ip.startsWith('192.168.') ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+      // Check both IPv4 and IPv6 to prevent SSRF via IPv6 rebinding
+      const [v4Addresses, v6Addresses] = await Promise.allSettled([
+        dns.resolve4(hostname),
+        dns.resolve6(hostname),
+      ])
+      const allAddresses: { ip: string; isV6: boolean }[] = []
+      if (v4Addresses.status === 'fulfilled') {
+        allAddresses.push(...v4Addresses.value.map(ip => ({ ip, isV6: false })))
+      }
+      if (v6Addresses.status === 'fulfilled') {
+        allAddresses.push(...v6Addresses.value.map(ip => ({ ip, isV6: true })))
+      }
+
+      const hasPrivate = allAddresses.some(({ ip, isV6 }) =>
+        isV6 ? isPrivateIPv6(ip) : isPrivateIPv4(ip)
       )
-      if (isPrivateIP) {
+      if (hasPrivate) {
         return NextResponse.json(
           { success: false, error: 'URL non autorisée' },
           { status: 400 }
         )
       }
+
+      // If neither resolved, allow through with caution (transient DNS failure)
+      if (allAddresses.length === 0) {
+        console.warn(`⚠️ DNS resolution failed for ${hostname} — allowing through with caution`)
+      }
     } catch {
-      // DNS resolution failed — log warning but allow through (might be IPv6-only or transient)
-      // The hostname string check above already blocks obvious private names
       console.warn(`⚠️ DNS resolution failed for ${hostname} — allowing through with caution`)
     }
 
@@ -309,7 +340,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       pathLower.includes('/recherche') ||
       pathLower.includes('/search') ||
       pathLower.includes('/list.htm') ||
-      pathLower.includes('/annonces/') && !pathLower.match(/\/\d{5,}/) ||
+      pathLower.includes('/annonces/') && !pathLower.match(/\/\d{5,}/) && !pathLower.match(/-r\d{5,}/) ||
       searchParams.includes('idtypebien=') ||
       searchParams.includes('tri=') && searchParams.includes('localities=') ||
       searchParams.includes('category=') && searchParams.includes('locations=')
@@ -420,7 +451,10 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       if (!extractionResult && source === 'century21') {
         extractionResult = await runCascadeStep(extractionLog, 'N1', 'Century21', () => tryCentury21(url))
       }
-      if (!extractionResult && (source === 'guyhoquet' || source === 'stephaneplaza')) {
+      // ── Sites avec HTML accessible (pas de DataDome) → tryAgenceHTML ──
+      // Agences, mandataires, portails : fetch HTML + __NEXT_DATA__ + JSON-LD + meta
+      const SITES_AGENCE_HTML = ['guyhoquet', 'stephaneplaza', 'iad', 'capifrance', 'safti', 'optimhome', 'paruvendu', 'superimmo', 'avendrealouer', 'greenacres', 'meilleursagents', 'hosman', 'bouygues', 'kaufman', 'foncia', 'nexity']
+      if (!extractionResult && source && SITES_AGENCE_HTML.includes(source)) {
         extractionResult = await runCascadeStep(extractionLog, 'N1', `Agence HTML (${source})`, () => tryAgenceHTML(url, source))
       }
     }
@@ -436,8 +470,13 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     // SeLoger Neuf fast-fail en amont (L225-235) → pas besoin de retry Chrome ici
     
+    // ── Fast-path : sites bloqués sur datacenter ──
+    // skipDirectFetch = skip uniquement les étapes qui utilisent NOTRE IP (N2 Direct Fetch, N4 Playwright/Proxies)
+    // Jina (N3), Google Cache et Archive.org (N4) utilisent des IPs EXTERNES → pas bloqués par DataDome
+    const skipDirectFetch = source !== null && SITES_DATACENTER_BLOCKED.includes(source) && IS_VERCEL
+    
     // ── Délai aléatoire entre stratégies ──
-    if (!extractionResult && !vercelSkipToScrapingBee) await randomDelay(500, 1500)
+    if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch) await randomDelay(500, 1500)
     
     // ── Circuit breaker : si ce domaine bloque trop, on skip les fetch directs ──
     const circuitOpen = isDomainCircuitOpen(url)
@@ -447,10 +486,10 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Fonctionne pour tout site sans protection anti-bot :
     // Century21, ParuVendu, agences indépendantes, etc.
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !circuitOpen && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !circuitOpen && !vercelSkipToScrapingBee && !skipDirectFetch) {
       extractionResult = await runCascadeStep(extractionLog, 'N2', 'Direct Fetch + HTML', () => tryDirectFetch(url, source))
-    } else if (circuitOpen && !vercelSkipToScrapingBee) {
-      extractionLog.push({ level: 'N2', method: 'Direct Fetch', durationMs: 0, status: 'skipped', detail: 'circuit breaker open' })
+    } else if ((circuitOpen || skipDirectFetch) && !vercelSkipToScrapingBee) {
+      extractionLog.push({ level: 'N2', method: 'Direct Fetch', durationMs: 0, status: 'skipped', detail: skipDirectFetch ? 'datacenter-blocked site' : 'circuit breaker open' })
     }
     
     // ── Délai aléatoire ──
@@ -458,6 +497,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 3 : Jina Reader (extraction texte IA, gratuit)
+    // Utilise les serveurs Jina (IP externe) → pas bloqué par DataDome
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await runCascadeStep(extractionLog, 'N3', 'Jina Reader', () => tryJinaReader(url, source))
@@ -466,17 +506,19 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // ═══════════════════════════════════════════════════════
     // NIVEAU 4 : Fallbacks gratuits
     // Google Cache → Playwright fallback → Proxies → Archive.org
+    // Google Cache et Archive.org utilisent des IPs externes → toujours essayer
+    // Playwright et Proxies utilisent notre IP → skip si datacenter-blocked
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee) {
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Google Cache', () => tryGoogleCache(url, source))
     }
     
-    if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee && !skipDirectFetch) {
       await randomDelay(1000, 2500)
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Playwright Chrome (fallback)', () => tryPlaywrightChrome(url, source))
     }
     
-    if (!extractionResult && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch) {
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Free Proxies', () => tryFreeProxies(url, source))
     }
     
@@ -1094,17 +1136,17 @@ async function tryLeBonCoinAPI(url: string, useProxy = false): Promise<Extractio
     const adId = idMatch[1]
     
     await waitForDomainThrottle(`https://api.leboncoin.fr/`)
+    
+    // Clé API mobile LeBonCoin (publique, extraite du JS frontend LBC)
+    // Permet de bypass DataDome depuis n'importe quelle IP (datacenter inclus)
+    const LBC_API_KEY = process.env.LEBONCOIN_API_KEY || 'ba0c2dad52b3ec'
+    
     const lbcHeaders: Record<string, string> = {
-        'User-Agent': getRandomUserAgent(),
+        'User-Agent': 'LBC;Android;14;phone;8.1.1',
+        'api_key': LBC_API_KEY,
         'Accept': 'application/json',
         'Accept-Language': 'fr-FR,fr;q=0.9',
-        'Referer': 'https://www.leboncoin.fr/',
-        'Origin': 'https://www.leboncoin.fr',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
     }
-    if (process.env.LEBONCOIN_API_KEY) lbcHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
 
     const apiUrl = `https://api.leboncoin.fr/finder/classified/${adId}`
     let json: Record<string, unknown> | null = null
@@ -1120,7 +1162,7 @@ async function tryLeBonCoinAPI(url: string, useProxy = false): Promise<Extractio
     }
 
     if (!json) {
-      // ── Appel direct (fallback si proxy KO) ──
+      // ── Appel direct (fallback si proxy KO, ou appel principal hors Vercel) ──
       const response = await fetch(apiUrl, {
         headers: lbcHeaders,
         signal: AbortSignal.timeout(10000),
@@ -1177,14 +1219,13 @@ async function tryLeBonCoinFallback(url: string): Promise<ExtractionResponse | n
 
     for (const endpoint of altEndpoints) {
       try {
+        const LBC_API_KEY = process.env.LEBONCOIN_API_KEY || 'ba0c2dad52b3ec'
         const fbHeaders: Record<string, string> = {
-            'User-Agent': getRandomUserAgent(),
+            'User-Agent': 'LBC;Android;14;phone;8.1.1',
+            'api_key': LBC_API_KEY,
             'Accept': 'application/json',
             'Accept-Language': 'fr-FR,fr;q=0.9',
-            'Referer': 'https://www.leboncoin.fr/',
-            'Origin': 'https://www.leboncoin.fr',
         }
-        if (process.env.LEBONCOIN_API_KEY) fbHeaders['api_key'] = process.env.LEBONCOIN_API_KEY
         const response = await fetch(endpoint, {
           headers: fbHeaders,
           signal: AbortSignal.timeout(10000),
@@ -2764,7 +2805,7 @@ async function tryJinaReader(url: string, source: string | null): Promise<Extrac
   try {
     const jinaUrl = `https://r.jina.ai/${url}`
     const jinaApiKey = process.env.JINA_API_KEY
-    const isDataDomeSite = url.includes('selogerneuf.com') || url.includes('logic-immo.com') || url.includes('pap.fr')
+    const isDataDomeSite = url.includes('selogerneuf.com') || url.includes('logic-immo.com') || url.includes('pap.fr') || url.includes('leboncoin.fr')
     
     // ── Pour les sites DataDome : tenter d'abord le mode HTML ──
     // Jina peut exécuter le JS et bypasser DataDome grâce à son infra navigateur.
@@ -2786,6 +2827,27 @@ async function tryJinaReader(url: string, source: string | null): Promise<Extrac
         if (htmlResp.ok) {
           const html = await htmlResp.text()
           if (html.length > 500 && !isBlockedResponse(html)) {
+            // ── LeBonCoin : __NEXT_DATA__ → parseLeBonCoinBaseData (données structurées) ──
+            if (source === 'leboncoin') {
+              const lbcNextMatch = html.match(/<script[^>]*id\s*=\s*["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/)
+              if (lbcNextMatch) {
+                try {
+                  const nextJson = JSON.parse(lbcNextMatch[1])
+                  const adData = nextJson?.props?.pageProps?.ad
+                    || nextJson?.props?.pageProps?.classified
+                    || nextJson?.props?.pageProps
+                  if (adData && (adData.list_id || adData.subject || adData.price)) {
+                    const lbcData = parseLeBonCoinBaseData(adData as Record<string, unknown>, url)
+                    const fc = countLeBonCoinFields(lbcData)
+                    if (fc >= MIN_FIELDS) {
+                      console.log(`✅ Jina HTML: ${fc} champs LeBonCoin extraits (__NEXT_DATA__)`)
+                      return { success: true, source: 'leboncoin', data: lbcData, fieldsExtracted: fc, method: 'jina-html-nextdata', message: `${fc} données extraites via Jina HTML (__NEXT_DATA__ LeBonCoin)` }
+                    }
+                  }
+                } catch { /* LBC __NEXT_DATA__ parse échoué, fallback extraction générique */ }
+              }
+            }
+            
             // Parser __NEXT_DATA__ en priorité (sites Next.js comme selogerneuf.com)
             const nextData = parseNextData(html) as Record<string, unknown>
             const htmlData = extractFromHTML(html, url) || {} as Record<string, unknown>
@@ -3060,6 +3122,33 @@ async function tryGoogleCache(url: string, source: string | null): Promise<Extra
     
     const html = await response.text()
     if (isBlockedResponse(html)) return null
+    
+    // ── LeBonCoin / sites Next.js : extraire __NEXT_DATA__ (données structurées JSON) ──
+    if (source === 'leboncoin') {
+      const nextDataMatch = html.match(/<script[^>]*id\s*=\s*["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/)
+      if (nextDataMatch) {
+        try {
+          const nextJson = JSON.parse(nextDataMatch[1])
+          const adData = nextJson?.props?.pageProps?.ad
+            || nextJson?.props?.pageProps?.classified
+            || nextJson?.props?.pageProps
+          if (adData && (adData.list_id || adData.subject || adData.price)) {
+            const lbcData = parseLeBonCoinBaseData(adData as Record<string, unknown>, url)
+            const fc = countLeBonCoinFields(lbcData)
+            if (fc >= MIN_FIELDS) {
+              return {
+                success: true,
+                source: 'leboncoin',
+                data: lbcData,
+                fieldsExtracted: fc,
+                method: 'google-cache-nextdata',
+                message: `${fc} données extraites via Google Cache (__NEXT_DATA__)`
+              }
+            }
+          }
+        } catch { /* __NEXT_DATA__ parse échoué, continuer avec extraction générique */ }
+      }
+    }
     
     // Pipeline centralisé
     const data: Record<string, unknown> = extractFromHTML(html, url)

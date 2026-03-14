@@ -329,7 +329,69 @@ export function parseAnnonceHTML(html: string, url: string): Partial<NouvelleAnn
     }
   }
   
-  // PAP specific
+  // PAP specific — PAP uses Nuxt.js and has specific CSS classes and data attributes
+  if (url.includes('pap.fr')) {
+    // PAP prix: class "item-price" or "prix" or data attributes
+    if (!data.prix) {
+      const papPrix = html.match(/class="[^"]*item-price[^"]*"[^>]*>([^<]+)/i)
+        || html.match(/class="[^"]*prix[^"]*"[^>]*>([^<]+)/i)
+        || html.match(/data-price="(\d+)"/i)
+      if (papPrix) {
+        const p = extraireNombre(papPrix[1])
+        if (p && p > 10000 && p < 50000000) data.prix = p
+      }
+    }
+    // PAP surface
+    if (!data.surface) {
+      const papSurf = html.match(/class="[^"]*item-tags[^"]*"[^>]*>[\s\S]*?(\d+(?:[.,]\d+)?)\s*m[²2]/i)
+        || html.match(/data-surface="(\d+(?:[.,]\d+)?)"/i)
+      if (papSurf) {
+        const s = extraireSurface(papSurf[1])
+        if (s && s >= 9 && s <= 1000) data.surface = s
+      }
+    }
+    // PAP pieces
+    if (!data.pieces) {
+      const papPieces = html.match(/data-nb_rooms="(\d+)"/i)
+        || html.match(/data-rooms="(\d+)"/i)
+      if (papPieces) data.pieces = parseInt(papPieces[1])
+    }
+    // PAP ville / CP from data attributes
+    if (!data.ville) {
+      const papVille = html.match(/data-(?:city|ville)="([^"]+)"/i)
+      if (papVille) data.ville = papVille[1]
+    }
+    if (!data.codePostal) {
+      const papCp = html.match(/data-(?:zipcode|cp)="(\d{5})"/i)
+        || html.match(/data-postal[_-]?code="(\d{5})"/i)
+      if (papCp) data.codePostal = papCp[1]
+    }
+    // PAP DPE from SVG or data attributes
+    if (!data.dpe) {
+      const papDpe = html.match(/data-dpe="([A-G])"/i)
+        || html.match(/class="[^"]*dpe-letter[^"]*"[^>]*>([A-G])</i)
+        || html.match(/diagnosticEnergetique[^>]*>[^A-G]*([A-G])\b/i)
+      if (papDpe) data.dpe = papDpe[1].toUpperCase() as ClasseDPE
+    }
+    if (!data.ges) {
+      const papGes = html.match(/data-ges="([A-G])"/i)
+        || html.match(/class="[^"]*ges-letter[^"]*"[^>]*>([A-G])</i)
+      if (papGes) data.ges = papGes[1].toUpperCase() as ClasseDPE
+    }
+    // PAP type from URL
+    if (!data.type) {
+      if (url.match(/maison|villa|pavillon/i)) data.type = 'maison' as TypeBienAnnonce
+      else if (url.match(/appartement/i)) data.type = 'appartement' as TypeBienAnnonce
+    }
+    // PAP images
+    if (!data.imageUrl) {
+      const papImg = html.match(/class="[^"]*owl-thumb-item[^"]*"[^>]*>[\s\S]*?src="(https?:\/\/photos[^"]+)"/i)
+        || html.match(/data-src="(https?:\/\/photos\.pap\.fr[^"]+)"/i)
+        || html.match(/src="(https?:\/\/photos\.pap\.fr\/[^"]+)"/i)
+      if (papImg) data.imageUrl = papImg[1].replace(/\/thumb\//, '/')
+    }
+  }
+
   if (!data.ville || !data.codePostal) {
     const papMatch = html.match(/data-(?:city|ville)="([^"]+)"/i)
     if (papMatch && !data.ville) {
@@ -1067,15 +1129,44 @@ function extractFromJsonLdItem(item: Record<string, unknown>, data: Partial<Nouv
 export function parseNextData(html: string): Partial<NouvelleAnnonce> {
   const data: Partial<NouvelleAnnonce> = {}
   
+  // ── Next.js: __NEXT_DATA__ ──
   const nextDataMatch = html.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i)
-  if (!nextDataMatch) return data
+  if (nextDataMatch) {
+    try {
+      const json = JSON.parse(nextDataMatch[1])
+      extractFromNestedJson(json, data, 0)
+    } catch { /* JSON invalide */ }
+  }
   
-  try {
-    const json = JSON.parse(nextDataMatch[1])
-    // Next.js stocke les données dans props.pageProps
-    extractFromNestedJson(json, data, 0)
-  } catch {
-    // JSON invalide, on skip
+  // ── Nuxt.js: window.__NUXT__ (PAP, etc.) ──
+  if (!nextDataMatch) {
+    const nuxtMatch = html.match(/window\.__NUXT__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/i)
+      || html.match(/window\.__NUXT_DATA__\s*=\s*(\[[\s\S]*?\])\s*;?\s*<\/script>/i)
+    if (nuxtMatch) {
+      try {
+        const json = JSON.parse(nuxtMatch[1])
+        extractFromNestedJson(json, data, 0)
+      } catch { /* JSON invalide */ }
+    }
+  }
+
+  // ── Vue.js SPA: window.__INITIAL_STATE__ / __APP_STATE__ ──
+  if (Object.keys(data).length <= 1) {
+    const spaPatterns = [
+      /window\.__INITIAL_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/i,
+      /window\.__APP_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/i,
+      /window\.__PRELOADED_STATE__\s*=\s*({[\s\S]*?})\s*;?\s*<\/script>/i,
+    ]
+    for (const pattern of spaPatterns) {
+      const match = html.match(pattern)
+      if (match) {
+        try {
+          const json = JSON.parse(match[1])
+          extractFromNestedJson(json, data, 0)
+        } catch { /* JSON invalide */ }
+        break
+      }
+    }
   }
   
   return data
