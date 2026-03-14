@@ -190,6 +190,11 @@ function nettoyerEchellesDPE(texte: string): string {
     // Variante : chaque palier kWh/kg sur sa propre ligne "A ≤ 50 kWh\nB 51 à 90 kWh\n..."
     // EXCLUT les lignes contenant "m²" (ce sont les valeurs réelles, ex: "D 198 kWh/m²/an")
     .replace(/(?:^|\n)\s*[A-G]\s*(?:≤|<=|⩽|<|>|>=|≥)?\s*\d+\s*(?:à\s*\d+)?\s*(?:kWh|kg)(?![^\n]*m[²2])[^\n]*(?:\n\s*[A-G]\s*(?:≤|<=|⩽|<|>|>=|≥)?\s*\d+\s*(?:à\s*\d+)?\s*(?:kWh|kg)(?![^\n]*m[²2])[^\n]*){3,}/gmi, '')
+    // Variante : paliers SANS unité sur des lignes séparées "A ≤ 70\nB 71 à 110\nC 111 à 180\n..."
+    // (SeLoger, Bienici) — 5+ lignes consécutives avec lettre + comparateur/plage
+    .replace(/(?:^|\n)\s*[A-G]\s*(?:≤|<=|⩽|<|>|>=|≥)\s*\d+[^\n]*(?:\n\s*[A-G]\s+\d+\s+[àa]\s+\d+[^\n]*){3,}(?:\n\s*[A-G]\s*(?:>|>=|≥)\s*\d+[^\n]*)?/gmi, '')
+    // Bienici : "A B C D E F G" suivi de lignes "≤50 51-90 91-150 ..." (échelle horizontale)
+    .replace(/(?:≤|<=|⩽)\d+(?:\s+\d+\s*[-–]\s*\d+){3,}(?:\s+(?:>|>=|≥)\d+)?/g, '')
     // Variante inline sur une seule ligne : "A ≤ 50 kWh B 51 à 90 kWh ... G > 450 kWh"
     .replace(/\b[A-G]\s*(?:≤|<=|⩽|<)\s*\d+\s*(?:kWh|kg)[^\n]*?[A-G]\s*(?:>|>=|≥)\s*\d+\s*(?:kWh|kg)[^\n]*/gi, '')
     // LeBonCoin : "Logement économe" ... "Logement énergivore" ou "Faible émission" ... "Forte émission"
@@ -637,6 +642,14 @@ function extraireDPE(texte: string): ClasseDPE | undefined {
   )
   if (kwhResult) return kwhResult
 
+  // 1b. Pattern inversé : nombre + kWh/m²/an + lettre ("165 kWh/m²/an C", "195 kWh/m².an D")
+  //     Stop at ')' to avoid capturing GES letter after DPE kWh (e.g. "DPE : D (215 kWh/m²/an). GES : C")
+  const kwhReversed = [...texte.matchAll(/\d{1,4}\s*kWh[^\n)]{0,20}?\b([A-G])\b/gi)]
+  if (kwhReversed.length > 0) {
+    const last = kwhReversed[kwhReversed.length - 1]
+    if (last[1]) return last[1].toUpperCase() as ClasseDPE
+  }
+
   // 2. Patterns textuels (pas affectés par l'échelle)
   const patterns = [
     /classe\s*(?:énergie|énergétique)\s*:?\s*([A-G])\b/i,
@@ -645,9 +658,11 @@ function extraireDPE(texte: string): ClasseDPE | undefined {
     /DPE\)\s*([A-G])\b/i,
     /diagnostic\s*(?:de\s*)?performance\s*énergétique\s*(?:\(DPE\))?\s*:?\s*([A-G])\b/i,
     /étiquette\s*énergie\s*:?\s*([A-G])\b/i,
-    /consommation\s*(?:d')?énergie\s*(?:primaire)?\s*:?\s*([A-G])\b/i,
+    /consommation\s*(?:d[’']?)?énergie\s*(?:primaire)?\s*:?\s*([A-G])\b/i,
     /bilan\s*(?:énergétique|énergie)\s*:?\s*([A-G])\b/i,
     /[ée]nergie\s*:?\s*([A-G])\b/i,
+    // PAP : "Classification : E"
+    /classification\s*:?\s*([A-G])\b/i,
     // LaForêt, Orpi : "Consommation conventionnelle en énergie primaire D"
     /consommation\s*conventionnelle[^.]{0,50}?\s*([A-G])\b/i,
     // Pattern numérique sans unité : "DPE 234 D" ou "DPE : 234 kWh - D"
@@ -677,6 +692,13 @@ function extraireGES(texte: string): ClasseDPE | undefined {
     /\b([A-G])\s*(?:≤|<=|⩽)?\s*\d{1,4}\s*kg\s*(?:CO|eq)/gi
   )
   if (kgResult) return kgResult
+
+  // 1b. Pattern inversé : nombre + kg CO₂/m²/an + lettre ("28 kg CO₂/m²/an C")
+  const kgReversed = [...texte.matchAll(/\d{1,4}\s*kg\s*(?:CO|eq)[^\n)]{0,20}?\b([A-G])\b/gi)]
+  if (kgReversed.length > 0) {
+    const last = kgReversed[kgReversed.length - 1]
+    if (last[1]) return last[1].toUpperCase() as ClasseDPE
+  }
 
   // 2. Patterns textuels
   const patterns = [
@@ -838,7 +860,7 @@ function extraireNbSallesBains(texte: string): number | undefined {
 function extraireOrientation(texte: string): string | undefined {
   // "Orientation sud", "Exposé plein sud", "Double exposition est/ouest"
   const patterns = [
-    /(?:orientation|orienté|exposé|exposition)\s*:?\s*((?:plein\s*)?(?:nord|sud|est|ouest)(?:\s*[/\-]\s*(?:nord|sud|est|ouest))?)/i,
+    /(?:orientation|orientée?|exposée?|exposition)\s*:?\s*((?:plein\s*)?(?:nord|sud|est|ouest)(?:\s*[/\-]\s*(?:nord|sud|est|ouest))?)/i,
     /(?:double\s*exposition)\s*:?\s*((?:nord|sud|est|ouest)\s*[/\-]\s*(?:nord|sud|est|ouest))/i,
     // "DOUBLE EXPOSITION" sans direction spécifique
     /(double\s*exposition)/i,
@@ -880,7 +902,7 @@ function extraireEtage(texte: string): number | undefined {
     /[ée]tage\s+(?:de\s+)?(?:votre\s+|ce\s+|le\s+)?bien[\s:]*\n\s*\n?\s*(\d+)/i,
     // [ \t]* au lieu de \s* pour ne pas croiser les lignes
     // ("Chambres : 2\nÉtage" → empêche de capturer 2)
-    /(\d+)(?:er?|e|ème)?[ \t]*étage/i,
+    /(\d+)(?:er?|e|[èe]me)?[ \t]+(?:et\s+dernier\s+)?étage/i,
     /étage\s*:?\s*(\d+)/i,
   ]
 
@@ -900,8 +922,9 @@ function extraireCharges(texte: string): number | undefined {
   const patterns = [
     // LeBonCoin markdown : "Charges annuelles de copropriété\n\n2 880 € par / an"
     /charges?\s+annuelles?\s+(?:de\s+)?copropri[ée]t[ée][\s:]*\n?\s*(\d[\d\s]*)\s*€/i,
-    /charges?\s*(?:de\s+)?copropriété\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)?\s*(?:\/\s*(?:an|mois))?/i,
+    /charges?\s*(?:de\s+)?copro(?:priété)?\s*[:(]?\s*\(?\s*(\d[\d\s]*)\s*(?:€|euros?)?\s*(?:\/\s*(?:an|mois))?/i,
     /charges?\s*mensuelles?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
+    /charges?\s*pr[ée]visionnelles?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
     /provisions?\s*sur\s*charges?\s*:?\s*(\d[\d\s]*)\s*(?:€|euros?)/i,
     /charges?\s*:\s*(\d[\d\s]*)\s*(?:€|euros?)\s*\/\s*mois/i,
     /(\d[\d\s]*)\s*(?:€|euros?)\s*(?:de\s+)?charges?\s*(?:par\s+mois|\/\s*mois|mensuelles?)/i,
@@ -965,11 +988,11 @@ function extraireEquipements(texte: string) {
     return !exclusions.some(excl => excl.test(lower))
   }
 
-  const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/, /ascenseur\s*:\s*non/]
-  const NEG_BALCON_ONLY = [/sans\s+balcon/, /pas\s+d['’e]?\s*balcon/, /aucun\s+balcon/, /balcon\s*:\s*non/]
-  const NEG_TERRASSE_ONLY = [/sans\s+terrasse/, /pas\s+d['’e]?\s*terrasse/, /aucune?\s+terrasse/, /terrasse\s*:\s*non/]
-  const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/, /parking\s*:\s*non/, /garage\s*:\s*non/]
-  const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/, /cave\s*:\s*non/]
+  const NEG_ASCENSEUR = [/sans\s+ascenseur/, /pas\s+d['’e]?\s*ascenseur/, /aucun\s+ascenseur/, /ascenseur\s*:\s*non/, /ni\s+d['’e]?\s*ascenseur/]
+  const NEG_BALCON_ONLY = [/sans\s+balcon/, /pas\s+d['’e]?\s*balcon/, /aucun\s+balcon/, /balcon\s*:\s*non/, /ni\s+d['’e]?\s*balcon/]
+  const NEG_TERRASSE_ONLY = [/sans\s+terrasse/, /pas\s+d['’e]?\s*terrasse/, /aucune?\s+terrasse/, /terrasse\s*:\s*non/, /ni\s+d['’e]?\s*terrasse/]
+  const NEG_PARKING = [/sans\s+(?:parking|garage)/, /pas\s+d['’e]?\s*(?:parking|garage)/, /aucun\s+(?:parking|garage)/, /parking\s*:\s*non/, /garage\s*:\s*non/, /ni\s+d['’e]?\s*(?:parking|garage)/]
+  const NEG_CAVE = [/sans\s+cave/, /pas\s+d['’e]?\s*cave/, /aucune?\s+cave/, /cave\s*:\s*non/, /ni\s+d['’e]?\s*cave/]
 
   // balconTerrasse : SeLoger peut avoir "Pas de balcon" ET "Terrasse" séparément.
   // Chaque élément (balcon, terrasse, loggia) est vérifié indépendamment.

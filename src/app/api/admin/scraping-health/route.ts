@@ -6,8 +6,8 @@
  */
 
 import { checkAdminAuth } from '@/lib/adminAuth'
-import { getActiveAlerts, getHealthReport, resolveAlert } from '@/lib/scraping/healthMonitor'
 import { getScrapingStats } from '@/lib/scraping/antiBlock'
+import { getActiveAlerts, getHealthReport, resolveAlert } from '@/lib/scraping/healthMonitor'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'

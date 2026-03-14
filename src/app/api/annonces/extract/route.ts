@@ -33,12 +33,12 @@ import {
     waitForDomainThrottle,
 } from '@/lib/scraping/antiBlock'
 import { completerDonnees } from '@/lib/scraping/completerDonnees'
-import { recordExtraction, recordProxyHealth } from '@/lib/scraping/healthMonitor'
 import {
     detecterSource,
     extractFromHTML,
     parseNextData,
 } from '@/lib/scraping/extracteur'
+import { recordExtraction } from '@/lib/scraping/healthMonitor'
 import { compterChampsExtraits, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import { tryPlaywrightChrome } from '@/lib/scraping/playwrightScraper'
 import { NextRequest, NextResponse } from 'next/server'
