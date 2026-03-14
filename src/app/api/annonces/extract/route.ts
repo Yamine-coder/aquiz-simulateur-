@@ -33,6 +33,7 @@ import {
     waitForDomainThrottle,
 } from '@/lib/scraping/antiBlock'
 import { completerDonnees } from '@/lib/scraping/completerDonnees'
+import { recordExtraction, recordProxyHealth } from '@/lib/scraping/healthMonitor'
 import {
     detecterSource,
     extractFromHTML,
@@ -133,6 +134,7 @@ async function runCascadeStep(
   level: string,
   method: string,
   fn: () => Promise<ExtractionResponse | null>,
+  site?: string,
 ): Promise<ExtractionResponse | null> {
   const t0 = performance.now()
   try {
@@ -141,9 +143,16 @@ async function runCascadeStep(
     if (result) {
       log.push({ level, method, durationMs, status: 'success', fieldsExtracted: result.fieldsExtracted })
       console.log(`✅ [${level}] ${method} → ${result.fieldsExtracted ?? '?'} champs en ${durationMs}ms`)
+      // ── Health Monitor ──
+      if (site) {
+        recordExtraction({ site, method, level, success: true, fieldsExtracted: result.fieldsExtracted ?? 0, durationMs, timestamp: Date.now() })
+      }
     } else {
       log.push({ level, method, durationMs, status: 'fail' })
       console.log(`❌ [${level}] ${method} → échec en ${durationMs}ms`)
+      if (site) {
+        recordExtraction({ site, method, level, success: false, fieldsExtracted: 0, durationMs, timestamp: Date.now() })
+      }
     }
     return result
   } catch (err) {
@@ -151,6 +160,9 @@ async function runCascadeStep(
     const detail = err instanceof Error ? err.message : String(err)
     log.push({ level, method, durationMs, status: 'fail', detail })
     console.log(`❌ [${level}] ${method} → erreur en ${durationMs}ms: ${detail}`)
+    if (site) {
+      recordExtraction({ site, method, level, success: false, fieldsExtracted: 0, durationMs, timestamp: Date.now(), error: detail })
+    }
     return null
   }
 }
@@ -235,14 +247,21 @@ export async function POST(request: NextRequest) {
 
 async function handleExtraction(request: NextRequest): Promise<NextResponse> {
   try {
+    // ── Bypass rate limit pour les probes internes (cron health check) ──
+    const cronProbe = request.headers.get('x-cron-probe')
+    const cronSecret = process.env.CRON_SECRET
+    const isCronProbe = !!cronSecret && cronProbe === cronSecret
+
     // ── Rate Limiting ─────────────────────────────────────
-    const ip = getClientIP(request.headers)
-    const rateCheck = checkRateLimit(`extract:${ip}`, RATE_LIMITS.extract)
-    if (!rateCheck.success) {
-      return NextResponse.json(
-        { success: false, error: 'Trop de requêtes d\'extraction. Veuillez patienter.' },
-        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
-      )
+    if (!isCronProbe) {
+      const ip = getClientIP(request.headers)
+      const rateCheck = checkRateLimit(`extract:${ip}`, RATE_LIMITS.extract)
+      if (!rateCheck.success) {
+        return NextResponse.json(
+          { success: false, error: 'Trop de requêtes d\'extraction. Veuillez patienter.' },
+          { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.resetAt - Date.now()) / 1000)) } }
+        )
+      }
     }
 
     const { url } = await request.json()
@@ -434,28 +453,28 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     
     if (!vercelSkipToScrapingBee) {
       if (source === 'seloger') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'SeLoger API', () => trySeLogerAPI(url, vercelUseProxy))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'SeLoger API', () => trySeLogerAPI(url, vercelUseProxy), source)
       }
       if (!extractionResult && source === 'leboncoin') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'LeBonCoin API', () => tryLeBonCoinAPI(url, vercelUseProxy))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'LeBonCoin API', () => tryLeBonCoinAPI(url, vercelUseProxy), source)
       }
       if (!extractionResult && source === 'bienici') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Bien\'ici API', () => tryBienIciAPI(url))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Bien\'ici API', () => tryBienIciAPI(url), source)
       }
       if (!extractionResult && source === 'laforet') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Laforêt API', () => tryLaforetAPI(url))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Laforêt API', () => tryLaforetAPI(url), source)
       }
       if (!extractionResult && source === 'orpi') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Orpi API', () => tryOrpiAPI(url, vercelUseProxy))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Orpi API', () => tryOrpiAPI(url, vercelUseProxy), source)
       }
       if (!extractionResult && source === 'century21') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Century21', () => tryCentury21(url))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Century21', () => tryCentury21(url), source)
       }
       // ── Sites avec HTML accessible (pas de DataDome) → tryAgenceHTML ──
       // Agences, mandataires, portails : fetch HTML + __NEXT_DATA__ + JSON-LD + meta
       const SITES_AGENCE_HTML = ['guyhoquet', 'stephaneplaza', 'iad', 'capifrance', 'safti', 'optimhome', 'paruvendu', 'superimmo', 'avendrealouer', 'greenacres', 'meilleursagents', 'hosman', 'bouygues', 'kaufman', 'foncia', 'nexity']
       if (!extractionResult && source && SITES_AGENCE_HTML.includes(source)) {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', `Agence HTML (${source})`, () => tryAgenceHTML(url, source))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', `Agence HTML (${source})`, () => tryAgenceHTML(url, source), source)
       }
     }
     
@@ -464,7 +483,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Uniquement Logic-Immo et sites DataDome/Cloudflare sans API connue
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee && source && SITES_CHROME_FIRST.includes(source)) {
-      extractionResult = await runCascadeStep(extractionLog, 'N1.5', `Playwright Chrome (${source})`, () => tryPlaywrightChrome(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N1.5', `Playwright Chrome (${source})`, () => tryPlaywrightChrome(url, source), source)
       triedChrome = true
     }
     
@@ -491,7 +510,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Century21, ParuVendu, agences indépendantes, etc.
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !circuitOpen && !vercelSkipToScrapingBee && !skipDirectFetch) {
-      extractionResult = await runCascadeStep(extractionLog, 'N2', 'Direct Fetch + HTML', () => tryDirectFetch(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N2', 'Direct Fetch + HTML', () => tryDirectFetch(url, source), source ?? undefined)
     } else if ((circuitOpen || skipDirectFetch) && !vercelSkipToScrapingBee) {
       extractionLog.push({ level: 'N2', method: 'Direct Fetch', durationMs: 0, status: 'skipped', detail: skipDirectFetch ? 'datacenter-blocked site' : 'circuit breaker open' })
     }
@@ -504,7 +523,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Utilise les serveurs Jina (IP externe) → pas bloqué par DataDome
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
-      extractionResult = await runCascadeStep(extractionLog, 'N3', 'Jina Reader', () => tryJinaReader(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N3', 'Jina Reader', () => tryJinaReader(url, source), source ?? undefined)
     }
     
     // ═══════════════════════════════════════════════════════
@@ -514,20 +533,20 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Playwright et Proxies utilisent notre IP → skip si datacenter-blocked
     // ═══════════════════════════════════════════════════════
     if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
-      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Google Cache', () => tryGoogleCache(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Google Cache', () => tryGoogleCache(url, source), source ?? undefined)
     }
     
     if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee && !skipDirectFetch && !isBudgetExhausted()) {
       await randomDelay(1000, 2500)
-      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Playwright Chrome (fallback)', () => tryPlaywrightChrome(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Playwright Chrome (fallback)', () => tryPlaywrightChrome(url, source), source ?? undefined)
     }
     
     if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch && !isBudgetExhausted()) {
-      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Free Proxies', () => tryFreeProxies(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Free Proxies', () => tryFreeProxies(url, source), source ?? undefined)
     }
     
     if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
-      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Archive.org', () => tryArchiveOrg(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N4', 'Archive.org', () => tryArchiveOrg(url, source), source ?? undefined)
     }
     
     // Log si budget dépassé
@@ -543,10 +562,10 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Sur Vercel SANS proxy : c'est le SEUL niveau exécuté pour les sites premium
     // ═══════════════════════════════════════════════════════
     if (!extractionResult) {
-      extractionResult = await runCascadeStep(extractionLog, 'N5', 'ScrapingBee', () => tryScrapingBee(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N5', 'ScrapingBee', () => tryScrapingBee(url, source), source ?? undefined)
     }
     if (!extractionResult) {
-      extractionResult = await runCascadeStep(extractionLog, 'N5', 'Firecrawl', () => tryFirecrawl(url, source))
+      extractionResult = await runCascadeStep(extractionLog, 'N5', 'Firecrawl', () => tryFirecrawl(url, source), source ?? undefined)
     }
     
     // ===== LOG RÉSUMÉ CASCADE =====

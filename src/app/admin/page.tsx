@@ -779,6 +779,9 @@ export default function AdminPage() {
           <button onClick={() => router.push('/admin/aides')} className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800" title="Monitoring des aides">
             <ShieldCheck size={14} /><span className="hidden sm:inline">Aides</span>
           </button>
+          <button onClick={() => router.push('/admin/scraping')} className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800" title="Santé Scraping">
+            <Zap size={14} /><span className="hidden sm:inline">Scraping</span>
+          </button>
           <button onClick={handleLogout} className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-red-400 hover:bg-zinc-800" title="Déconnexion">
             <LogOut size={14} />
           </button>
