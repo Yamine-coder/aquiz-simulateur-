@@ -2527,7 +2527,7 @@ async function tryOrpiAPI(url: string, useProxy = false): Promise<ExtractionResp
     if (useProxy) {
       const proxyResp = await proxyFetch(url, { timeout: 15000 })
       if (!proxyResp) return null
-      html = await proxyResp.text()
+      html = typeof proxyResp.body === 'string' ? proxyResp.body : JSON.stringify(proxyResp.body)
     } else {
       const response = await protectedFetch(url, {
         timeoutMs: 15000,
