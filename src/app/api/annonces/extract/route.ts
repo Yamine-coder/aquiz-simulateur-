@@ -616,7 +616,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       /cette\s*annonce\s*(n'est\s*plus|a\s*été)/i,
       /bien\s*(n'est\s*plus|a\s*été\s*vendu)/i,
       /page\s*(introuvable|inexistante)/i,
-      /a\s*été\s*vendu/i,  // LeBonCoin "Ce bien a été vendu"
+      /été\s*vendu/i,  // LeBonCoin "Ce bien a été vendu" (or truncated "été vendu")
       /ce\s*bien\s*a\s*été/i,
     ]
     
