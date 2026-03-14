@@ -73,13 +73,13 @@ interface ExtractionLogEntry {
 }
 
 /** Sites pour lesquels ScrapingBee doit activer premium_proxy (DataDome/Cloudflare) */
-const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouestfrance', 'figaro']
+const PREMIUM_PROXY_SITES = ['seloger', 'leboncoin', 'pap', 'logic-immo', 'ouestfrance', 'figaro', 'orpi']
 
 /** Sites protégés par anti-bot lourd (DataDome, Cloudflare) ou SPA → Playwright en priorité */
 const SITES_CHROME_FIRST = ['pap', 'logic-immo', 'foncia', 'nexity']
 
 /** Sites dont les APIs sont bloquées sur IPs datacenter → skip N2 Direct Fetch, N4 Playwright/Proxies */
-const SITES_DATACENTER_BLOCKED = ['pap']
+const SITES_DATACENTER_BLOCKED = ['pap', 'orpi']
 
 // ═══════════════════════════════════════════════════════
 // PROXY FETCH — Route les requêtes via Railway (IP non-AWS)
@@ -446,7 +446,7 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
         extractionResult = await runCascadeStep(extractionLog, 'N1', 'Laforêt API', () => tryLaforetAPI(url))
       }
       if (!extractionResult && source === 'orpi') {
-        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Orpi API', () => tryOrpiAPI(url))
+        extractionResult = await runCascadeStep(extractionLog, 'N1', 'Orpi API', () => tryOrpiAPI(url, vercelUseProxy))
       }
       if (!extractionResult && source === 'century21') {
         extractionResult = await runCascadeStep(extractionLog, 'N1', 'Century21', () => tryCentury21(url))
@@ -475,6 +475,10 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Jina (N3), Google Cache et Archive.org (N4) utilisent des IPs EXTERNES → pas bloqués par DataDome
     const skipDirectFetch = source !== null && SITES_DATACENTER_BLOCKED.includes(source) && IS_VERCEL
     
+    /** Garde-fou : temps max avant de sauter aux services payants (N5) */
+    const CASCADE_BUDGET_MS = 40_000
+    const isBudgetExhausted = () => (performance.now() - cascadeStart) > CASCADE_BUDGET_MS
+    
     // ── Délai aléatoire entre stratégies ──
     if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch) await randomDelay(500, 1500)
     
@@ -493,13 +497,13 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     }
     
     // ── Délai aléatoire ──
-    if (!extractionResult && !vercelSkipToScrapingBee) await randomDelay(500, 1500)
+    if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) await randomDelay(500, 1500)
     
     // ═══════════════════════════════════════════════════════
     // NIVEAU 3 : Jina Reader (extraction texte IA, gratuit)
     // Utilise les serveurs Jina (IP externe) → pas bloqué par DataDome
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
       extractionResult = await runCascadeStep(extractionLog, 'N3', 'Jina Reader', () => tryJinaReader(url, source))
     }
     
@@ -509,21 +513,28 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
     // Google Cache et Archive.org utilisent des IPs externes → toujours essayer
     // Playwright et Proxies utilisent notre IP → skip si datacenter-blocked
     // ═══════════════════════════════════════════════════════
-    if (!extractionResult && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Google Cache', () => tryGoogleCache(url, source))
     }
     
-    if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee && !skipDirectFetch) {
+    if (!extractionResult && !triedChrome && !vercelSkipToScrapingBee && !skipDirectFetch && !isBudgetExhausted()) {
       await randomDelay(1000, 2500)
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Playwright Chrome (fallback)', () => tryPlaywrightChrome(url, source))
     }
     
-    if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch) {
+    if (!extractionResult && !vercelSkipToScrapingBee && !skipDirectFetch && !isBudgetExhausted()) {
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Free Proxies', () => tryFreeProxies(url, source))
     }
     
-    if (!extractionResult && !vercelSkipToScrapingBee) {
+    if (!extractionResult && !vercelSkipToScrapingBee && !isBudgetExhausted()) {
       extractionResult = await runCascadeStep(extractionLog, 'N4', 'Archive.org', () => tryArchiveOrg(url, source))
+    }
+    
+    // Log si budget dépassé
+    if (!extractionResult && isBudgetExhausted() && !vercelSkipToScrapingBee) {
+      const elapsed = Math.round(performance.now() - cascadeStart)
+      console.log(`⏱️ Budget cascade dépassé (${elapsed}ms > ${CASCADE_BUDGET_MS}ms) → saut direct à N5`)
+      extractionLog.push({ level: 'N3-N4', method: 'skip (budget temps)', durationMs: 0, status: 'skipped', detail: `${elapsed}ms elapsed` })
     }
     
     // ═══════════════════════════════════════════════════════
@@ -589,6 +600,48 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       }, { status: 502 })
     }
     
+    // ===== DÉTECTION DE PAGES D'ERREUR / REDIRECTIONS =====
+    // Certains sites redirigent vers la homepage ou affichent une page 404
+    // quand l'annonce est expirée. L'extraction peut "réussir" avec des données
+    // du template de la page d'erreur → il faut détecter et rejeter.
+    const extractedTitle = (extractionResult.data.titre as string) || ''
+    const extractedVille = (extractionResult.data.ville as string) || ''
+    const extractedDesc = (extractionResult.data.description as string) || ''
+    const titleLower = extractedTitle.toLowerCase()
+    const villeLower = extractedVille.toLowerCase()
+    
+    const ERROR_PATTERNS = [
+      /erreur\s*404/i, /page\s*(non\s*)?trouv/i, /not\s*found/i,
+      /annonce\s*(supprim|expir|retir|désactiv)/i,
+      /cette\s*annonce\s*(n'est\s*plus|a\s*été)/i,
+      /bien\s*(n'est\s*plus|a\s*été\s*vendu)/i,
+      /page\s*(introuvable|inexistante)/i,
+    ]
+    
+    const isErrorPage = ERROR_PATTERNS.some(p => p.test(titleLower) || p.test(extractedDesc.substring(0, 300).toLowerCase()))
+    const isHomepageRedirect = (
+      // Ville contient une description générique au lieu d'un vrai nom de ville
+      villeLower.length > 50 ||
+      // Surface aberrante (ex: surface=404 parsée depuis "erreur 404")
+      (extractionResult.data.surface as number) === 404 ||
+      // Titre est la baseline du site, pas un titre d'annonce
+      titleLower.includes('toutes les annonces') ||
+      titleLower.includes('annonces immobilières de vente de biens')
+    )
+    
+    if (isErrorPage || isHomepageRedirect) {
+      console.log(`🚫 Annonce expirée/404 détectée: titre="${extractedTitle.substring(0, 80)}", ville="${extractedVille.substring(0, 40)}"`)
+      recordRequest(url, 'blocked')
+      
+      return NextResponse.json({
+        success: false,
+        error: 'Cette annonce semble expirée ou supprimée.',
+        hint: 'L\'annonce a probablement été vendue ou retirée du site.',
+        extractionLog,
+        totalDurationMs: totalDuration,
+      }, { status: 200 })
+    }
+
     // ===== CORRIGER CODE POSTAL DEPUIS L'URL =====
     // L'URL est la source la plus fiable pour les arrondissements (Paris/Lyon/Marseille).
     // Le parsing texte peut capturer un mauvais CP (ex: 75001 au lieu de 75017
@@ -2464,18 +2517,24 @@ async function tryAgenceHTML(url: string, source: string): Promise<ExtractionRes
 // Les pages Orpi contiennent des données JSON dans les attributs data-result
 // ou dans des scripts __NEXT_DATA__ / window.__INITIAL_STATE__
 // ─────────────────────────────────────
-async function tryOrpiAPI(url: string): Promise<ExtractionResponse | null> {
+async function tryOrpiAPI(url: string, useProxy = false): Promise<ExtractionResponse | null> {
   try {
     await waitForDomainThrottle('orpi.com')
 
-    console.log(`🏢 Orpi: tentative fetch HTML avec JSON embarqué`)
+    console.log(`🏢 Orpi: tentative fetch HTML avec JSON embarqué${useProxy ? ' (via proxy)' : ''}`)
 
-    const response = await protectedFetch(url, {
-      timeoutMs: 15000,
-      throttle: true,
-    })
-
-    const html = await response.text()
+    let html: string
+    if (useProxy) {
+      const proxyResp = await proxyFetch(url, { timeout: 15000 })
+      if (!proxyResp) return null
+      html = await proxyResp.text()
+    } else {
+      const response = await protectedFetch(url, {
+        timeoutMs: 15000,
+        throttle: true,
+      })
+      html = await response.text()
+    }
     if (isBlockedResponse(html)) return null
 
     // ── Méthode 1 : Chercher data-result dans les divs Orpi ──
