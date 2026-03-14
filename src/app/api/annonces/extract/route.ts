@@ -616,17 +616,26 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
       /cette\s*annonce\s*(n'est\s*plus|a\s*été)/i,
       /bien\s*(n'est\s*plus|a\s*été\s*vendu)/i,
       /page\s*(introuvable|inexistante)/i,
+      /a\s*été\s*vendu/i,  // LeBonCoin "Ce bien a été vendu"
+      /ce\s*bien\s*a\s*été/i,
     ]
     
-    const isErrorPage = ERROR_PATTERNS.some(p => p.test(titleLower) || p.test(extractedDesc.substring(0, 300).toLowerCase()))
+    const isErrorPage = ERROR_PATTERNS.some(p => 
+      p.test(titleLower) || 
+      p.test(extractedDesc.substring(0, 500).toLowerCase()) ||
+      p.test(villeLower)
+    )
     const isHomepageRedirect = (
       // Ville contient une description générique au lieu d'un vrai nom de ville
       villeLower.length > 50 ||
       // Surface aberrante (ex: surface=404 parsée depuis "erreur 404")
       (extractionResult.data.surface as number) === 404 ||
+      // Prix absent + aucune surface → données vides d'une page générique
+      (!extractionResult.data.prix && !extractionResult.data.surface && villeLower.length > 30) ||
       // Titre est la baseline du site, pas un titre d'annonce
       titleLower.includes('toutes les annonces') ||
-      titleLower.includes('annonces immobilières de vente de biens')
+      titleLower.includes('annonces immobilières de vente de biens') ||
+      titleLower.includes('trouver logement')
     )
     
     if (isErrorPage || isHomepageRedirect) {
