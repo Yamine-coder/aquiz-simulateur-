@@ -1,23 +1,18 @@
 import { PrismaClient } from '@/generated/prisma/client'
-import { PrismaLibSql } from '@prisma/adapter-libsql'
+import { PrismaPg } from '@prisma/adapter-pg'
 
 /**
- * Singleton Prisma Client avec adapter LibSQL/SQLite
+ * Singleton Prisma Client (PostgreSQL)
  * 
  * En développement, on réutilise l'instance entre les hot-reloads
  * pour éviter d'épuiser les connexions.
  * En production, on crée une seule instance.
- * 
- * Pour migrer vers Postgres : remplacer l'adapter par @prisma/adapter-pg
- * et modifier DATABASE_URL vers une URL PostgreSQL.
  */
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined }
 
 function createPrismaClient(): PrismaClient {
-  const adapter = new PrismaLibSql({
-    url: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
-  })
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
   return new PrismaClient({ adapter }) as unknown as PrismaClient
 }
 
