@@ -1,1132 +1,549 @@
-import type { BlogArticle } from '@/types/blog'
+import type { BlogArticle, BlogCategory } from '@/types/blog'
 
 const AQUIZ_AUTHOR = {
   name: 'AQUIZ',
   role: 'Conseil en acquisition immobilière',
 }
 
-// ─── ARTICLE 1 — Taux immobiliers 2026 ───
-const tauxImmobilier2026: BlogArticle = {
-  slug: 'taux-immobilier-2026-perspectives',
-  title:
-    'Taux immobiliers 2026 : perspectives et stratégies pour emprunter au meilleur coût',
-  excerpt:
-    'Analyse complète des tendances des taux de crédit immobilier en 2026. Découvrez nos conseils pour optimiser votre financement et emprunter dans les meilleures conditions.',
-  category: 'financement',
-  tags: ['taux immobilier', 'crédit immobilier', 'emprunt', 'banque', '2026'],
-  publishedAt: '2026-01-15',
-  updatedAt: '2026-02-20',
-  author: AQUIZ_AUTHOR,
-  readingTime: 8,
-  coverImage: '/images/blog/taux-credit-immobilier.jpg',
-  coverAlt: 'Clés de maison posées sur des billets en euros et graphiques financiers',
-  relatedTools: [
-    {
-      label: 'Simulateur Mode A',
-      href: '/simulateur/mode-a',
-      description: "Calculez votre capacité d'emprunt selon les taux actuels",
-    },
-    {
-      label: 'Simulateur Mode B',
-      href: '/simulateur/mode-b',
-      description: 'Vérifiez la faisabilité de votre projet immobilier',
-    },
-  ],
-  sections: [
-    {
-      heading: 'Où en sont les taux immobiliers en 2026 ?',
-      content:
-        "<p>Après la forte remontée des taux entre 2022 et 2023, les taux de crédit immobilier ont amorcé une décrue progressive depuis mi-2024. En ce début 2026, les emprunteurs bénéficient de conditions nettement plus favorables qu'il y a deux ans.</p><p>Les taux moyens constatés en janvier 2026 se situent autour de :</p>",
-      subsections: [
-        {
-          heading: 'Taux moyens par durée',
-          content:
-            "<ul><li><strong>15 ans :</strong> entre 2,80 % et 3,10 %</li><li><strong>20 ans :</strong> entre 3,00 % et 3,30 %</li><li><strong>25 ans :</strong> entre 3,15 % et 3,50 %</li></ul><p>Ces niveaux représentent une baisse d'environ 0,5 point par rapport aux pics de fin 2023, tout en restant supérieurs aux taux historiquement bas de 2021.</p>",
-        },
-        {
-          heading: "L'impact de la politique de la BCE",
-          content:
-            "<p>La Banque centrale européenne (BCE) a progressivement assoupli sa politique monétaire au cours de l'année 2025. La baisse du taux directeur a permis aux banques de proposer des conditions plus compétitives. Toutefois, la prudence reste de mise face aux incertitudes économiques mondiales.</p>",
-        },
-      ],
-    },
-    {
-      heading: 'Comment obtenir le meilleur taux en 2026 ?',
-      content:
-        '<p>Obtenir un taux avantageux ne dépend pas uniquement du contexte économique. Votre profil emprunteur joue un rôle déterminant dans la négociation avec les banques.</p>',
-      subsections: [
-        {
-          heading: 'Soigner son dossier emprunteur',
-          content:
-            "<p>Les banques privilégient les profils stables et bien gérés :</p><ul><li><strong>Stabilité professionnelle :</strong> un CDI ou une ancienneté suffisante en indépendant.</li><li><strong>Gestion saine :</strong> pas de découvert bancaire, épargne régulière.</li><li><strong>Apport personnel :</strong> un apport de 10 % minimum est recommandé, 20 % pour les meilleurs taux.</li><li><strong>Taux d'endettement :</strong> rester sous les 35 % imposés par le HCSF.</li></ul>",
-        },
-        {
-          heading: 'Faire jouer la concurrence',
-          content:
-            "<p>Ne vous limitez pas à votre banque principale. Sollicitez au minimum 3 établissements et pensez aux courtiers qui peuvent négocier des conditions privilégiées. La concurrence entre banques est forte en ce début 2026, profitez-en.</p>",
-        },
-        {
-          heading: "Négocier l'assurance emprunteur",
-          content:
-            "<p>L'assurance représente une part significative du coût total du crédit. Depuis la loi Lemoine, vous pouvez changer d'assurance à tout moment. Une délégation d'assurance peut vous faire économiser plusieurs milliers d'euros sur la durée du prêt.</p>",
-        },
-      ],
-    },
-    {
-      heading: "Prévisions pour le reste de l'année 2026",
-      content:
-        "<p>Les observateurs du marché immobilier s'accordent sur un scénario de stabilisation avec une légère tendance baissière :</p><ul><li>Les taux devraient se maintenir entre 2,8 % et 3,5 % selon les durées.</li><li>La concurrence bancaire pourrait s'intensifier au printemps, période traditionnellement dynamique.</li><li>Les primo-accédants restent la cible privilégiée des banques, avec des conditions préférentielles.</li></ul><p>Il est recommandé de ne pas attendre indéfiniment une baisse supplémentaire et de concrétiser son projet dès que les conditions sont réunies.</p>",
-    },
-    {
-      heading: "Simulez votre capacité d'emprunt",
-      content:
-        "<p>Pour savoir exactement combien vous pouvez emprunter aux taux actuels, utilisez notre simulateur gratuit. En quelques minutes, obtenez une estimation précise de votre capacité d'achat en tenant compte de votre situation personnelle, de vos revenus et de vos charges.</p><p>Notre outil prend en compte les normes HCSF 2024 (taux d'endettement maximum de 35 %) et vous donne un résultat réaliste et fiable.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 2 — PTZ 2026 ───
-const ptz2026: BlogArticle = {
-  slug: 'ptz-2026-guide-complet',
-  title:
-    'PTZ 2026 : le guide complet du Prêt à Taux Zéro pour votre premier achat',
-  excerpt:
-    "Tout savoir sur le PTZ en 2026 : conditions d'éligibilité, plafonds, zones géographiques et simulation. Le guide indispensable pour les primo-accédants.",
-  category: 'financement',
-  tags: ['PTZ', 'prêt à taux zéro', 'primo-accédant', 'aide', '2026'],
-  publishedAt: '2026-01-28',
-  updatedAt: '2026-02-15',
-  author: AQUIZ_AUTHOR,
-  readingTime: 10,
-  coverImage: '/images/blog/ptz-financement.jpg',
-  coverAlt:
-    "Illustration du Prêt à Taux Zéro pour l'achat immobilier en France",
-  relatedTools: [
-    {
-      label: 'Simulateur Mode A',
-      href: '/simulateur/mode-a',
-      description:
-        "Calculez votre capacité d'emprunt avec ou sans PTZ",
-    },
-    {
-      label: 'Aides financières',
-      href: '/aides',
-      description:
-        'Vérifiez votre éligibilité au PTZ et aux autres aides',
-    },
-  ],
-  sections: [
-    {
-      heading: "Qu'est-ce que le PTZ ?",
-      content:
-        "<p>Le Prêt à Taux Zéro (PTZ) est un dispositif d'aide de l'État destiné à faciliter l'accession à la propriété des ménages modestes et intermédiaires. Comme son nom l'indique, ce prêt ne génère aucun intérêt : vous ne remboursez que le capital emprunté.</p><p>En 2026, le PTZ reste un levier majeur pour boucler le financement d'un premier achat immobilier, avec des conditions qui ont été revues pour élargir le nombre de bénéficiaires.</p>",
-    },
-    {
-      heading: "Conditions d'éligibilité au PTZ en 2026",
-      content:
-        '<p>Pour bénéficier du PTZ, vous devez remplir plusieurs conditions cumulatives :</p>',
-      subsections: [
-        {
-          heading: 'Être primo-accédant',
-          content:
-            '<p>Vous ne devez pas avoir été propriétaire de votre résidence principale au cours des deux dernières années. Des exceptions existent pour les personnes en situation de handicap ou victimes de catastrophes naturelles.</p>',
-        },
-        {
-          heading: 'Respecter les plafonds de ressources',
-          content:
-            "<p>Vos revenus fiscaux de référence (N-2) ne doivent pas dépasser certains plafonds qui dépendent de la zone géographique et de la composition du foyer :</p><ul><li><strong>Zone A bis / A :</strong> 49 000 EUR pour une personne seule, jusqu'à 118 400 EUR pour un foyer de 5 personnes et plus.</li><li><strong>Zone B1 :</strong> 34 500 EUR pour une personne seule, jusqu'à 83 400 EUR pour 5 personnes et plus.</li><li><strong>Zone B2 / C :</strong> 31 500 EUR pour une personne seule, jusqu'à 76 200 EUR pour 5 personnes et plus.</li></ul>",
-        },
-        {
-          heading: 'Type de logement éligible',
-          content:
-            "<p>En 2026, le PTZ est élargi :</p><ul><li><strong>Logement neuf :</strong> éligible dans toutes les zones (A, B1, B2 et C).</li><li><strong>Logement ancien avec travaux :</strong> éligible en zones B2 et C, avec obligation de travaux représentant au moins 25 % du coût total.</li><li><strong>Logement social (vente HLM) :</strong> éligible partout en France.</li></ul>",
-        },
-      ],
-    },
-    {
-      heading: 'Montant et durée du PTZ',
-      content:
-        "<p>Le montant du PTZ dépend de la zone géographique, du nombre d'occupants et du coût de l'opération :</p><ul><li><strong>Quotité financée :</strong> de 20 % à 50 % du coût de l'opération selon la tranche de revenus.</li><li><strong>Durée totale :</strong> 20 à 25 ans, dont une période de différé (5 à 15 ans) pendant laquelle vous ne remboursez pas le PTZ.</li></ul><p>Le différé est un avantage considérable : pendant cette période, seul le prêt principal est remboursé, ce qui allège considérablement vos mensualités de départ.</p>",
-    },
-    {
-      heading: 'Les zones géographiques du PTZ',
-      content:
-        "<p>Le zonage PTZ détermine les conditions et montants applicables :</p><ul><li><strong>Zone A bis :</strong> Paris et communes limitrophes.</li><li><strong>Zone A :</strong> Grandes métropoles (Lyon, Marseille, Lille, Montpellier...).</li><li><strong>Zone B1 :</strong> Grandes villes et couronne des métropoles.</li><li><strong>Zone B2 :</strong> Villes moyennes.</li><li><strong>Zone C :</strong> Zones rurales et petites villes.</li></ul><p>Pour connaître la zone de votre commune, consultez le simulateur de zonage sur le site du ministère du Logement ou utilisez notre outil de vérification d'éligibilité.</p>",
-    },
-    {
-      heading:
-        'Comment intégrer le PTZ dans votre plan de financement ?',
-      content:
-        "<p>Le PTZ ne peut pas financer la totalité de votre achat. Il doit être complété par un ou plusieurs prêts :</p><ul><li>Un prêt immobilier classique (le prêt principal).</li><li>Éventuellement un Prêt d'Accession Sociale (PAS).</li><li>Un prêt Action Logement si vous y êtes éligible.</li><li>Votre apport personnel.</li></ul><p>L'idéal est de combiner le PTZ avec un prêt principal à taux fixe pour sécuriser vos mensualités. Notre simulateur vous permet de tester différentes combinaisons pour trouver le montage optimal.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 3 — Premier achat à Paris ───
+// ─── ARTICLE 1 — Premier achat immobilier à Paris ───
 const premierAchatParis: BlogArticle = {
   slug: 'premier-achat-immobilier-paris-guide',
-  title:
-    'Premier achat immobilier à Paris en 2026 : le guide complet pour réussir',
+  title: 'Premier achat immobilier à Paris : le guide complet pour les primo-accédants en 2026',
   excerpt:
-    'Acheter son premier bien à Paris reste un défi. Prix au m2, quartiers accessibles, aides disponibles : toutes les clés pour concrétiser votre projet dans la capitale.',
+    'Acheter un premier appartement à Paris en 2026 : budget, financement, localisation et erreurs à éviter. Le guide complet pour les primo-accédants.',
   category: 'achat',
-  tags: [
-    'Paris',
-    'premier achat',
-    'prix immobilier',
-    'quartiers',
-    'primo-accédant',
-  ],
-  publishedAt: '2026-02-10',
+  tags: ['premier achat', 'Paris', 'primo-accédant', 'budget', 'immobilier', '2026'],
+  publishedAt: '2026-01-20',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
-  readingTime: 12,
+  readingTime: 10,
   coverImage: '/images/blog/paris-immobilier.jpg',
-  coverAlt:
-    'Vue aérienne de Paris avec la Tour Eiffel pour illustrer le marché immobilier parisien',
+  coverAlt: 'Vue panoramique des toits de Paris avec la Tour Eiffel en arrière-plan',
   relatedTools: [
-    {
-      label: 'Carte des prix',
-      href: '/carte',
-      description:
-        'Explorez les prix au m2 par quartier à Paris et en Île-de-France',
-    },
     {
       label: 'Simulateur Mode A',
       href: '/simulateur/mode-a',
-      description: "Calculez votre capacité d'achat pour Paris",
+      description: "Calculez votre capacité d'achat à Paris selon vos revenus",
     },
     {
       label: 'Simulateur Mode B',
       href: '/simulateur/mode-b',
-      description:
-        'Vérifiez si vous pouvez acheter le bien qui vous plaît',
+      description: 'Vérifiez si un bien parisien rentre dans votre budget',
     },
   ],
   sections: [
     {
-      heading: 'État du marché immobilier parisien en 2026',
+      heading: 'Le marché immobilier parisien : un contexte exigeant',
       content:
-        "<p>Le marché immobilier parisien a connu des ajustements significatifs depuis 2022. Après une correction des prix de l'ordre de 5 à 10 % entre 2022 et 2024, le marché s'est stabilisé courant 2025. En ce début 2026, les signaux sont plutôt encourageants pour les acheteurs.</p>",
-      subsections: [
-        {
-          heading: 'Prix moyens au m2 par arrondissement',
-          content:
-            "<p>Les écarts de prix restent considérables d'un arrondissement à l'autre :</p><ul><li><strong>Arrondissements les plus chers (6e, 7e, 4e) :</strong> entre 12 000 et 15 000 EUR/m2.</li><li><strong>Arrondissements intermédiaires (9e, 10e, 11e, 14e, 15e) :</strong> entre 9 000 et 11 500 EUR/m2.</li><li><strong>Arrondissements les plus accessibles (13e, 18e, 19e, 20e) :</strong> entre 7 500 et 9 500 EUR/m2.</li></ul>",
-        },
-        {
-          heading: 'Les quartiers à privilégier pour un premier achat',
-          content:
-            '<p>Pour un budget de primo-accédant, certains quartiers offrent un bon compromis entre prix et qualité de vie :</p><ul><li><strong>13e arrondissement (Butte-aux-Cailles, Bibliothèque) :</strong> prix plus accessibles, quartier en pleine mutation avec de nombreux programmes neufs.</li><li><strong>18e (Porte de Clignancourt, Jules Joffrin) :</strong> des opportunités existent loin de Montmartre touristique.</li><li><strong>19e (Buttes-Chaumont, Place des Fêtes) :</strong> cadre de vie agréable, prix parmi les plus bas de Paris.</li><li><strong>20e (Gambetta, Pelleport) :</strong> ambiance village, bons transports, prix encore raisonnables.</li></ul>',
-        },
-      ],
+        "<p>Acheter un premier appartement à Paris représente un objectif important pour de nombreux ménages. Pourtant, entre le niveau élevé des prix, les conditions de financement et la concurrence entre acheteurs, le parcours d'un primo-accédant peut rapidement devenir complexe. Réussir son premier achat immobilier dans la capitale nécessite donc une préparation rigoureuse : comprendre le fonctionnement du marché, définir son budget réel et analyser les risques liés au bien avant de s'engager.</p><p>Le marché immobilier parisien reste l'un des plus chers d'Europe, même si les prix ont connu une légère correction ces dernières années avec la hausse des taux d'intérêt. Selon les données publiées par Notaires du Grand Paris, le prix moyen des appartements anciens à Paris se situe autour de <strong>9 600 à 9 700 euros par mètre carré</strong> en 2025. Cette moyenne masque toutefois de fortes disparités selon les arrondissements. Dans certains quartiers centraux ou très recherchés, les prix dépassent encore 12 000 euros par mètre carré, tandis que certains secteurs plus périphériques restent sous les 9 000 euros par mètre carré. Ces écarts s'expliquent notamment par l'emplacement du bien, la qualité de l'immeuble, la présence d'un ascenseur, l'étage, la luminosité ou encore la présence d'un balcon ou d'une terrasse. En pratique, deux appartements de surface équivalente peuvent afficher des prix très différents selon ces critères.</p><p>Malgré ces niveaux de prix élevés, Paris reste un marché particulièrement attractif. La capitale bénéficie d'une forte concentration d'emplois, d'un réseau de transports dense et d'une attractivité internationale qui soutient la demande immobilière sur le long terme. Pour les primo-accédants, cela signifie qu'il est indispensable de structurer son projet avant même de commencer les visites.</p>",
     },
     {
-      heading: 'Quel budget pour acheter à Paris ?',
+      heading: 'Définir son budget : la première étape indispensable',
       content:
-        "<p>Acheter à Paris nécessite une préparation financière rigoureuse. Voici les ordres de grandeur pour un appartement de 2 pièces (environ 35-45 m2) :</p>",
-      subsections: [
-        {
-          heading: 'Estimation du budget global',
-          content:
-            "<ul><li><strong>Prix du bien :</strong> entre 280 000 et 430 000 EUR selon l'arrondissement.</li><li><strong>Frais de notaire (ancien) :</strong> environ 7 à 8 %, soit 20 000 à 35 000 EUR.</li><li><strong>Budget total :</strong> entre 300 000 et 465 000 EUR.</li></ul>",
-        },
-        {
-          heading: 'Revenus et apport nécessaires',
-          content:
-            "<p>Pour emprunter 350 000 EUR sur 25 ans à un taux de 3,2 % :</p><ul><li><strong>Mensualité :</strong> environ 1 700 EUR (hors assurance).</li><li><strong>Revenus nets mensuels nécessaires :</strong> au minimum 4 860 EUR (pour respecter les 35 % d'endettement).</li><li><strong>Apport recommandé :</strong> au minimum 35 000 EUR (10 %), idéalement 70 000 EUR (20 %).</li></ul>",
-        },
-      ],
+        "<p>La première étape consiste à déterminer précisément son budget. Cette démarche repose principalement sur les revenus du foyer, l'apport personnel disponible et la capacité d'emprunt. En France, les établissements bancaires appliquent généralement les recommandations du Haut Conseil de Stabilité Financière, qui fixe un <strong>taux d'endettement maximal de 35 % des revenus</strong>, assurance comprise. Concrètement, cela signifie que la mensualité totale du crédit immobilier ne doit pas dépasser environ un tiers des revenus nets du foyer. Les banques analysent également d'autres éléments pour évaluer la solidité d'un dossier : la stabilité professionnelle, l'ancienneté dans l'emploi, la gestion des comptes bancaires et l'épargne restante après l'achat.</p>",
     },
     {
-      heading: 'Les aides pour acheter à Paris',
+      heading: "L'apport personnel et les frais annexes",
       content:
-        '<p>Plusieurs dispositifs peuvent vous aider à financer votre premier achat parisien :</p>',
-      subsections: [
-        {
-          heading: 'Le PTZ (Prêt à Taux Zéro)',
-          content:
-            "<p>Paris est classée en zone A bis, permettant de bénéficier du PTZ dans le neuf. Le montant peut atteindre 50 % du coût de l'opération pour les revenus les plus modestes. C'est un levier considérable qui réduit significativement le coût de votre crédit.</p>",
-        },
-        {
-          heading: 'Le Prêt Paris Logement (PPL)',
-          content:
-            "<p>La ville de Paris propose le Prêt Paris Logement, un prêt à taux zéro complémentaire pouvant aller jusqu'à 39 600 EUR pour un couple. Conditions : être primo-accédant, acheter dans Paris et respecter des plafonds de ressources spécifiques.</p>",
-        },
-        {
-          heading: 'Le Prêt Action Logement',
-          content:
-            "<p>Si vous êtes salarié d'une entreprise de plus de 10 personnes, vous pouvez bénéficier d'un prêt à taux réduit (1 %) jusqu'à 40 000 EUR. Un complément précieux pour boucler votre financement.</p>",
-        },
-      ],
+        "<p>L'apport personnel joue aussi un rôle déterminant. Dans la plupart des projets immobiliers, les banques attendent un apport permettant au minimum de couvrir les frais liés à l'acquisition. Le prix du bien ne représente en effet qu'une partie du budget total. Dans l'ancien, les frais de notaire représentent généralement entre <strong>7 % et 8 % du prix d'achat</strong>, selon les informations publiées par Service-Public.fr. À ces frais s'ajoutent souvent d'autres dépenses, comme les frais de garantie bancaire (caution ou hypothèque), les frais de dossier de la banque, les frais de déménagement ou encore d'éventuels travaux.</p><p>Les futurs propriétaires doivent également anticiper les charges courantes liées au logement : les charges de copropriété, la taxe foncière et l'entretien du bien. Ces dépenses peuvent représenter plusieurs centaines d'euros par mois et doivent être intégrées dans le calcul du budget global afin d'éviter toute mauvaise surprise.</p>",
     },
     {
-      heading: 'Conseils pratiques pour réussir votre achat',
+      heading: 'Quelle surface pour quel budget à Paris ?',
       content:
-        "<p>Acheter à Paris demande de la méthode et de la réactivité. Voici nos recommandations :</p><ul><li><strong>Préparez votre financement en amont :</strong> obtenez un accord de principe de votre banque avant de visiter, pour être crédible face aux vendeurs.</li><li><strong>Soyez réactif :</strong> les biens bien placés partent vite. Visitez rapidement et soyez prêt à faire une offre.</li><li><strong>Ne négligez pas les charges de copropriété :</strong> elles peuvent représenter 200 à 400 EUR/mois dans les grands immeubles parisiens.</li><li><strong>Faites attention au DPE :</strong> les passoires énergétiques (classés F et G) seront progressivement interdites à la location et perdent de la valeur.</li><li><strong>Explorez la petite couronne :</strong> des villes comme Montreuil, Pantin ou Ivry offrent des prix 30 à 40 % inférieurs à Paris intra-muros avec d'excellentes dessertes en métro.</li></ul>",
+        "<p>La surface accessible dépend directement du budget disponible. À titre indicatif, un budget autour de 300 000 à 350 000 euros permet souvent d'acquérir un studio ou un petit deux-pièces dans certains arrondissements. Avec un budget compris entre 400 000 et 500 000 euros, il devient généralement possible de viser un deux-pièces de 30 à 45 m² dans plusieurs quartiers de la capitale.</p><p>Ces estimations restent toutefois indicatives, car l'état du logement, la présence de travaux ou la qualité de l'immeuble peuvent fortement influencer le prix final. Par exemple, un appartement situé dans un immeuble ancien sans ascenseur peut être proposé à un prix inférieur au marché, tandis qu'un bien rénové dans un immeuble de standing peut dépasser largement la moyenne du quartier.</p>",
     },
     {
-      heading: 'Simulez votre projet parisien',
+      heading: "L'importance de la localisation et de l'analyse technique",
       content:
-        "<p>Avant de vous lancer dans les visites, commencez par simuler votre capacité d'achat. Notre outil gratuit prend en compte votre situation financière, les taux actuels et les aides disponibles pour vous donner une estimation précise de votre budget immobilier.</p><p>Vous pouvez également explorer notre carte interactive des prix pour identifier les quartiers correspondant à votre budget.</p>",
+        "<p>Dans l'immobilier, la localisation constitue le premier facteur de valorisation d'un bien. Un appartement situé dans un quartier bien desservi par les transports et disposant de commerces et de services à proximité conserve généralement mieux sa valeur dans le temps. Les analyses de l'INSEE montrent d'ailleurs que l'accessibilité aux transports et aux services constitue l'un des principaux facteurs d'attractivité résidentielle dans les grandes métropoles. Avant de faire une offre d'achat, il est donc essentiel d'analyser l'environnement du bien : proximité du métro ou du RER, présence de commerces, dynamisme du quartier ou encore qualité de l'environnement urbain.</p><p>Un achat immobilier implique également l'analyse de plusieurs documents techniques. Les <strong>procès-verbaux d'assemblée générale</strong> de copropriété permettent par exemple d'identifier les travaux votés dans l'immeuble, les travaux à venir ou l'état financier de la copropriété. Le <strong>diagnostic de performance énergétique (DPE)</strong> constitue également un élément important, car il informe sur la consommation énergétique du logement et peut avoir un impact sur la valeur du bien ou sur les travaux à prévoir. Il est également recommandé d'examiner le montant des charges de copropriété, l'état général des parties communes et l'existence éventuelle de procédures en cours dans la copropriété.</p>",
+    },
+    {
+      heading: 'Les erreurs à éviter et se faire accompagner',
+      content:
+        "<p>Lors d'un premier achat immobilier, certaines erreurs reviennent régulièrement. Beaucoup d'acheteurs se concentrent uniquement sur le prix du bien sans intégrer les frais annexes dans leur budget global. D'autres surestiment leur capacité d'emprunt ou négligent l'analyse technique du logement. Le coup de cœur peut aussi conduire à prendre une décision trop rapide. Pourtant, un achat immobilier représente souvent l'un des engagements financiers les plus importants d'une vie. Les professionnels du secteur recommandent donc de comparer plusieurs biens et de prendre le temps d'analyser chaque opportunité avant de se positionner.</p><p>Dans un marché aussi compétitif que celui de Paris, être accompagné par un professionnel peut sécuriser le projet. Un expert immobilier peut notamment aider à analyser la cohérence du budget, identifier les biens correspondant réellement aux critères de recherche, vérifier les documents techniques et négocier le prix d'achat. Cette approche permet d'aborder l'acquisition avec une vision plus rationnelle et stratégique.</p><p>Acheter son premier appartement à Paris reste un projet exigeant, mais il demeure réalisable avec une préparation sérieuse. Avant de commencer les visites, il est essentiel de définir un budget réaliste, sécuriser son financement, identifier les quartiers compatibles avec son projet et analyser les caractéristiques techniques du bien. Une recherche bien structurée permet d'augmenter significativement les chances de réussir son premier achat immobilier dans la capitale et de transformer ce projet en véritable décision patrimoniale sur le long terme.</p>",
     },
   ],
 }
 
-// ─── Export ───
-
-// ─── ARTICLE 4 — Frais de notaire 2026 ───
-const fraisNotaire2026: BlogArticle = {
-  slug: 'frais-de-notaire-2026-calcul-simulation',
-  title: 'Frais de notaire 2026 : calcul, simulation et astuces pour les réduire',
-  excerpt: 'Tout comprendre sur les frais de notaire en 2026 : montant, calcul détaillé, différence ancien/neuf et astuces pour optimiser votre budget immobilier.',
-  category: 'financement',
-  tags: ['frais de notaire', 'achat immobilier', 'calcul', 'neuf', 'ancien', '2026'],
-  publishedAt: '2026-01-28',
-  updatedAt: '2026-02-15',
-  author: AQUIZ_AUTHOR,
-  readingTime: 7,
-  coverImage: '/images/blog/frais-notaire.jpg',
-  coverAlt: 'Document notarial pour un achat immobilier en France',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: "Intégrez les frais de notaire dans votre capacité d'achat" },
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Vérifiez le coût total de votre projet avec frais inclus' },
-  ],
-  sections: [
-    {
-      heading: 'Que sont les frais de notaire ?',
-      content: "<p>Lors de tout achat immobilier en France, l'acquéreur doit s'acquitter de frais supplémentaires appelés \"frais de notaire\" ou plus exactement \"frais d'acquisition\". Contrairement à ce que leur nom suggère, ces frais ne correspondent pas uniquement à la rémunération du notaire.</p><p>En réalité, environ 80 % de ces frais sont des taxes reversées à l'État et aux collectivités locales (droits de mutation). Le reste couvre les débours (frais avancés par le notaire) et ses émoluments (sa rémunération proprement dite).</p>",
-      subsections: [
-        {
-          heading: 'La composition détaillée',
-          content: "<ul><li><strong>Droits de mutation :</strong> 5,09 % à 5,81 % du prix de vente dans l'ancien, environ 0,71 % dans le neuf</li><li><strong>Émoluments du notaire :</strong> fixés par un barème dégressif (environ 1 % du prix)</li><li><strong>Débours :</strong> frais de dossier, cadastre, syndic... (quelques centaines d'euros)</li><li><strong>Contribution de sécurité immobilière :</strong> 0,10 % du prix</li></ul>",
-        },
-      ],
-    },
-    {
-      heading: 'Frais de notaire dans l\'ancien vs le neuf',
-      content: "<p>La différence entre ancien et neuf est considérable et peut représenter plusieurs milliers d'euros d'économie :</p>",
-      subsections: [
-        {
-          heading: 'Dans l\'ancien : 7 à 8 % du prix',
-          content: "<p>Pour un bien ancien (plus de 5 ans), les frais de notaire représentent en moyenne <strong>7 à 8 % du prix de vente</strong>. Sur un appartement à 300 000 EUR, comptez entre 21 000 et 24 000 EUR de frais.</p><p>C'est le cas le plus courant sur le marché français, les transactions dans l'ancien représentant plus de 80 % des ventes.</p>",
-        },
-        {
-          heading: 'Dans le neuf : 2 à 3 % du prix',
-          content: "<p>Pour un bien neuf (moins de 5 ans ou VEFA), les frais sont réduits à <strong>2 à 3 % du prix</strong> grâce à des droits de mutation allégés. Sur le même bien à 300 000 EUR, les frais tombent à 6 000 - 9 000 EUR. Une économie de 15 000 EUR en moyenne.</p>",
-        },
-      ],
-    },
-    {
-      heading: 'Comment calculer vos frais de notaire ?',
-      content: "<p>Le calcul précise dépend du département (le taux de taxe départementale varie) et du prix du bien. Voici la formule simplifiée :</p><ul><li><strong>Bien ancien :</strong> Prix x 7,5 % (estimation moyenne)</li><li><strong>Bien neuf :</strong> Prix x 2,5 % (estimation moyenne)</li></ul><p>Pour un calcul précis, utilisez notre simulateur qui intègre automatiquement les frais de notaire selon le type de bien et votre département.</p>",
-    },
-    {
-      heading: 'Astuces pour réduire les frais de notaire',
-      content: "<p>Plusieurs stratégies permettent de diminuer la facture :</p><ul><li><strong>Déduire le mobilier :</strong> si le bien est vendu meublé, la valeur du mobilier (cuisine équipée, placards...) peut être déduite du prix. Les frais de notaire s'appliquent uniquement sur l'immobilier. Économie potentielle : 500 à 2 000 EUR.</li><li><strong>Négocier les émoluments :</strong> depuis 2021, les notaires peuvent accorder une remise de 20 % sur leurs émoluments pour les transactions supérieures à 100 000 EUR.</li><li><strong>Acheter dans le neuf :</strong> les frais réduits (2-3 %) représentent une économie substantielle, même si le prix au m2 est souvent plus élevé.</li><li><strong>Comparer les notaires :</strong> vous êtes libre de choisir votre notaire. Certains sont plus enclins à appliquer la remise.</li></ul>",
-    },
-    {
-      heading: 'L\'impact sur votre plan de financement',
-      content: "<p>Les frais de notaire sont rarement financés par le crédit immobilier. Les banques demandent généralement que l'apport personnel couvre au minimum ces frais. C'est pourquoi on parle d'\"apport minimum\" équivalent aux frais de notaire.</p><p>Concrètement, pour un achat à 250 000 EUR dans l'ancien, il faudra disposer d'au moins 18 000 à 20 000 EUR d'apport. Notre simulateur Mode A calcule automatiquement ce montant pour vous.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 5 — 10 erreurs primo-accédant ───
+// ─── ARTICLE 2 — 10 erreurs primo-accédants ───
 const erreursPrimoAccedant: BlogArticle = {
   slug: 'primo-accedant-10-erreurs-a-eviter',
-  title: 'Primo-accédant : les 10 erreurs à éviter pour réussir votre premier achat',
-  excerpt: 'Premier achat immobilier ? Découvrez les pièges les plus courants et nos conseils pour les éviter. Guide pratique pour acheter sereinement.',
-  category: 'guides',
-  tags: ['primo-accédant', 'premier achat', 'erreurs', 'conseils', 'guide'],
-  publishedAt: '2026-02-05',
-  author: AQUIZ_AUTHOR,
-  readingTime: 10,
-  coverImage: '/images/blog/primo-accedant-erreurs.jpg',
-  coverAlt: 'Couple visitant un appartement pour leur premier achat immobilier',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre budget avant de chercher' },
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Vérifiez la faisabilité avant de signer' },
-  ],
-  sections: [
-    {
-      heading: 'Erreur 1 : ne pas définir son budget avant de visiter',
-      content: "<p>C'est l'erreur la plus fréquente. Beaucoup de primo-accédants commencent par visiter des biens sans connaître précisément leur capacité d'achat. Résultat : ils tombent amoureux d'un bien hors budget ou, à l'inverse, se limitent à tort.</p><p><strong>La solution :</strong> utilisez un simulateur de capacité d'emprunt avant toute visite. Prenez en compte vos revenus, vos charges, votre apport et la durée souhaitée du prêt. Vous aurez une fourchette de prix réaliste.</p>",
-    },
-    {
-      heading: 'Erreur 2 : oublier les frais annexes',
-      content: "<p>Le prix affiché n'est que la partie émergée de l'iceberg. Il faut ajouter :</p><ul><li><strong>Frais de notaire :</strong> 7-8 % dans l'ancien, 2-3 % dans le neuf</li><li><strong>Frais de garantie :</strong> caution ou hypothèque (1 à 2 % du prêt)</li><li><strong>Frais de dossier bancaire :</strong> 500 à 1 500 EUR</li><li><strong>Travaux éventuels :</strong> rafraîchissement, mise aux normes</li><li><strong>Déménagement et installation :</strong> 1 000 à 5 000 EUR</li></ul><p>Au total, prévoyez 10 à 15 % du prix du bien en coûts supplémentaires.</p>",
-    },
-    {
-      heading: 'Erreur 3 : ne comparer qu\'une seule banque',
-      content: "<p>Votre banque actuelle n'offre pas forcément le meilleur taux. En faisant jouer la concurrence entre 3 à 5 établissements, vous pouvez économiser jusqu'à 0,3 point de taux, soit plusieurs milliers d'euros sur la durée du prêt.</p><p><strong>Astuce :</strong> passez par un courtier qui négociera pour vous auprès de multiples banques. Son coût (0,5 à 1 % du montant emprunté) est généralement compensé par les économies réalisées.</p>",
-    },
-    {
-      heading: 'Erreur 4 : négliger l\'assurance emprunteur',
-      content: "<p>L'assurance emprunteur représente 25 à 30 % du coût total du crédit. Beaucoup acceptent l'assurance groupe de leur banque sans comparer. Pourtant, la délégation d'assurance (choisir un assureur externe) peut faire économiser 5 000 à 15 000 EUR sur 20 ans.</p><p>Depuis la loi Lemoine (2022), vous pouvez changer d'assurance à tout moment, sans frais ni préavis.</p>",
-    },
-    {
-      heading: 'Erreur 5 : dépasser le taux d\'endettement de 35 %',
-      content: "<p>La règle HCSF est stricte : vos mensualités de crédit (tous crédits confondus) ne doivent pas dépasser 35 % de vos revenus nets. Si vous êtes à 36 %, la banque refusera votre dossier, même si votre reste à vivre est confortable.</p><p><strong>Solution :</strong> avant de chercher, simulez votre taux d'endettement et ajustez la durée du prêt ou l'apport pour rester sous la barre des 35 %.</p>",
-    },
-    {
-      heading: 'Erreur 6 : sous-estimer le reste à vivre',
-      content: "<p>Même en respectant les 35 %, assurez-vous que votre reste à vivre (revenus - charges - mensualité) est suffisant pour vivre confortablement. Les minimums recommandés : 800 EUR pour un célibataire, 1 200 EUR pour un couple, +300 EUR par enfant.</p>",
-    },
-    {
-      heading: 'Erreur 7 : acheter sur un coup de cœur',
-      content: "<p>Un bel appartement lumineux peut cacher des défauts coûteux : mauvais DPE (passoire énergétique), charges de copropriété élevées, travaux de ravalement votés, nuisances sonores... Prenez le temps de vérifier tous ces points avant de signer.</p><p>Demandez systématiquement les PV d'assemblée générale des 3 dernières années et le carnet d'entretien de l'immeuble.</p>",
-    },
-    {
-      heading: 'Erreur 8 : ne pas vérifier le DPE',
-      content: "<p>Le Diagnostic de Performance Énergétique est devenu crucial. Les logements classés F et G seront progressivement interdits à la location (G dès 2025, F dès 2028). Même pour une résidence principale, un mauvais DPE signifie des factures énergétiques élevées et une potentielle moins-value à la revente.</p>",
-    },
-    {
-      heading: 'Erreur 9 : oublier les aides disponibles',
-      content: "<p>En tant que primo-accédant, vous avez accès à des aides précieuses souvent méconnues :</p><ul><li><strong>PTZ (Prêt à Taux Zéro) :</strong> jusqu'à 40 % du montant de l'achat, sans intérêts</li><li><strong>Prêt Action Logement :</strong> jusqu'à 40 000 EUR à 1 %</li><li><strong>Aides locales :</strong> Prêt Paris Logement, aides régionales...</li><li><strong>TVA réduite :</strong> 5,5 % dans certaines zones ANRU</li></ul><p>Ne passez pas à côté de ces dispositifs qui peuvent représenter 20 000 à 50 000 EUR d'économie.</p>",
-    },
-    {
-      heading: 'Erreur 10 : ne pas anticiper la revente',
-      content: "<p>Même si vous achetez pour y vivre, pensez revente. Un bien mal situé, avec des défauts structurels ou dans un quartier en déclin sera difficile à revendre. Privilégiez les fondamentaux : emplacement, transports, commerces, écoles.</p><p>En moyenne, les Français revendent leur premier bien au bout de 7 ans. Assurez-vous que votre investissement prendra de la valeur.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 6 — Investissement locatif 2026 ───
-const investissementLocatif2026: BlogArticle = {
-  slug: 'investissement-locatif-2026-rentabilite-fiscalite',
-  title: 'Investissement locatif en 2026 : rentabilité, fiscalité et stratégies gagnantes',
-  excerpt: 'Guide complet de l\'investissement locatif en 2026. Rendement, fiscalité, choix du bien et erreurs à éviter pour un placement immobilier rentable.',
-  category: 'investissement',
-  tags: ['investissement locatif', 'rentabilité', 'fiscalité', 'LMNP', 'rendement', '2026'],
-  publishedAt: '2026-02-10',
-  author: AQUIZ_AUTHOR,
-  readingTime: 11,
-  coverImage: '/images/blog/investissement-locatif.jpg',
-  coverAlt: 'Immeuble de rapport pour investissement locatif en France',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre capacité d\'investissement' },
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Analysez la rentabilité d\'un bien précis' },
-  ],
-  sections: [
-    {
-      heading: 'Pourquoi investir dans l\'immobilier locatif en 2026 ?',
-      content: "<p>L'immobilier locatif reste l'un des placements préférés des Français, et pour cause. En 2026, plusieurs facteurs rendent cet investissement attractif :</p><ul><li><strong>Effet de levier du crédit :</strong> vous investissez avec l'argent de la banque, remboursé en partie par les loyers</li><li><strong>Protection contre l'inflation :</strong> les loyers et la valeur du bien suivent l'inflation</li><li><strong>Demande locative forte :</strong> la pénurie de logements dans les grandes villes garantit un faible risque de vacance</li><li><strong>Avantages fiscaux :</strong> de nombreux dispositifs permettent de réduire l'imposition</li></ul>",
-    },
-    {
-      heading: 'Quel rendement attendre en 2026 ?',
-      content: "<p>Le rendement locatif varie fortement selon la ville et le type de bien :</p>",
-      subsections: [
-        {
-          heading: 'Rendement brut vs net',
-          content: "<p>Le <strong>rendement brut</strong> se calcule simplement : (loyer annuel / prix d'achat) x 100. Mais le rendement <strong>net</strong> déduit les charges (taxe foncière, charges de copropriété, assurance, gestion, travaux, vacance locative). En général, le net représente 60 à 70 % du brut.</p>",
-        },
-        {
-          heading: 'Les rendements par ville',
-          content: "<ul><li><strong>Paris :</strong> 3 à 4 % brut (prix élevés, mais sécurité maximale)</li><li><strong>Lyon, Bordeaux, Nantes :</strong> 4 à 5,5 % brut</li><li><strong>Lille, Marseille, Toulouse :</strong> 5 à 7 % brut</li><li><strong>Villes moyennes (Saint-Etienne, Limoges) :</strong> 7 à 10 % brut, mais plus de risques</li></ul>",
-        },
-      ],
-    },
-    {
-      heading: 'Les régimes fiscaux de l\'immobilier locatif',
-      content: "<p>Le choix du régime fiscal impacte fortement la rentabilité nette de votre investissement.</p>",
-      subsections: [
-        {
-          heading: 'Location nue : micro-foncier ou réel',
-          content: "<p>En <strong>micro-foncier</strong> (revenus fonciers inférieurs à 15 000 EUR/an), vous bénéficiez d'un abattement forfaitaire de 30 %. Au <strong>régime réel</strong>, vous déduisez les charges réelles (intérêts, travaux, assurance...), souvent plus avantageux si vous avez un crédit en cours.</p>",
-        },
-        {
-          heading: 'LMNP : le régime star de 2026',
-          content: "<p>Le statut de <strong>Loueur Meublé Non Professionnel</strong> reste très avantageux en 2026. Au régime réel, l'amortissement du bien et du mobilier permet souvent de ne payer aucun impôt sur les loyers pendant 15 à 20 ans. Un avantage fiscal majeur pour les investisseurs.</p>",
-        },
-      ],
-    },
-    {
-      heading: 'Comment choisir le bon bien locatif ?',
-      content: "<p>Les critères clés pour un investissement réussi :</p><ul><li><strong>Emplacement :</strong> privilégiez les zones tendues avec une forte demande locative (proximité transports, universités, bassin d'emploi)</li><li><strong>Type de bien :</strong> les T2 et petites surfaces offrent les meilleurs rendements en pourcentage</li><li><strong>État du bien :</strong> un bien avec travaux permet de déduire les coûts en régime réel et d'augmenter la valeur</li><li><strong>Copropriété saine :</strong> vérifiez les comptes, les travaux votés et l'état de l'immeuble</li><li><strong>DPE correct :</strong> les passoires énergétiques seront bientôt interdites à la location</li></ul>",
-    },
-    {
-      heading: 'Les erreurs à éviter en investissement locatif',
-      content: "<ul><li><strong>Acheter uniquement pour la défiscalisation :</strong> les dispositifs fiscaux ne compensent jamais un mauvais emplacement</li><li><strong>Surestimer les loyers :</strong> basez-vous sur les loyers réels du quartier, pas sur les estimations optimistes</li><li><strong>Oublier la vacance locative :</strong> prévoyez 1 à 2 mois de vacance par an dans vos calculs</li><li><strong>Négliger la gestion :</strong> la gestion locative (trouver un locataire, gérer les réparations) prend du temps. Prévoyez 6 à 8 % de frais de gestion si vous déléguez</li><li><strong>S'endetter excessivement :</strong> gardez une marge de sécurité dans votre taux d'endettement pour faire face aux imprévus</li></ul>",
-    },
-  ],
-}
-
-// ─── ARTICLE 7 — Marché immobilier 2026 ───
-const marcheImmobilier2026: BlogArticle = {
-  slug: 'marche-immobilier-2026-tendances-prix-regions',
-  title: 'Marché immobilier 2026 : tendances, prix et perspectives par région',
-  excerpt: 'Analyse du marché immobilier français en 2026. Évolution des prix, tendances par région et prévisions pour les acheteurs et investisseurs.',
-  category: 'marche',
-  tags: ['marché immobilier', 'prix immobilier', 'tendances', 'régions', '2026'],
-  publishedAt: '2026-02-18',
-  author: AQUIZ_AUTHOR,
-  readingTime: 9,
-  coverImage: '/images/blog/marche-immobilier-france.jpg',
-  coverAlt: 'Vue aérienne de maisons représentant le marché immobilier français',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Estimez votre budget selon votre région' },
-  ],
-  sections: [
-    {
-      heading: 'Bilan du marché immobilier en 2025',
-      content: "<p>L'année 2025 a marqué un tournant pour le marché immobilier français. Après deux années de correction (2023-2024) liées à la remontée des taux, le marché a retrouvé un certain dynamisme :</p><ul><li><strong>Volume de transactions :</strong> environ 850 000 ventes, en hausse de 8 % par rapport à 2024</li><li><strong>Prix :</strong> stabilisation au niveau national (+0,5 %), avec des disparités régionales marquées</li><li><strong>Crédit :</strong> reprise progressive de la production de prêts grâce à la baisse des taux</li></ul>",
-    },
-    {
-      heading: 'Les prix région par région en 2026',
-      content: "<p>Le marché immobilier français est loin d'être uniforme. Voici la situation par grande région :</p>",
-      subsections: [
-        {
-          heading: 'Île-de-France : stabilisation à Paris, reprise en banlieue',
-          content: "<p>Paris intra-muros voit ses prix se stabiliser autour de <strong>9 500 EUR/m2</strong> en moyenne, après une correction de 5 à 8 % depuis les pics de 2022. La petite couronne connaît un regain d'intérêt avec des prix 30 à 40 % inférieurs à Paris et de bons rendements locatifs.</p>",
-        },
-        {
-          heading: 'Lyon, Bordeaux, Nantes : marché dynamique',
-          content: "<p>Ces métropoles attractives maintiennent des prix élevés (3 500 à 5 000 EUR/m2) avec une légère tendance haussière (+1 à 2 %). La demande reste forte, portée par l'emploi et la qualité de vie.</p>",
-        },
-        {
-          heading: 'Villes moyennes : la bonne affaire ?',
-          content: "<p>Des villes comme Angers, Tours, Reims ou Clermont-Ferrand offrent des prix attractifs (1 500 à 2 800 EUR/m2) avec des rendements locatifs intéressants. Le télétravail a renforcé leur attractivité, et les prix progressent modérément (+2 à 4 %).</p>",
-        },
-        {
-          heading: 'Zones rurales et littorales',
-          content: "<p>Le littoral atlantique et la Provence restent très demandés avec des prix en hausse. Les zones rurales éloignées continuent de voir leurs prix stagner, sauf dans les secteurs touristiques.</p>",
-        },
-      ],
-    },
-    {
-      heading: 'Les tendances qui vont marquer 2026',
-      content: "<ul><li><strong>Le retour des primo-accédants :</strong> la baisse des taux et l'extension du PTZ permettent à de nouveaux profils d'accéder à la propriété</li><li><strong>La rénovation énergétique :</strong> les passoires thermiques décotent fortement, créant des opportunités pour les acheteurs prêts à rénover</li><li><strong>Le neuf en difficulté :</strong> les coûts de construction élevés et la fin du Pinel pénalisent le marché du neuf</li><li><strong>La colocation et le coliving :</strong> ces modes d'habitat se développent dans les grandes villes, offrant des rendements supérieurs pour les investisseurs</li></ul>",
-    },
-    {
-      heading: 'Faut-il acheter en 2026 ?',
-      content: "<p>La réponse dépend de votre situation :</p><ul><li><strong>Primo-accédant :</strong> les conditions sont favorables (taux en baisse, PTZ élargi). Si votre budget est prêt, c'est un bon moment pour acheter votre résidence principale.</li><li><strong>Investisseur :</strong> les villes moyennes offrent les meilleurs rendements. Concentrez-vous sur les biens avec un bon DPE ou à rénover.</li><li><strong>Attentiste :</strong> les prix ne devraient pas baisser significativement dans les zones tendues. Attendre risque de vous coûter plus cher en loyer perdu qu'en éventuelle baisse de prix.</li></ul><p>Dans tous les cas, commencez par simuler votre capacité d'achat pour savoir où vous en êtes.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 8 — Apport personnel ───
-const apportPersonnel: BlogArticle = {
-  slug: 'apport-personnel-combien-faut-il-pour-acheter',
-  title: 'Apport personnel : combien faut-il vraiment pour acheter en 2026 ?',
-  excerpt: 'Quel apport pour acheter un bien immobilier ? Montant minimum, stratégies pour constituer son apport et solutions pour acheter sans apport.',
-  category: 'financement',
-  tags: ['apport personnel', 'épargne', 'financement', 'premier achat', 'crédit immobilier'],
-  publishedAt: '2026-02-22',
-  author: AQUIZ_AUTHOR,
-  readingTime: 8,
-  coverImage: '/images/blog/apport-personnel.jpg',
-  coverAlt: 'Tirelire et pièces représentant l\'épargne pour un apport immobilier',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Intégrez votre apport dans le calcul de capacité' },
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Testez l\'impact de votre apport sur votre projet' },
-  ],
-  sections: [
-    {
-      heading: 'Qu\'est-ce que l\'apport personnel ?',
-      content: "<p>L'apport personnel désigne la somme d'argent que vous investissez directement dans votre achat immobilier, sans passer par un emprunt bancaire. Il provient généralement de votre épargne, d'un héritage, d'une donation ou de la revente d'un bien.</p><p>L'apport joue un rôle crucial : il montre à la banque votre capacité à épargner et réduit le montant à emprunter, donc le risque pour le prêteur.</p>",
-    },
-    {
-      heading: 'Quel montant d\'apport minimum en 2026 ?',
-      content: "<p>Il n'existe pas de montant légal minimum. Cependant, en pratique :</p>",
-      subsections: [
-        {
-          heading: 'La règle des 10 %',
-          content: "<p>La majorité des banques demandent un apport couvrant au minimum les <strong>frais annexes</strong> (frais de notaire + garantie), soit environ <strong>10 % du prix du bien</strong> dans l'ancien et 5 % dans le neuf.</p><p>Exemple : pour un achat à 250 000 EUR dans l'ancien, on vous demandera environ 25 000 EUR d'apport minimum.</p>",
-        },
-        {
-          heading: 'L\'idéal : 15 à 20 %',
-          content: "<p>Avec un apport de 15 à 20 %, vous obtiendrez les meilleures conditions de taux. La banque considère que votre dossier est solide et le risque faible. Vous pouvez négocier une réduction de 0,1 à 0,3 point par rapport au taux standard.</p>",
-        },
-      ],
-    },
-    {
-      heading: 'Comment constituer son apport ?',
-      content: "<p>Plusieurs sources peuvent alimenter votre apport :</p><ul><li><strong>Épargne régulière :</strong> objectif de 500 à 1 000 EUR/mois pendant 2 à 4 ans sur un livret A, LDDS ou PEL</li><li><strong>PEL (Plan Épargne Logement) :</strong> taux garanti + prime d'État + droit à un prêt immobilier à taux préférentiel</li><li><strong>Donation familiale :</strong> jusqu'à 100 000 EUR de donation sans droits entre parent et enfant</li><li><strong>Participation / intéressement :</strong> déblocage anticipé autorisé pour l'achat de la résidence principale</li><li><strong>Vente de placements :</strong> liquidation d'un PEA, assurance-vie ou crypto-actifs</li></ul>",
-    },
-    {
-      heading: 'Acheter sans apport : est-ce possible ?',
-      content: "<p>Oui, c'est le <strong>prêt à 110 %</strong> (financement du bien + des frais). Mais les conditions sont strictes en 2026 :</p><ul><li><strong>Profil requis :</strong> jeune actif (25-35 ans), CDI confirmé, revenus en croissance, pas d'incidents bancaires</li><li><strong>Secteur public :</strong> les fonctionnaires titulaires obtiennent plus facilement un financement sans apport grâce à la sécurité de l'emploi</li><li><strong>Contrepartie :</strong> un taux plus élevé (+0,2 à 0,5 point) et des conditions d'assurance plus strictes</li></ul><p>Les banques restent sélectives sur ce type de dossier. Présentez un plan d'épargne qui montre votre capacité à gérer votre budget.</p>",
-    },
-    {
-      heading: 'L\'impact de l\'apport sur votre projet',
-      content: "<p>L'apport ne change pas seulement le montant emprunté, il transforme tout votre plan de financement :</p><ul><li><strong>Mensualités réduites :</strong> 20 000 EUR d'apport en plus = environ 100 EUR/mois de mensualité en moins</li><li><strong>Meilleur taux :</strong> les banques récompensent les apports importants par des taux préférentiels</li><li><strong>Pouvoir de négociation :</strong> un bon apport vous donne du poids face au vendeur (offre plus crédible)</li><li><strong>Marge de sécurité :</strong> un apport conséquent laisse plus de reste à vivre, ce qui rassure la banque</li></ul><p>Utilisez notre simulateur pour voir concrètement l'impact de votre apport sur votre capacité d'achat.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 9 — Assurance emprunteur ───
-const assuranceEmprunteur: BlogArticle = {
-  slug: 'assurance-emprunteur-guide-economiser',
-  title: 'Assurance emprunteur : comment choisir et économiser des milliers d\'euros',
-  excerpt: 'L\'assurance emprunteur représente jusqu\'à 30 % du coût total de votre crédit. Délégation, loi Lemoine, comparaison : toutes les clés pour payer moins cher.',
-  category: 'financement',
-  tags: ['assurance emprunteur', 'délégation', 'loi Lemoine', 'crédit immobilier', 'économie'],
-  publishedAt: '2026-01-20',
-  author: AQUIZ_AUTHOR,
-  readingTime: 7,
-  coverImage: '/images/blog/assurance-emprunteur.jpg',
-  coverAlt: 'Personne signant un document d\'assurance pour un prêt immobilier',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Intégrez le coût de l\'assurance dans votre simulation' },
-  ],
-  sections: [
-    {
-      heading: 'Qu\'est-ce que l\'assurance emprunteur ?',
-      content: "<p>L'assurance emprunteur est une garantie exigée par les banques lors de la souscription d'un crédit immobilier. Elle couvre le remboursement du prêt en cas de décès, d'invalidité ou d'incapacité de travail de l'emprunteur.</p><p>Bien que non obligatoire légalement, aucune banque n'accordera de prêt sans cette assurance. Elle représente en moyenne <strong>0,25 % à 0,50 % du capital emprunté par an</strong>, soit 5 000 à 20 000 EUR sur la durée totale du crédit.</p>",
-    },
-    {
-      heading: 'Les garanties essentielles',
-      content: "<p>Votre contrat d'assurance emprunteur doit couvrir au minimum :</p><ul><li><strong>Décès :</strong> le capital restant dû est remboursé à la banque</li><li><strong>PTIA (Perte Totale et Irréversible d'Autonomie) :</strong> même couverture que le décès</li><li><strong>ITT (Incapacité Temporaire de Travail) :</strong> prise en charge des mensualités pendant l'arrêt</li><li><strong>IPP/IPT (Invalidité Permanente) :</strong> couverture partielle ou totale selon le taux d'invalidité</li></ul><p>Pour un investissement locatif, les banques se contentent souvent des garanties décès et PTIA.</p>",
-    },
-    {
-      heading: 'La délégation d\'assurance : la clé pour économiser',
-      content: "<p>La <strong>délégation d'assurance</strong> consiste à choisir un assureur externe plutôt que l'assurance groupe proposée par votre banque. Les économies sont considérables :</p><ul><li>Un emprunteur de 30 ans peut économiser <strong>8 000 à 15 000 EUR</strong> sur 20 ans</li><li>Un emprunteur de 45 ans peut économiser <strong>15 000 à 25 000 EUR</strong></li></ul><p>La seule condition : le contrat externe doit offrir des garanties équivalentes à celles exigées par la banque.</p>",
-    },
-    {
-      heading: 'La loi Lemoine : changez à tout moment',
-      content: "<p>Depuis la loi Lemoine (juin 2022), vous pouvez <strong>changer d'assurance emprunteur à tout moment</strong>, sans frais, sans préavis et sans justification. C'est une révolution pour les emprunteurs :</p><ul><li>Pas besoin d'attendre la date anniversaire du contrat</li><li>La banque ne peut pas refuser si les garanties sont équivalentes</li><li>Le changement prend effet sous 10 jours</li></ul><p>Si vous avez souscrit votre prêt il y a plus d'un an, comparez dès aujourd'hui : vous pourriez économiser plusieurs centaines d'euros par an.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 10 — Courtier vs banque ───
-const courtierVsBanque: BlogArticle = {
-  slug: 'courtier-immobilier-vs-banque-que-choisir',
-  title: 'Courtier immobilier ou banque : comment obtenir le meilleur prêt en 2026',
-  excerpt: 'Faut-il passer par un courtier ou négocier directement avec sa banque ? Avantages, coûts et conseils pour décrocher les meilleures conditions de crédit.',
-  category: 'financement',
-  tags: ['courtier', 'banque', 'négociation', 'taux', 'crédit immobilier'],
+  title: 'Primo-accédant : les 10 erreurs à éviter lors d\'un premier achat immobilier',
+  excerpt:
+    'Budget mal défini, frais sous-estimés, coup de cœur... Découvrez les 10 erreurs les plus fréquentes des primo-accédants et nos conseils pour les éviter.',
+  category: 'achat',
+  tags: ['primo-accédant', 'erreurs', 'premier achat', 'conseils', 'financement'],
   publishedAt: '2026-01-25',
-  author: AQUIZ_AUTHOR,
-  readingTime: 6,
-  coverImage: '/images/blog/courtier-vs-banque.jpg',
-  coverAlt: 'Poignée de mains professionnelle entre un courtier et un client',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Comparez les offres avec votre capacité d\'emprunt' },
-  ],
-  sections: [
-    {
-      heading: 'Le rôle du courtier immobilier',
-      content: "<p>Un courtier en crédit immobilier est un intermédiaire entre vous et les banques. Son rôle : négocier les meilleures conditions de prêt en mettant en concurrence plusieurs établissements bancaires.</p><p>En 2026, environ <strong>40 % des crédits immobiliers</strong> passent par un courtier. C'est devenu un acteur incontournable du marché.</p>",
-    },
-    {
-      heading: 'Avantages du courtier',
-      content: "<ul><li><strong>Gain de temps :</strong> il sollicite 5 à 15 banques en parallèle, là où vous n'en démarcheriez que 2 ou 3</li><li><strong>Pouvoir de négociation :</strong> il négocie des taux préférentiels grâce à ses volumes d'affaires</li><li><strong>Expertise :</strong> il connaît les critères d'acceptation de chaque banque et oriente votre dossier</li><li><strong>Accompagnement :</strong> il vous guide de la simulation jusqu'à la signature chez le notaire</li></ul>",
-    },
-    {
-      heading: 'Le coût d\'un courtier',
-      content: "<p>La rémunération du courtier se compose généralement de :</p><ul><li><strong>Commission bancaire :</strong> payée par la banque (environ 1 % du montant emprunté, sans coût pour vous)</li><li><strong>Frais de courtage :</strong> 1 000 à 3 000 EUR, payables au déblocage du prêt. Certains courtiers en ligne ne facturent rien</li></ul><p>Au final, les économies réalisées sur le taux compensent largement les frais dans la grande majorité des cas.</p>",
-    },
-    {
-      heading: 'Quand privilégier sa banque directement ?',
-      content: "<p>Négocier directement avec votre banque peut être avantageux si :</p><ul><li>Vous êtes un excellent client (épargne importante, revenus élevés, ancienneté)</li><li>Votre banque propose déjà des offres de rentrée commerciales</li><li>Vous souhaitez grouper vos avoirs (assurance-vie, compte-titres) pour négocier</li></ul><p><strong>Notre conseil :</strong> commencez par demander une offre à votre banque, puis consultez un courtier pour comparer. Vous aurez ainsi le meilleur des deux mondes.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 11 — Rachat de crédit ───
-const rachatCredit: BlogArticle = {
-  slug: 'rachat-credit-immobilier-2026-guide',
-  title: 'Rachat de crédit immobilier en 2026 : est-ce le bon moment pour renégocier ?',
-  excerpt: 'Taux en baisse, économie potentielle : le rachat de crédit immobilier est-il rentable en 2026 ? Conditions, calcul et démarches pour renégocier votre prêt.',
-  category: 'financement',
-  tags: ['rachat crédit', 'renégociation', 'taux', 'économie', 'crédit immobilier'],
-  publishedAt: '2026-02-01',
-  author: AQUIZ_AUTHOR,
-  readingTime: 8,
-  coverImage: '/images/blog/rachat-credit.jpg',
-  coverAlt: 'Documents financiers et calculatrice pour un rachat de crédit',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Recalculez votre mensualité avec un nouveau taux' },
-  ],
-  sections: [
-    {
-      heading: 'Qu\'est-ce que le rachat de crédit immobilier ?',
-      content: "<p>Le rachat de crédit consiste à faire reprendre votre prêt immobilier par une autre banque à un taux plus avantageux. Cela permet de réduire vos mensualités ou la durée de votre prêt, donc le coût total de votre emprunt.</p><p>La renégociation, elle, consiste à demander à votre propre banque de baisser votre taux. Moins contraignant administrativement, mais souvent moins avantageux.</p>",
-    },
-    {
-      heading: 'Quand est-il rentable de renégocier ?',
-      content: "<p>Un rachat de crédit est généralement rentable si trois conditions sont réunies :</p><ul><li><strong>Écart de taux suffisant :</strong> au moins 0,7 à 1 point d'écart entre votre taux actuel et les taux du marché</li><li><strong>Durée restante significative :</strong> idéalement plus de 10 ans (on rembourse surtout des intérêts en début de prêt)</li><li><strong>Capital restant dû important :</strong> au moins 70 000 EUR pour que l'économie compense les frais</li></ul><p>Si vous avez emprunté en 2023 à plus de 4 %, la baisse des taux à 3 % en 2026 rend le rachat très intéressant.</p>",
-    },
-    {
-      heading: 'Les frais à intégrer',
-      content: "<ul><li><strong>Indemnités de remboursement anticipé (IRA) :</strong> maximum 3 % du capital restant dû ou 6 mois d'intérêts</li><li><strong>Frais de dossier :</strong> 500 à 1 500 EUR pour la nouvelle banque</li><li><strong>Frais de garantie :</strong> nouvelle hypothèque ou caution (1 à 2 % du capital)</li><li><strong>Assurance :</strong> profitez-en pour renégocier aussi votre assurance emprunteur</li></ul><p>Au total, comptez 2 à 4 % du capital restant dû en frais. L'économie doit dépasser ce montant pour que l'opération soit rentable.</p>",
-    },
-    {
-      heading: 'Les démarches pas à pas',
-      content: "<ol><li><strong>Faites le calcul :</strong> utilisez notre simulateur pour estimer l'économie potentielle</li><li><strong>Demandez à votre banque :</strong> commencez par une renégociation amiable (moins de frais)</li><li><strong>Sollicitez d'autres banques :</strong> obtenez 2 à 3 offres de rachat</li><li><strong>Comparez avec un courtier :</strong> il négociera pour vous les frais et le taux</li><li><strong>Signez la nouvelle offre :</strong> respectez le délai de réflexion de 10 jours</li></ol>",
-    },
-  ],
-}
-
-// ─── ARTICLE 12 — Compromis de vente ───
-const compromisVente: BlogArticle = {
-  slug: 'compromis-de-vente-guide-pratique',
-  title: 'Compromis de vente : tout comprendre avant de signer',
-  excerpt: 'Le compromis de vente est une étape clé de l\'achat immobilier. Clauses suspensives, délai de rétractation, dépôt de garantie : guide complet.',
-  category: 'achat',
-  tags: ['compromis de vente', 'achat immobilier', 'clauses suspensives', 'notaire', 'signature'],
-  publishedAt: '2026-02-12',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
   readingTime: 9,
-  coverImage: '/images/blog/compromis-vente.jpg',
-  coverAlt: 'Signature d\'un compromis de vente immobilier chez le notaire',
+  coverImage: '/images/blog/primo-accedant-erreurs.jpg',
+  coverAlt: 'Jeune couple consultant des documents immobiliers avec un air préoccupé',
   relatedTools: [
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Vérifiez votre budget avant de signer le compromis' },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: "Définissez votre budget réel avant de chercher",
+    },
+    {
+      label: 'Simulateur Mode B',
+      href: '/simulateur/mode-b',
+      description: 'Vérifiez la faisabilité d\'un bien avant de vous engager',
+    },
   ],
   sections: [
     {
-      heading: 'Qu\'est-ce qu\'un compromis de vente ?',
-      content: "<p>Le compromis de vente (ou \"promesse synallagmatique de vente\") est un avant-contrat par lequel le vendeur et l'acheteur s'engagent mutuellement sur la vente d'un bien immobilier à un prix convenu.</p><p>C'est un engagement ferme : une fois signé, les deux parties sont tenues de conclure la vente, sauf si l'une des <strong>clauses suspensives</strong> n'est pas remplie.</p>",
+      heading: 'Introduction : un projet qui nécessite méthode et recul',
+      content:
+        "<p>Devenir propriétaire pour la première fois est une étape importante dans un parcours de vie. Pourtant, un premier achat immobilier reste souvent un projet complexe, qui combine décisions financières, choix de localisation et analyse technique du bien. Pour les primo-accédants, certaines erreurs reviennent fréquemment et peuvent avoir un impact important sur la réussite du projet.</p><p>Entre la préparation du financement, la sélection du bien et l'analyse du marché, il est donc essentiel d'aborder un premier achat avec méthode et recul. Voici les dix erreurs les plus fréquentes commises par les primo-accédants et les conseils pour les éviter.</p>",
     },
     {
-      heading: 'Les clauses suspensives essentielles',
-      content: "<p>Les clauses suspensives protègent l'acheteur. Si l'une d'elles n'est pas remplie, la vente est annulée sans pénalité :</p><ul><li><strong>Obtention du prêt :</strong> obligatoire, vous protège si la banque refuse votre crédit (délai habituel : 45 à 60 jours)</li><li><strong>Absence de servitude :</strong> vérification qu'aucune contrainte d'urbanisme ne grève le bien</li><li><strong>Droit de préemption :</strong> la mairie peut exercer son droit pour acheter le bien à votre place</li><li><strong>État du bien :</strong> absence de vices cachés significatifs ou de sinistres non déclarés</li></ul><p>Vous pouvez ajouter d'autres clauses sur mesure : vente de votre bien actuel, obtention d'un permis de construire, etc.</p>",
+      heading: 'Erreurs 1 à 4 : le budget et le financement',
+      content:
+        "<p>La première erreur consiste à <strong>ne pas définir précisément son budget avant de commencer les visites</strong>. Beaucoup d'acheteurs débutent leur recherche en consultant les annonces immobilières sans avoir évalué leur capacité d'emprunt. Pourtant, les banques appliquent aujourd'hui des critères stricts pour l'octroi des crédits immobiliers. En France, les recommandations du Haut Conseil de Stabilité Financière limitent généralement le taux d'endettement à <strong>35 % des revenus</strong> du ménage, assurance comprise, avec une durée maximale d'emprunt de 25 ans dans la plupart des cas. Sans une estimation claire du budget, les acheteurs risquent donc de cibler des biens qu'ils ne pourront finalement pas financer.</p><p>Une autre erreur fréquente consiste à <strong>sous-estimer le coût total du projet immobilier</strong>. De nombreux primo-accédants se concentrent uniquement sur le prix du logement et la mensualité du crédit. Or un achat immobilier implique plusieurs frais supplémentaires. Dans l'ancien, les frais de notaire représentent généralement entre <strong>7 % et 8 % du prix</strong> du bien, auxquels s'ajoutent les frais de garantie bancaire, les frais de dossier ou encore les éventuels travaux. Ne pas anticiper ces dépenses peut rapidement déséquilibrer le budget du ménage après l'acquisition.</p><p>La troisième erreur consiste à <strong>maximiser sa capacité d'emprunt sans conserver de marge financière</strong>. Certains acheteurs cherchent à emprunter le montant maximum possible pour accéder à un logement plus grand ou mieux situé. Cette stratégie peut fragiliser le projet sur le long terme. Les spécialistes de l'immobilier rappellent qu'un financement trop tendu laisse peu de marge en cas d'imprévu, comme une hausse des charges, des travaux ou un changement de situation professionnelle.</p><p>La quatrième erreur concerne <strong>l'utilisation de l'apport personnel</strong>. Beaucoup de primo-accédants mobilisent l'intégralité de leur épargne pour augmenter leur capacité d'achat. Pourtant, il est souvent conseillé de conserver une réserve financière après l'achat afin de faire face aux imprévus liés au logement ou à la vie quotidienne.</p>",
     },
     {
-      heading: 'Le dépôt de garantie',
-      content: "<p>À la signature du compromis, l'acheteur verse un <strong>dépôt de garantie</strong> (ou séquestre), généralement égal à <strong>5 à 10 % du prix de vente</strong>. Cette somme est conservée par le notaire jusqu'à la signature de l'acte définitif.</p><p>Si la vente aboutit, le dépôt est déduit du prix. Si vous vous rétractez après le délai légal ou sans clause suspensive applicable, vous perdez cette somme.</p>",
+      heading: 'Erreurs 5 à 7 : le choix du bien',
+      content:
+        "<p>Une cinquième erreur consiste à <strong>négliger l'importance de l'emplacement du bien</strong>. Dans l'immobilier, la localisation reste l'un des principaux facteurs de valorisation d'un logement. Un bien situé dans un quartier mal desservi par les transports ou éloigné des services peut être plus difficile à revendre ou à louer. Les professionnels recommandent donc d'étudier attentivement l'environnement du bien : accessibilité, commerces, écoles, projets urbains et qualité de vie du quartier.</p><p>La sixième erreur consiste à <strong>acheter un bien uniquement sur un coup de cœur</strong>. L'émotion joue souvent un rôle important lors d'une première acquisition. Pourtant, les experts du secteur rappellent qu'il est essentiel de conserver une approche rationnelle et d'anticiper l'évolution de sa situation personnelle ou professionnelle. Un logement adapté aujourd'hui doit aussi rester cohérent dans plusieurs années.</p><p>La septième erreur concerne la <strong>mauvaise analyse de l'état du bien et de la copropriété</strong>. Certains acheteurs négligent les documents techniques comme les diagnostics immobiliers ou les procès-verbaux d'assemblée générale de copropriété. Pourtant, ces documents peuvent révéler la présence de travaux importants, des problèmes structurels ou des dépenses futures à anticiper.</p>",
     },
     {
-      heading: 'Le délai de rétractation de 10 jours',
-      content: "<p>Après la signature du compromis, l'acheteur dispose d'un <strong>délai de rétractation de 10 jours calendaires</strong> (loi SRU). Pendant cette période, vous pouvez renoncer à l'achat sans motif et sans pénalité.</p><p>Le délai commence le lendemain de la remise du compromis complet (avec tous les diagnostics). La rétractation se fait par lettre recommandée avec accusé de réception.</p>",
-    },
-    {
-      heading: 'Du compromis à l\'acte définitif',
-      content: "<p>Entre le compromis et la signature de l'acte authentique chez le notaire, comptez <strong>2 à 3 mois</strong>. Ce délai permet de :</p><ul><li>Obtenir le financement bancaire</li><li>Lever les clauses suspensives</li><li>Purger le droit de préemption de la mairie</li><li>Préparer l'acte notarié</li></ul><p>Pendant cette période, restez en contact avec votre notaire et votre banque pour anticiper tout retard.</p>",
+      heading: 'Erreurs 8 à 10 : financement, travaux et accompagnement',
+      content:
+        "<p>La huitième erreur consiste à <strong>ne pas comparer plusieurs solutions de financement</strong>. Se contenter de l'offre de sa banque historique peut parfois conduire à payer un crédit plus cher que nécessaire. Les conditions de prêt, taux d'intérêt, assurance emprunteur, frais de dossier varient d'un établissement à l'autre. Comparer plusieurs offres permet donc souvent d'optimiser le coût global du financement.</p><p>La neuvième erreur consiste à <strong>sous-estimer le coût des travaux</strong>. Dans de nombreux cas, les acheteurs envisagent des rénovations après l'acquisition sans mesurer précisément leur coût réel. Cuisine, salle de bain, rénovation énergétique ou remise aux normes peuvent rapidement représenter plusieurs dizaines de milliers d'euros.</p><p>Enfin, la dixième erreur consiste à <strong>réaliser son premier achat immobilier sans accompagnement</strong>. Dans un marché immobilier parfois complexe, être accompagné par un professionnel permet souvent d'éviter certaines erreurs. Un spécialiste de l'immobilier peut aider à analyser le marché, vérifier les documents techniques et négocier le prix d'achat.</p><p>Réussir son premier achat immobilier repose donc sur une préparation solide et une analyse rigoureuse. Définir un budget réaliste, étudier le marché, vérifier les caractéristiques du bien et anticiper les coûts permettent d'éviter la plupart des erreurs courantes. Pour les primo-accédants, cette démarche structurée transforme un projet parfois stressant en véritable décision patrimoniale sur le long terme.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 13 — Diagnostics immobiliers ───
-const diagnosticsImmobiliers: BlogArticle = {
-  slug: 'diagnostics-immobiliers-obligatoires-guide',
-  title: 'Diagnostics immobiliers obligatoires : lesquels vérifier avant d\'acheter',
-  excerpt: 'DPE, amiante, plomb, électricité... Quels sont les diagnostics obligatoires lors d\'un achat immobilier ? Guide complet pour tout comprendre.',
-  category: 'achat',
-  tags: ['diagnostics immobiliers', 'DPE', 'amiante', 'plomb', 'achat immobilier'],
-  publishedAt: '2026-02-14',
-  author: AQUIZ_AUTHOR,
-  readingTime: 7,
-  coverImage: '/images/blog/diagnostics-immobiliers.jpg',
-  coverAlt: 'Technicien effectuant un diagnostic énergétique dans une maison',
-  relatedTools: [
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Intégrez le coût des travaux éventuels dans votre budget' },
-  ],
-  sections: [
-    {
-      heading: 'Pourquoi les diagnostics sont-ils importants ?',
-      content: "<p>Les diagnostics immobiliers permettent à l'acheteur de connaître l'état réel du bien avant l'achat. Ils sont obligatoires et regroupés dans un <strong>Dossier de Diagnostic Technique (DDT)</strong> qui doit être annexé au compromis de vente.</p><p>Ils sont à la charge du vendeur, mais en tant qu'acheteur, vous devez savoir les lire et les interpréter pour éviter les mauvaises surprises.</p>",
-    },
-    {
-      heading: 'Le DPE : le diagnostic le plus important',
-      content: "<p>Le <strong>Diagnostic de Performance Énergétique</strong> classe le bien de A (très performant) à G (passoire thermique). En 2026, c'est devenu un critère déterminant :</p><ul><li><strong>Classe G :</strong> interdite à la location depuis 2025</li><li><strong>Classe F :</strong> sera interdite à la location dès 2028</li><li><strong>Impact sur le prix :</strong> une classe F ou G décote le bien de 10 à 20 %</li><li><strong>Coût des travaux :</strong> la rénovation énergétique peut coûter 15 000 à 50 000 EUR</li></ul><p>Un bon DPE (A, B ou C) est un gage de confort et de valeur à la revente.</p>",
-    },
-    {
-      heading: 'Les autres diagnostics obligatoires',
-      content: "<ul><li><strong>Amiante :</strong> obligatoire pour les biens construits avant juillet 1997</li><li><strong>Plomb (CREP) :</strong> pour les logements construits avant 1949</li><li><strong>Électricité :</strong> si l'installation a plus de 15 ans</li><li><strong>Gaz :</strong> si l'installation a plus de 15 ans</li><li><strong>Termites :</strong> dans les zones déclarées à risque par arrêté préfectoral</li><li><strong>Risques naturels et technologiques (ERP) :</strong> obligatoire partout</li><li><strong>Assainissement :</strong> pour les maisons individuelles non raccordées au tout-à-l'égout</li><li><strong>Mérule :</strong> dans les zones déclarées à risque</li></ul>",
-    },
-    {
-      heading: 'Comment réagir en cas de diagnostic défavorable ?',
-      content: "<p>Un diagnostic révèle un problème ? Plusieurs options s'offrent à vous :</p><ul><li><strong>Négocier le prix :</strong> demandez une réduction correspondant au coût des travaux nécessaires</li><li><strong>Exiger les travaux :</strong> le vendeur peut s'engager à réaliser les travaux avant la vente</li><li><strong>Inclure une clause :</strong> ajouter une clause suspensive au compromis liée aux diagnostics</li><li><strong>Renoncer :</strong> si les travaux sont trop importants, mieux vaut passer à un autre bien</li></ul><p>Dans tous les cas, faites chiffrer les travaux par un professionnel avant de prendre votre décision.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 14 — Visites efficaces ───
-const visitesEfficaces: BlogArticle = {
-  slug: 'visite-immobiliere-checklist-points-a-verifier',
-  title: 'Visite immobilière : la checklist complète des points à vérifier',
-  excerpt: 'Ne laissez rien au hasard lors de vos visites. Découvrez notre checklist exhaustive pour évaluer un bien immobilier comme un pro.',
-  category: 'achat',
-  tags: ['visite immobilière', 'checklist', 'achat immobilier', 'conseils', 'vérification'],
-  publishedAt: '2026-02-16',
+// ─── ARTICLE 3 — Checklist déménagement ───
+const checklistDemenagement: BlogArticle = {
+  slug: 'checklist-demenagement-guide-pratique',
+  title: 'Checklist déménagement : le guide pratique pour ne rien oublier',
+  excerpt:
+    'De la planification au jour J, suivez notre checklist complète pour organiser votre déménagement sans stress et sans oubli.',
+  category: 'guides',
+  tags: ['déménagement', 'checklist', 'guide pratique', 'organisation', 'logement'],
+  publishedAt: '2026-02-01',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
   readingTime: 8,
   coverImage: '/images/blog/visite-appartement.jpg',
-  coverAlt: 'Intérieur lumineux d\'un appartement lors d\'une visite immobilière',
+  coverAlt: 'Intérieur lumineux d\'un appartement vide prêt pour un emménagement',
   relatedTools: [
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Vérifiez si ce bien rentre dans votre budget' },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: 'Prévoyez le budget déménagement dans votre projet immobilier',
+    },
   ],
   sections: [
     {
-      heading: 'Avant la visite : préparez-vous',
-      content: "<p>Une visite efficace se prépare. Avant de vous déplacer :</p><ul><li>Définissez vos critères non négociables (surface, étage, luminosité, transports)</li><li>Vérifiez le prix au m2 du quartier pour évaluer si le bien est correctement valorisé</li><li>Préparez une liste de questions à poser (charges, travaux prévus, raison de la vente)</li><li>Apportez un mètre, votre téléphone pour photos, et une lampe torche</li></ul>",
+      heading: 'Anticiper et planifier le déménagement',
+      content:
+        "<p>Un déménagement représente souvent une étape importante dans une vie. Qu'il s'agisse d'un changement de logement après un achat immobilier, d'une mutation professionnelle ou d'un nouveau projet de vie, cette transition nécessite une organisation rigoureuse. Entre les démarches administratives, la préparation des cartons et l'installation dans le nouveau logement, les tâches à accomplir sont nombreuses et peuvent rapidement devenir source de stress si elles ne sont pas anticipées.</p><p>Pour éviter les oublis et faciliter cette période de transition, il est généralement recommandé de préparer son déménagement <strong>entre un et trois mois à l'avance</strong>. Cette anticipation permet de planifier les démarches administratives, d'organiser la logistique et de limiter les imprévus le jour du départ. Selon plusieurs guides pratiques consacrés à la mobilité résidentielle, une bonne organisation permet non seulement de réduire le stress, mais aussi de mieux maîtriser le coût global du déménagement.</p><p>La première étape consiste à planifier la date du déménagement et à organiser les formalités liées à l'ancien logement. Pour les locataires, cela implique notamment d'envoyer un préavis de départ au propriétaire ou à l'agence immobilière. En France, le délai standard est généralement de <strong>trois mois</strong> pour un logement vide, bien qu'il puisse être réduit à un mois dans certaines situations, notamment dans les zones dites tendues ou dans certains cas particuliers prévus par la réglementation. Anticiper ce délai est essentiel pour éviter des frais supplémentaires ou un chevauchement entre deux loyers.</p>",
     },
     {
-      heading: 'Pendant la visite : les points clés',
-      content: "<p>Soyez méthodique. Vérifiez chaque élément :</p>",
-      subsections: [
-        {
-          heading: 'L\'environnement extérieur',
-          content: "<ul><li>Qualité de l'immeuble (façade, hall, ascenseur, parties communes)</li><li>Bruit : visitez à différents moments si possible</li><li>Voisinage et commerces à proximité</li><li>Stationnement et transports</li></ul>",
-        },
-        {
-          heading: 'L\'intérieur du bien',
-          content: "<ul><li><strong>Luminosité :</strong> exposition, taille des fenêtres, vis-à-vis</li><li><strong>Humidité :</strong> traces sur les murs, odeur de moisi, joints noircis</li><li><strong>Électricité :</strong> nombre de prises, tableau électrique aux normes</li><li><strong>Plomberie :</strong> pression d'eau, état des canalisations</li><li><strong>Isolation :</strong> fenêtres double vitrage, DPE</li><li><strong>Agencement :</strong> circulations, rangements, potentiel d'aménagement</li></ul>",
-        },
-      ],
+      heading: 'Organiser la logistique et faire le tri',
+      content:
+        "<p>À ce stade, il est également conseillé de déterminer la manière dont le déménagement sera réalisé. Certains ménages choisissent de déménager par leurs propres moyens, tandis que d'autres préfèrent faire appel à une entreprise spécialisée. Dans ce second cas, il est recommandé de <strong>demander plusieurs devis</strong> afin de comparer les prestations et les tarifs proposés par les différents professionnels. Les prix peuvent varier selon plusieurs critères, notamment la distance, le volume des meubles et les services supplémentaires comme l'emballage des objets fragiles.</p><p>Un déménagement représente aussi une excellente occasion de faire le tri dans ses affaires. Au fil des années, de nombreux objets inutiles s'accumulent dans les logements. Avant de commencer à préparer les cartons, il est donc conseillé de réduire le volume des affaires à transporter. Cette étape permet de simplifier l'organisation du déménagement et peut également diminuer les coûts si l'on fait appel à un professionnel. Les objets peuvent être répartis en trois catégories : <strong>ceux à conserver, ceux à vendre ou donner, et ceux à jeter</strong>. Cette méthode permet d'éviter de transporter des objets dont on n'a plus réellement besoin.</p>",
     },
     {
-      heading: 'Les questions indispensables à poser',
-      content: "<ul><li>Depuis combien de temps le bien est-il en vente ?</li><li>Pourquoi le propriétaire vend-il ?</li><li>Quel est le montant des charges de copropriété ?</li><li>Y a-t-il des travaux votés ou prévus ?</li><li>Combien paient les locataires (si immeuble partiellement loué) ?</li><li>Quel est le DPE et la taxe foncière ?</li><li>Y a-t-il eu des sinistres déclarés ?</li></ul>",
+      heading: 'Préparer les cartons efficacement',
+      content:
+        "<p>La préparation des cartons constitue l'une des étapes les plus visibles du déménagement. Pour éviter la précipitation, il est préférable de commencer plusieurs semaines à l'avance en emballant d'abord les objets les moins utilisés, comme les livres, les décorations ou certains vêtements hors saison. Les cartons doivent être <strong>clairement étiquetés</strong> avec leur contenu et la pièce de destination dans le nouveau logement. Cette organisation facilite considérablement le déballage et l'installation. Les objets fragiles doivent être protégés avec du papier bulle ou du papier journal, et il est conseillé de ne pas surcharger les cartons afin d'éviter les accidents lors du transport.</p>",
     },
     {
-      heading: 'Après la visite : analyse et décision',
-      content: "<p>Ne vous précipitez pas. Après chaque visite :</p><ul><li>Notez vos impressions à chaud dans les 10 minutes</li><li>Comparez avec vos autres visites sur les mêmes critères</li><li>Revisitez le bien à un autre moment de la journée si vous hésitez</li><li>Faites estimer les éventuels travaux par un artisan</li><li>Simulez votre financement précis avec le prix de ce bien</li></ul>",
+      heading: 'Les démarches administratives',
+      content:
+        "<p>Un déménagement implique également plusieurs démarches administratives importantes. Il est notamment nécessaire de signaler son changement d'adresse auprès de différents organismes et fournisseurs. Les principaux services à prévenir sont généralement les fournisseurs d'énergie, les opérateurs internet et téléphonie, les compagnies d'assurance, les établissements bancaires et certains organismes administratifs. Aujourd'hui, une partie de ces démarches peut être réalisée en ligne, ce qui facilite considérablement la gestion du changement d'adresse.</p>",
+    },
+    {
+      heading: 'Le jour J et l\'installation',
+      content:
+        "<p>À l'approche du jour du déménagement, certaines vérifications doivent également être effectuées. Avant de quitter l'ancien logement, il est recommandé de <strong>relever les compteurs</strong> d'électricité, d'eau et de gaz afin de transmettre les index aux fournisseurs d'énergie. Cela permet d'éviter toute erreur de facturation. Il est également important de vérifier que toutes les pièces du logement ont été vidées : placards, cave, grenier ou boîte aux lettres. Lors de l'état des lieux de sortie, toutes les clés doivent être remises au propriétaire ou à l'agence immobilière.</p><p>Une fois installé dans le nouveau logement, plusieurs démarches restent encore à effectuer. Les nouveaux occupants doivent notamment vérifier le bon fonctionnement des installations essentielles comme l'électricité, l'eau chaude ou le chauffage. Il est également conseillé de s'assurer que les contrats d'énergie et d'internet sont bien activés afin d'éviter toute interruption de service. Dans certains cas, il peut également être nécessaire de mettre à jour certains documents administratifs, comme la carte grise du véhicule ou l'adresse auprès de certaines administrations.</p><p>Un déménagement peut rapidement devenir une source de stress lorsque les différentes étapes ne sont pas anticipées. À l'inverse, une organisation méthodique permet de rendre cette transition beaucoup plus sereine. Les spécialistes du logement rappellent que la réussite d'un déménagement repose principalement sur trois éléments : <strong>l'anticipation, l'organisation et la gestion du budget</strong>. En suivant une checklist claire et en planifiant les différentes étapes plusieurs semaines à l'avance, il devient possible de limiter les imprévus et de faciliter l'installation dans un nouveau logement. Un déménagement bien préparé permet ainsi de transformer une étape souvent perçue comme contraignante en un nouveau départ plus serein.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 15 — Checklist déménagement ───
-const checklistDemenagement: BlogArticle = {
-  slug: 'checklist-demenagement-guide-pratique',
-  title: 'Déménagement : la checklist complète pour ne rien oublier',
-  excerpt: 'De la résiliation de vos contrats à l\'installation dans votre nouveau logement, suivez notre guide étape par étape pour un déménagement sans stress.',
-  category: 'guides',
-  tags: ['déménagement', 'checklist', 'guide pratique', 'organisation', 'nouveau logement'],
-  publishedAt: '2026-02-08',
-  author: AQUIZ_AUTHOR,
-  readingTime: 6,
-  coverImage: '/images/blog/checklist-demenagement.jpg',
-  coverAlt: 'Intérieur de cuisine moderne d\'un nouveau logement prêt à emménager',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Prévoyez le budget déménagement dans votre projet' },
-  ],
-  sections: [
-    {
-      heading: '2 mois avant : lancez les démarches',
-      content: "<ul><li><strong>Prévenez votre propriétaire :</strong> préavis de 1 mois (zone tendue) ou 3 mois</li><li><strong>Demandeurs de devis :</strong> comparez 3 à 5 déménageurs professionnels</li><li><strong>Triez vos affaires :</strong> vendez, donnez ou jetez ce que vous ne gardez pas</li><li><strong>Inscrivez vos enfants :</strong> nouvelle école, crèche, activités</li><li><strong>Posez des congés :</strong> prévoyez 2 à 3 jours autour du déménagement</li></ul>",
-    },
-    {
-      heading: '1 mois avant : les démarches administratives',
-      content: "<ul><li><strong>Changement d'adresse :</strong> service en ligne de La Poste (réexpédition du courrier)</li><li><strong>Résiliation/transfert :</strong> internet, électricité, gaz, eau</li><li><strong>Notifications :</strong> banque, assurances, employeur, CPAM, CAF, impôts</li><li><strong>Assurance habitation :</strong> souscrivez un contrat pour le nouveau logement (obligatoire dès le jour de la signature)</li></ul>",
-    },
-    {
-      heading: 'Jour J : les essentiels',
-      content: "<p>Préparez un \"kit de survie\" avec les indispensables :</p><ul><li>Documents importants (acte de vente, contrats, pièces d'identité)</li><li>Médicaments et trousse de premiers secours</li><li>Chargeurs de téléphone</li><li>Vêtements de rechange</li><li>De quoi manger et boire (bouilloire, café, biscuits)</li><li>Produits d'entretien de base</li></ul>",
-    },
-    {
-      heading: 'Budget déménagement : combien prévoir ?',
-      content: "<p>Le coût d'un déménagement varie fortement :</p><ul><li><strong>Location de camion (DIY) :</strong> 100 à 300 EUR/jour</li><li><strong>Déménageurs professionnels :</strong> 800 à 3 000 EUR (selon volume et distance)</li><li><strong>Cartons et fournitures :</strong> 50 à 150 EUR</li><li><strong>Frais d'installation :</strong> 500 à 2 000 EUR (petits travaux, électroménager)</li></ul><p>Total moyen pour un appartement 2-3 pièces : <strong>1 500 à 3 000 EUR</strong>. Pensez à inclure ce budget dans votre plan de financement immobilier.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 16 — Budget rénovation ───
-const budgetRenovation: BlogArticle = {
-  slug: 'budget-renovation-appartement-guide-2026',
-  title: 'Budget rénovation appartement : combien prévoir poste par poste en 2026',
-  excerpt: 'Rénovation légère ou lourde, cuisine, salle de bain, isolation : découvrez les coûts moyens et nos astuces pour maîtriser votre budget travaux.',
-  category: 'guides',
-  tags: ['rénovation', 'travaux', 'budget', 'appartement', 'coût', '2026'],
-  publishedAt: '2026-02-20',
+// ─── ARTICLE 4 — Reste à vivre ───
+const resteAVivre: BlogArticle = {
+  slug: 'reste-a-vivre-immobilier-calcul-importance',
+  title: 'Reste à vivre : pourquoi c\'est aussi important que le taux d\'endettement ?',
+  excerpt:
+    'Le reste à vivre est un critère décisif pour les banques. Découvrez comment le calculer, les seuils de référence et comment l\'améliorer pour votre projet immobilier.',
+  category: 'simulation',
+  tags: ['reste à vivre', 'taux d\'endettement', 'capacité d\'emprunt', 'banque', 'financement'],
+  publishedAt: '2026-02-05',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
   readingTime: 9,
-  coverImage: '/images/blog/budget-renovation.jpg',
-  coverAlt: 'Ouvriers effectuant des travaux de rénovation dans un appartement',
+  coverImage: '/images/blog/reste-a-vivre.jpg',
+  coverAlt: 'Calcul de budget familial avec une calculatrice et des documents financiers',
   relatedTools: [
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Intégrez le budget travaux dans votre plan de financement' },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: "Calculez votre reste à vivre et votre capacité d'emprunt",
+    },
+    {
+      label: 'Simulateur Mode B',
+      href: '/simulateur/mode-b',
+      description: 'Vérifiez que votre reste à vivre est suffisant pour ce bien',
+    },
   ],
   sections: [
     {
-      heading: 'Les 3 niveaux de rénovation',
-      content: "<p>Le coût d'une rénovation dépend de l'ampleur des travaux :</p><ul><li><strong>Rénovation légère (rafraîchissement) :</strong> peinture, sols, quelques aménagements — <strong>200 à 500 EUR/m2</strong></li><li><strong>Rénovation moyenne :</strong> cuisine, salle de bain, électricité partielle — <strong>500 à 1 000 EUR/m2</strong></li><li><strong>Rénovation lourde :</strong> redistribution des pièces, plomberie, électricité complète, isolation — <strong>1 000 à 1 800 EUR/m2</strong></li></ul><p>Pour un appartement de 60 m2, cela représente de 12 000 à 108 000 EUR selon le niveau de travaux.</p>",
+      heading: 'Qu\'est-ce que le reste à vivre ?',
+      content:
+        "<p>Le reste à vivre est l'un des indicateurs les plus importants dans l'analyse d'un projet immobilier. Pourtant, de nombreux acheteurs se concentrent uniquement sur le taux d'endettement lorsqu'ils évaluent leur capacité d'emprunt. En réalité, les banques ne se limitent pas à ce seul critère : elles analysent également la somme d'argent qu'il reste à un ménage une fois toutes ses charges payées. Cette notion, appelée reste à vivre, permet d'évaluer si un emprunteur pourra rembourser son crédit immobilier tout en conservant un niveau de vie équilibré. Dans un contexte où l'accès au crédit immobilier est devenu plus exigeant, comprendre cet indicateur est essentiel pour réussir son projet d'achat.</p><p>Le reste à vivre correspond au <strong>montant disponible chaque mois après le paiement de l'ensemble des charges fixes</strong> du foyer. Concrètement, il s'agit de l'argent restant une fois que les dépenses incompressibles ont été déduites des revenus. Ces charges comprennent généralement la mensualité du crédit immobilier, les autres crédits éventuels (automobile ou consommation), les impôts, les assurances, mais aussi certaines dépenses récurrentes comme les abonnements ou les charges énergétiques. Le montant obtenu représente alors le budget disponible pour les dépenses du quotidien : alimentation, transport, loisirs, épargne ou imprévus. Selon plusieurs spécialistes du financement immobilier comme Pretto ou Meilleurtaux, les banques utilisent cet indicateur pour vérifier qu'un emprunteur pourra assumer ses engagements financiers sans mettre en péril son équilibre budgétaire.</p>",
     },
     {
-      heading: 'Coût par poste de rénovation',
-      content: "<ul><li><strong>Cuisine équipée :</strong> 5 000 à 20 000 EUR (hors électroménager haut de gamme)</li><li><strong>Salle de bain :</strong> 4 000 à 15 000 EUR</li><li><strong>Peinture complète :</strong> 20 à 40 EUR/m2</li><li><strong>Parquet/carrelage :</strong> 30 à 80 EUR/m2 pose comprise</li><li><strong>Électricité complète :</strong> 80 à 120 EUR/m2</li><li><strong>Isolation des murs :</strong> 50 à 100 EUR/m2</li><li><strong>Fenêtres double vitrage :</strong> 500 à 1 000 EUR par fenêtre</li></ul>",
+      heading: 'La relation entre reste à vivre et taux d\'endettement',
+      content:
+        "<p>Dans l'analyse d'un dossier de financement, le reste à vivre est étudié en parallèle du taux d'endettement. Ce dernier correspond à la part des revenus consacrée au remboursement des crédits. En France, les recommandations du Haut Conseil de stabilité financière (HCSF) fixent généralement un plafond de <strong>35 % d'endettement</strong> assurance incluse. Cependant, respecter ce seuil ne garantit pas automatiquement l'obtention d'un prêt. <strong>Une banque peut refuser un financement si le reste à vivre est jugé trop faible</strong>, même lorsque le taux d'endettement est conforme. L'objectif des établissements bancaires est de s'assurer que le ménage conservera une capacité financière suffisante pour faire face aux dépenses courantes et aux aléas de la vie pendant toute la durée du prêt, qui peut s'étendre sur vingt à vingt-cinq ans.</p>",
     },
     {
-      heading: 'Les aides pour financer vos travaux',
-      content: "<p>Plusieurs aides peuvent réduire significativement la facture :</p><ul><li><strong>MaPrimeRenov' :</strong> jusqu'à 20 000 EUR pour la rénovation énergétique</li><li><strong>Eco-PTZ :</strong> prêt à taux zéro jusqu'à 50 000 EUR pour les travaux de rénovation énergétique</li><li><strong>TVA à 5,5 % :</strong> pour les travaux d'amélioration énergétique (au lieu de 10 %)</li><li><strong>CEE (Certificats d'Économie d'Énergie) :</strong> primes des fournisseurs d'énergie</li></ul>",
+      heading: 'Comment calculer son reste à vivre ?',
+      content:
+        "<p>Le calcul du reste à vivre est relativement simple. Il consiste à soustraire les charges fixes mensuelles du total des revenus nets du foyer. Les revenus pris en compte incluent généralement les salaires nets, les revenus indépendants stabilisés, les pensions ou retraites, ainsi que certains revenus locatifs. Dans ce dernier cas, les banques appliquent souvent une décote de sécurité et ne retiennent qu'environ <strong>70 % des loyers perçus</strong>. Une fois ces revenus additionnés, toutes les charges récurrentes sont déduites pour obtenir le reste à vivre réel. Ce calcul permet aux banques d'évaluer la capacité d'un ménage à financer ses dépenses quotidiennes après l'achat immobilier.</p><p>Prenons un exemple concret. Un couple dispose de revenus nets mensuels de 3 200 euros. Après l'achat immobilier, la mensualité du crédit s'élève à 950 euros. Le ménage rembourse également un crédit automobile de 150 euros et supporte environ 250 euros de charges fixes supplémentaires liées aux assurances et aux impôts. Le total des charges atteint donc 1 350 euros. En soustrayant ces dépenses aux revenus mensuels, le reste à vivre s'établit à <strong>1 850 euros</strong>. Cette somme correspond au budget disponible pour vivre chaque mois. Plus ce montant est élevé, plus la banque sera rassurée quant à la solvabilité du foyer.</p>",
     },
     {
-      heading: 'Conseils pour maîtriser son budget',
-      content: "<ul><li><strong>Prévoyez une marge de 15 à 20 % :</strong> les dépassements sont quasi systématiques en rénovation</li><li><strong>Demandez minimum 3 devis :</strong> comparez et négociez</li><li><strong>Définissez vos priorités :</strong> commencez par le structurel avant le décoratif</li><li><strong>Groupez les travaux :</strong> certains artisans proposent des forfaits \"clés en main\"</li><li><strong>Anticipez les délais :</strong> comptez 1 à 3 mois pour une rénovation légère, 3 à 6 mois pour une rénovation lourde</li></ul>",
+      heading: 'Les seuils de référence des banques',
+      content:
+        "<p>Contrairement au taux d'endettement, il n'existe pas de seuil légal unique pour le reste à vivre. Chaque banque applique ses propres critères d'analyse en fonction du profil de l'emprunteur et de la composition du foyer. Néanmoins, certaines références sont souvent observées dans le secteur bancaire. Pour une personne seule, les établissements financiers considèrent généralement qu'un reste à vivre situé entre <strong>700 et 1 000 euros</strong> constitue un minimum raisonnable. Pour un couple, ce montant se situe plutôt entre <strong>1 200 et 1 500 euros</strong>, avec un complément supplémentaire pour chaque enfant à charge.</p><p>Ces valeurs restent indicatives et peuvent varier selon le niveau de revenus ou le coût de la vie dans la région. Dans les grandes métropoles comme Paris ou Lyon, où les dépenses quotidiennes sont plus élevées, les banques peuvent exiger un reste à vivre plus important afin de sécuriser le financement.</p>",
+    },
+    {
+      heading: 'Les erreurs fréquentes à éviter',
+      content:
+        "<p>Plusieurs erreurs sont fréquemment commises par les acheteurs lorsqu'ils évaluent leur reste à vivre. La première consiste à confondre cet indicateur avec le taux d'endettement. Le taux d'endettement est exprimé en pourcentage des revenus, alors que le reste à vivre correspond à un montant concret en euros. Une autre erreur consiste à sous-estimer certaines charges du quotidien. Les dépenses d'assurance, les abonnements ou encore les frais de transport peuvent représenter une part importante du budget et doivent être intégrés dans le calcul. Enfin, certains emprunteurs oublient d'anticiper les évolutions possibles de leur situation financière, comme un changement professionnel, un congé parental ou une baisse de revenus à long terme.</p>",
+    },
+    {
+      heading: 'Comment améliorer son reste à vivre ?',
+      content:
+        "<p>Il est toutefois possible d'améliorer son reste à vivre avant de déposer un dossier de financement. La première stratégie consiste à réduire ses charges fixes, par exemple en soldant certains crédits à la consommation ou en renégociant certains contrats d'assurance. Une autre approche consiste à augmenter ses revenus, notamment grâce à des revenus locatifs ou à une évolution salariale. Enfin, l'ajustement du projet immobilier peut également jouer un rôle important. Allonger la durée du prêt, augmenter l'apport personnel ou réduire le montant emprunté permet souvent d'abaisser la mensualité du crédit et d'améliorer mécaniquement le reste à vivre.</p><p>Au-delà du simple critère bancaire, le reste à vivre constitue un véritable outil de gestion financière pour les particuliers. Il permet de s'assurer que le projet immobilier reste compatible avec le budget du foyer et d'éviter une situation de tension financière sur le long terme. Dans un contexte marqué par la remontée des taux d'intérêt et par une vigilance accrue des banques, analyser son reste à vivre est devenu une étape incontournable pour préparer un achat immobilier.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 17 — Prix par arrondissement Paris ───
-const prixArrondissementParis: BlogArticle = {
-  slug: 'prix-immobilier-par-arrondissement-paris-2026',
-  title: 'Prix immobilier à Paris en 2026 : le classement complet par arrondissement',
-  excerpt: 'Du 1er au 20e arrondissement, découvrez les prix au m2 actualisés, les tendances et les meilleurs quartiers pour acheter à Paris en 2026.',
+// ─── ARTICLE 5 — Apport personnel ───
+const apportPersonnel: BlogArticle = {
+  slug: 'apport-personnel-combien-faut-il-pour-acheter',
+  title: 'Apport personnel : combien faut-il vraiment pour acheter en 2026 ?',
+  excerpt:
+    'Quel apport prévoir pour acheter un bien immobilier ? Montant minimum, apport idéal, données du marché et solutions pour acheter sans apport.',
+  category: 'financement',
+  tags: ['apport personnel', 'épargne', 'financement', 'crédit immobilier', 'premier achat'],
+  publishedAt: '2026-02-10',
+  updatedAt: '2026-03-15',
+  author: AQUIZ_AUTHOR,
+  readingTime: 8,
+  coverImage: '/images/blog/apport-personnel.jpg',
+  coverAlt: 'Tirelire et pièces de monnaie symbolisant l\'épargne pour un apport immobilier',
+  relatedTools: [
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: "Intégrez votre apport dans le calcul de votre capacité d'achat",
+    },
+    {
+      label: 'Simulateur Mode B',
+      href: '/simulateur/mode-b',
+      description: "Testez l'impact de votre apport sur votre projet",
+    },
+  ],
+  sections: [
+    {
+      heading: "L'apport personnel : un levier essentiel",
+      content:
+        "<p>Acheter un bien immobilier implique presque toujours de disposer d'un apport personnel, c'est-à-dire une somme d'argent que l'acheteur investit dans son projet sans recourir à un crédit bancaire. Cet apport provient généralement de l'épargne, d'une donation familiale, d'un héritage ou encore de la revente d'un bien immobilier. Dans le financement d'un achat immobilier, l'apport joue un rôle déterminant car il rassure la banque et permet de réduire le montant du prêt à accorder. <strong>Plus l'apport est important, plus le dossier est solide</strong> et plus les conditions d'emprunt peuvent être avantageuses. Comprendre combien d'apport prévoir et comment il influence l'accès au crédit est donc essentiel pour réussir son projet immobilier.</p>",
+    },
+    {
+      heading: 'Quel montant minimum ?',
+      content:
+        "<p>Dans la majorité des cas, les banques demandent un <strong>apport minimum d'environ 10 %</strong> du montant total du projet immobilier. Cette somme sert principalement à couvrir les frais annexes liés à l'acquisition, notamment les frais de notaire, les frais de garantie du prêt ou encore les frais de dossier bancaire. Par exemple, pour l'achat d'un bien à 250 000 euros, un apport minimum d'environ 25 000 euros est généralement nécessaire afin de couvrir ces frais sans les intégrer au crédit.</p><p>Cependant, ce minimum ne correspond pas toujours à la réalité du marché. Dans la pratique, les banques privilégient souvent des profils disposant d'un apport plus conséquent. De nombreux experts du financement immobilier estiment qu'un apport situé <strong>entre 10 % et 20 %</strong> du prix du bien constitue aujourd'hui la norme pour obtenir de bonnes conditions de crédit.</p>",
+    },
+    {
+      heading: "L'apport idéal : entre 20 % et 30 %",
+      content:
+        "<p>Un apport plus élevé présente plusieurs avantages. D'abord, il permet de réduire le montant emprunté et donc les mensualités du crédit. Ensuite, il rassure l'établissement bancaire sur la capacité de gestion financière de l'emprunteur. Enfin, il peut permettre d'obtenir un taux d'intérêt plus avantageux ou de négocier certaines conditions du prêt. Pour bénéficier des conditions de financement les plus favorables, certains spécialistes recommandent même un apport situé entre <strong>20 % et 30 %</strong> du prix du bien, ce qui diminue fortement le risque perçu par la banque et améliore le pouvoir de négociation de l'acheteur.</p>",
+    },
+    {
+      heading: 'Les données du marché en 2025',
+      content:
+        "<p>Les données récentes du marché immobilier confirment l'importance de l'apport personnel dans les projets d'achat. En 2025, l'apport moyen des primo-accédants en France atteint environ <strong>57 844 euros</strong> pour un bien moyen de 254 513 euros, soit près de 22,7 % du prix d'achat. Pour les secundo-accédants, l'apport moyen est encore plus élevé et dépasse souvent 80 000 euros.</p><p>Dans les grandes métropoles, le niveau d'apport nécessaire peut être encore plus important en raison des prix immobiliers élevés. Par exemple, certaines études montrent qu'en 2025 l'apport moyen mobilisé par les acheteurs peut dépasser <strong>130 000 euros à Paris</strong>, ce qui représente souvent plus d'une année complète de revenus pour un ménage moyen.</p>",
+    },
+    {
+      heading: 'Acheter sans apport : est-ce possible ?',
+      content:
+        "<p>Il est toutefois important de rappeler que l'apport personnel n'est pas toujours obligatoire dans tous les cas. Certaines banques peuvent accepter de financer un projet sans apport, notamment pour des profils très solides : jeunes cadres à fort potentiel, fonctionnaires ou emprunteurs disposant d'une stabilité professionnelle importante. Dans ces situations, la banque peut proposer un <strong>financement à 100 %, voire 110 %</strong>, couvrant à la fois le prix du bien et les frais annexes. Cependant, ces dossiers restent plus difficiles à obtenir et nécessitent généralement un profil financier particulièrement sécurisé.</p>",
+    },
+    {
+      heading: 'Comment constituer son apport ?',
+      content:
+        "<p>Plusieurs sources peuvent être utilisées pour constituer un apport personnel. La plus courante reste l'épargne accumulée sur des livrets ou des placements financiers. Les donations familiales jouent également un rôle croissant dans l'accès à la propriété, notamment pour les jeunes acheteurs dans les grandes villes. Les héritages, la participation salariale ou encore la revente d'un premier bien immobilier peuvent également servir à financer l'apport. Dans certains cas, des dispositifs publics comme le prêt à taux zéro peuvent compléter le financement et réduire le montant à emprunter pour les primo-accédants.</p><p>Au-delà de son rôle financier, l'apport personnel constitue un véritable levier stratégique dans un projet immobilier. Il permet de renforcer la crédibilité du dossier auprès des banques, d'améliorer la capacité d'emprunt et de réduire le coût total du crédit. Un apport élevé peut également offrir davantage de marge de négociation lors de l'achat du bien, notamment dans un marché où les vendeurs privilégient les acheteurs disposant d'un financement sécurisé.</p><p>Dans un contexte où les conditions d'accès au crédit immobilier restent encadrées par des règles strictes, notamment un taux d'endettement généralement limité à 35 % des revenus et une durée maximale de prêt autour de 25 ans, disposer d'un apport solide reste un facteur déterminant pour concrétiser son projet immobilier.</p>",
+    },
+  ],
+}
+
+// ─── ARTICLE 6 — Marché immobilier 2026 ───
+const marcheImmobilier2026: BlogArticle = {
+  slug: 'marche-immobilier-2026-tendances-prix-regions',
+  title: 'Marché immobilier 2026 : tendances, prix et perspectives par région',
+  excerpt:
+    'Analyse du marché immobilier français en 2026 : reprise modérée, fragmentation géographique, impact du DPE et conditions de financement.',
   category: 'marche',
-  tags: ['prix immobilier', 'Paris', 'arrondissement', 'prix au m2', '2026'],
-  publishedAt: '2026-01-30',
+  tags: ['marché immobilier', 'prix immobilier', 'tendances', 'régions', 'DPE', '2026'],
+  publishedAt: '2026-02-15',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
   readingTime: 10,
-  coverImage: '/images/blog/prix-arrondissement-paris.jpg',
-  coverAlt: 'Immeubles haussmanniens typiques des arrondissements parisiens',
+  coverImage: '/images/blog/marche-immobilier-france.jpg',
+  coverAlt: 'Vue aérienne de maisons représentant le marché immobilier français',
   relatedTools: [
-    { label: 'Carte des prix', href: '/carte', description: 'Explorez les prix au m2 par quartier sur la carte interactive' },
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre budget pour chaque arrondissement' },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: 'Estimez votre capacité d\'achat selon votre région',
+    },
+    {
+      label: 'Carte des prix',
+      href: '/carte',
+      description: 'Explorez les prix au m² par ville sur la carte interactive',
+    },
   ],
   sections: [
     {
-      heading: 'Vue d\'ensemble du marché parisien en 2026',
-      content: "<p>Le prix moyen au m2 à Paris s'établit à environ <strong>9 500 EUR</strong> en janvier 2026, en légère baisse de 3 % par rapport à 2024. Cette moyenne masque des écarts considérables entre arrondissements, de 7 500 EUR dans le 19e à plus de 14 000 EUR dans le 6e.</p>",
+      heading: 'Une reprise modérée au niveau national',
+      content:
+        "<p>Le marché immobilier français en 2026 entre dans une nouvelle phase après plusieurs années de turbulences liées à la hausse des taux d'intérêt, à l'inflation et à la baisse du pouvoir d'achat immobilier. Après le ralentissement observé entre 2022 et 2024, l'année 2025 a marqué un début de stabilisation, et 2026 confirme progressivement un retour à l'équilibre. Les professionnels du secteur parlent désormais d'une reprise prudente, caractérisée par une activité qui redémarre progressivement, des prix relativement stables et des dynamiques très différentes selon les régions. Comprendre ces tendances est essentiel pour les acheteurs, les investisseurs et les primo-accédants qui souhaitent se positionner sur le marché immobilier dans les prochaines années.</p><p>Au niveau national, les indicateurs montrent une reprise modérée de l'activité. Après une forte baisse des transactions pendant la crise immobilière récente, le volume des ventes repart progressivement à la hausse. Environ <strong>940 000 transactions immobilières</strong> sont attendues en 2026, ce qui confirme un redémarrage du marché même si celui-ci reste plus prudent qu'avant 2022. Les prix suivent une trajectoire similaire : après une période de correction, ils se stabilisent et devraient connaître une légère progression comprise entre <strong>+1 % et +3 %</strong> en moyenne en France, selon plusieurs observatoires immobiliers. Cette évolution marque la fin de la phase de baisse et l'entrée dans un cycle plus équilibré, où les vendeurs et les acheteurs retrouvent progressivement un terrain d'entente sur les prix.</p>",
     },
     {
-      heading: 'Les arrondissements les plus chers',
-      content: "<ul><li><strong>6e arrondissement (Saint-Germain-des-Prés) :</strong> 14 200 EUR/m2 — le plus cher de Paris, quartier intellectuel et bourgeois</li><li><strong>7e (Tour Eiffel, Invalides) :</strong> 13 500 EUR/m2 — ministères, ambassades, grands appartements familiaux</li><li><strong>4e (Marais, Île Saint-Louis) :</strong> 12 800 EUR/m2 — charme historique, très demandé</li><li><strong>1er (Louvre, Tuileries) :</strong> 12 200 EUR/m2 — hypercentre, rareté de l'offre</li><li><strong>5e (Quartier Latin) :</strong> 11 600 EUR/m2 — universités, calme, charmant</li></ul>",
+      heading: 'Une forte fragmentation géographique',
+      content:
+        "<p>Cependant, cette moyenne nationale masque des écarts très importants entre les territoires. En 2026, le marché immobilier français se caractérise avant tout par une <strong>forte fragmentation géographique</strong>. Certaines métropoles continuent de progresser tandis que d'autres zones connaissent une stagnation ou des ajustements. Par exemple, les prix immobiliers progressent en moyenne de 1,6 % sur un an, avec des variations selon les villes : Paris enregistre une hausse d'environ 2,9 %, alors que d'autres grandes villes comme Bordeaux, Marseille, Toulouse ou Montpellier affichent des évolutions plus modérées. Cette dynamique reflète un marché désormais beaucoup plus localisé où les facteurs économiques, démographiques et urbains influencent fortement les prix.</p>",
     },
     {
-      heading: 'Les arrondissements accessibles pour un premier achat',
-      content: "<ul><li><strong>19e (Buttes-Chaumont) :</strong> 7 500 EUR/m2 — le plus accessible, multiculturel, parc magnifique</li><li><strong>20e (Belleville, Gambetta) :</strong> 7 800 EUR/m2 — ambiance village, en pleine gentrification</li><li><strong>13e (Bibliothèque, Butte-aux-Cailles) :</strong> 8 200 EUR/m2 — nouveaux programmes, bien desservi</li><li><strong>18e (hors Montmartre) :</strong> 8 500 EUR/m2 — opportunités dans le nord de l'arrondissement</li></ul><p>Pour un 2 pièces de 40 m2 dans ces arrondissements, comptez entre 300 000 et 340 000 EUR, frais de notaire inclus.</p>",
+      heading: 'La montée en puissance des villes moyennes',
+      content:
+        "<p>L'une des tendances majeures du marché immobilier en 2026 est la montée en puissance des villes moyennes et des territoires régionaux. Depuis la pandémie et l'essor du télétravail, de nombreux ménages cherchent davantage d'espace, de qualité de vie et de nature. Cette évolution des modes de vie se traduit par une hausse de la demande pour les maisons individuelles et les biens situés en périphérie des grandes villes ou dans des villes intermédiaires. Les données montrent par exemple que <strong>64 % des acheteurs</strong> privilégient désormais un logement avec un extérieur, ce qui explique l'attrait croissant pour les régions et les zones périurbaines. Dans plusieurs territoires, notamment dans l'ouest et le sud de la France, les prix immobiliers progressent même plus rapidement que dans les grandes métropoles.</p>",
     },
     {
-      heading: 'Tendances et quartiers à surveiller',
-      content: "<p>Certains micro-quartiers connaissent une dynamique intéressante :</p><ul><li><strong>Porte de Clichy (17e) :</strong> prolongement de la ligne 14, nouveau palais de justice — prix en hausse</li><li><strong>Saint-Ouen / Porte de Saint-Ouen (18e) :</strong> le Grand Paris Express booste les prix</li><li><strong>Bercy / Gare de Lyon (12e) :</strong> quartier en mutation, bon potentiel</li><li><strong>Olympiades (13e) :</strong> nouveaux aménagements, prix encore contenus</li></ul>",
+      heading: 'Les grandes villes : vers un marché plus normalisé',
+      content:
+        "<p>Dans le même temps, les grandes villes restent des marchés immobiliers structurants mais leur dynamique évolue. Paris, Lyon ou Bordeaux continuent d'afficher des niveaux de prix élevés, mais la croissance y est désormais plus modérée qu'auparavant. Après plusieurs années de hausse spectaculaire, ces marchés semblent avoir atteint une forme de plateau, avec des acheteurs devenus plus exigeants et plus attentifs à la qualité des biens. Dans certaines zones très tendues, la négociation entre acheteurs et vendeurs redevient même plus fréquente, signe d'un marché qui se normalise.</p>",
+    },
+    {
+      heading: "L'impact du DPE sur la valorisation des biens",
+      content:
+        "<p>Une autre transformation importante du marché immobilier en 2026 concerne l'impact du diagnostic de performance énergétique (DPE). Les critères environnementaux prennent désormais une place centrale dans la valorisation des biens immobiliers. Les logements les plus performants sur le plan énergétique bénéficient d'une <strong>prime de valeur</strong>, tandis que les biens classés F ou G sont de plus en plus difficiles à vendre ou nécessitent d'importants travaux de rénovation. Le marché devient progressivement <strong>bipolaire</strong>, avec d'un côté les biens rénovés et immédiatement habitables, et de l'autre les logements nécessitant des travaux qui subissent souvent une décote. Cette évolution reflète l'impact des politiques publiques visant à améliorer la performance énergétique du parc immobilier français.</p>",
+    },
+    {
+      heading: 'Conditions de financement et contexte économique',
+      content:
+        "<p>Les conditions de financement jouent également un rôle déterminant dans l'évolution du marché immobilier en 2026. Après une forte remontée des taux d'intérêt entre 2022 et 2023, ceux-ci se stabilisent autour de <strong>3 % à 3,5 %</strong> en moyenne, ce qui améliore progressivement la capacité d'emprunt des ménages. Toutefois, les banques restent particulièrement sélectives dans l'octroi des crédits immobiliers, notamment en raison des règles imposées par le Haut Conseil de stabilité financière. Cette prudence limite encore la reprise du marché, même si les projets immobiliers recommencent à se concrétiser progressivement.</p><p>Enfin, l'évolution du marché immobilier en 2026 dépend également du contexte économique global. La confiance des ménages, la croissance économique et l'évolution de l'inflation influencent directement la capacité d'achat immobilier. Les professionnels du secteur estiment ainsi que le marché pourrait continuer à se redresser progressivement dans les prochaines années, avec des volumes de ventes qui devraient se stabiliser autour de <strong>950 000 transactions par an</strong> et des prix qui augmenteraient de manière modérée.</p><p>Dans ce contexte, analyser les tendances du marché immobilier devient essentiel pour prendre les bonnes décisions d'investissement ou d'achat. L'évolution des prix, les dynamiques régionales et les nouvelles exigences énergétiques transforment profondément la manière d'acheter un bien immobilier en France. Chez AQUIZ, l'objectif est justement d'aider les acheteurs à comprendre ces évolutions et à analyser leur capacité d'achat réelle en fonction du marché. En combinant données immobilières, capacité d'emprunt et analyse du reste à vivre, les futurs acquéreurs peuvent mieux anticiper les opportunités et sécuriser leur projet immobilier dans un marché devenu plus sélectif et plus stratégique.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 18 — Villes IDF accessibles ───
+// ─── ARTICLE 7 — Villes IDF accessibles ───
 const villesIdfAccessibles: BlogArticle = {
   slug: 'villes-ile-de-france-accessibles-2026',
   title: 'Les 10 villes les plus accessibles d\'Île-de-France pour acheter en 2026',
-  excerpt: 'Prix, transports, cadre de vie : notre sélection des meilleures villes de la banlieue parisienne pour un premier achat à prix raisonnable.',
+  excerpt:
+    'Prix, transports, cadre de vie : notre analyse des communes les plus accessibles autour de Paris pour un premier achat immobilier en 2026.',
   category: 'marche',
   tags: ['Île-de-France', 'banlieue', 'villes accessibles', 'prix immobilier', 'premier achat'],
-  publishedAt: '2026-02-06',
+  publishedAt: '2026-02-20',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
   readingTime: 9,
   coverImage: '/images/blog/villes-idf-accessibles.jpg',
   coverAlt: 'Maison de banlieue parisienne avec jardin, typique de l\'Île-de-France',
   relatedTools: [
-    { label: 'Carte des prix', href: '/carte', description: 'Comparez les prix des villes IDF sur la carte' },
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre budget pour chaque ville' },
+    {
+      label: 'Carte des prix',
+      href: '/carte',
+      description: 'Comparez les prix des villes IDF sur la carte interactive',
+    },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: 'Calculez votre budget pour chaque ville',
+    },
   ],
   sections: [
     {
-      heading: 'Pourquoi acheter en Île-de-France plutôt qu\'à Paris ?',
-      content: "<p>Avec un prix moyen de 9 500 EUR/m2 à Paris, beaucoup de primo-accédants se tournent vers la banlieue. Les avantages sont multiples :</p><ul><li><strong>Prix 30 à 60 % inférieurs :</strong> de 3 000 à 6 500 EUR/m2 selon les villes</li><li><strong>Surfaces plus grandes :</strong> un 3 pièces en banlieue au prix d'un studio à Paris</li><li><strong>Grand Paris Express :</strong> les nouvelles lignes de métro améliorent considérablement l'accessibilité</li><li><strong>Cadre de vie :</strong> espaces verts, calme, services de proximité</li></ul>",
+      heading: 'Pourquoi s\'éloigner de Paris ?',
+      content:
+        "<p>Acheter un bien immobilier en Île-de-France reste un défi pour de nombreux ménages, en particulier pour les primo-accédants. Avec un marché historiquement tendu et des prix élevés dans la capitale, de nombreux acheteurs se tournent vers des communes plus accessibles situées en première ou deuxième couronne. En 2026, cette tendance se confirme : les villes situées autour de Paris attirent de plus en plus d'acquéreurs à la recherche d'un meilleur compromis entre prix immobilier, accessibilité aux transports et qualité de vie. Comprendre quelles villes restent abordables et pourquoi elles gagnent en attractivité est essentiel pour réussir son projet immobilier dans la région.</p><p>Le principal facteur qui pousse les acheteurs à s'éloigner de Paris est évidemment le niveau des prix. En 2026, le prix moyen de l'immobilier dans la capitale avoisine près de <strong>9 800 € par mètre carré</strong>, ce qui rend l'achat très difficile pour une grande partie des ménages, notamment les primo-accédants. À l'échelle de l'Île-de-France, les prix restent plus modérés mais demeurent élevés avec une moyenne autour de <strong>5 600 € par mètre carré</strong>, ce qui illustre l'écart important entre Paris et certaines zones plus accessibles de la région. Dans ce contexte, de nombreuses communes de banlieue deviennent des alternatives particulièrement attractives pour les acheteurs qui souhaitent rester proches de la capitale tout en maîtrisant leur budget.</p>",
     },
     {
-      heading: 'Notre top 10 des villes accessibles',
-      content: "<ol><li><strong>Montreuil (93) :</strong> 5 800 EUR/m2 — la plus proche de Paris, métro ligne 9, scène culturelle vibrante</li><li><strong>Pantin (93) :</strong> 5 200 EUR/m2 — canal, ligne 5, forte attractivité</li><li><strong>Ivry-sur-Seine (94) :</strong> 5 000 EUR/m2 — ligne 7, programmation culturelle, prix contenus</li><li><strong>Saint-Denis (93) :</strong> 4 200 EUR/m2 — héritage olympique, ligne 13 et futur métro 16</li><li><strong>Aubervilliers (93) :</strong> 3 800 EUR/m2 — ligne 12, campus Condorcet, en pleine mutation</li><li><strong>Nanterre (92) :</strong> 5 500 EUR/m2 — RER A, La Défense à vélo, grand parc</li><li><strong>Villejuif (94) :</strong> 4 500 EUR/m2 — ligne 7, futur Grand Paris Express (ligne 15)</li><li><strong>Champigny-sur-Marne (94) :</strong> 3 600 EUR/m2 — RER A, bords de Marne, prix très accessibles</li><li><strong>Argenteuil (95) :</strong> 3 200 EUR/m2 — RER C et Transilien J, 15 min de Saint-Lazare</li><li><strong>Meaux (77) :</strong> 2 500 EUR/m2 — TER 25 min de Paris Est, cadre historique</li></ol>",
+      heading: 'Seine-Saint-Denis et Val-d\'Oise : les prix les plus accessibles',
+      content:
+        "<p>Plusieurs villes situées en petite et grande couronne se distinguent aujourd'hui par des prix nettement plus accessibles. En Seine-Saint-Denis, par exemple, certaines communes comme Drancy, Gagny ou Les Pavillons-sous-Bois proposent des prix autour de <strong>3 300 à 3 600 € par mètre carré</strong>, soit près de trois fois moins que dans certains quartiers parisiens. Ces villes bénéficient en outre d'une amélioration progressive des infrastructures de transport et de l'attractivité économique liée au développement du Grand Paris. Pour les primo-accédants, elles représentent souvent une porte d'entrée vers la propriété dans la région parisienne.</p><p>Dans le Val-d'Oise, la ville de Cergy fait également partie des marchés immobiliers les plus accessibles de la région. On y trouve des appartements anciens autour de <strong>3 000 € par mètre carré</strong>, ce qui permet à de nombreux ménages d'acheter un logement familial pour le prix d'un petit studio parisien. Grâce à la présence d'un pôle universitaire, d'une bonne desserte en transports et d'un bassin d'emploi dynamique, Cergy attire à la fois les primo-accédants, les investisseurs et les étudiants.</p>",
     },
     {
-      heading: 'Les critères de sélection pour bien choisir',
-      content: "<ul><li><strong>Temps de trajet :</strong> visez moins de 40 minutes porte-à-porte vers votre lieu de travail</li><li><strong>Transports :</strong> privilégiez les villes avec une gare RER ou métro (pas seulement bus)</li><li><strong>Dynamisme :</strong> vérifiez les projets urbains (ZAC, Grand Paris Express, rénovations)</li><li><strong>Services :</strong> écoles, médecins, commerces, espaces verts</li><li><strong>Évolution des prix :</strong> certaines villes ont un potentiel de plus-value grâce aux futurs transports</li></ul>",
+      heading: 'Val-de-Marne et Essonne : des opportunités intéressantes',
+      content:
+        "<p>Dans le Val-de-Marne, certaines communes offrent également des opportunités intéressantes pour les acheteurs. Des villes comme Limeil-Brévannes ou Thiais affichent par exemple des prix situés autour de <strong>4 000 à 4 600 € par mètre carré</strong>, soit bien en dessous de la moyenne parisienne. Cette relative accessibilité s'explique notamment par une distance légèrement plus importante avec la capitale, mais aussi par des projets urbains récents qui améliorent progressivement l'attractivité de ces territoires.</p><p>L'Essonne constitue également un territoire particulièrement intéressant pour les ménages disposant d'un budget plus limité. Le prix moyen de l'immobilier y tourne autour de <strong>3 000 € par mètre carré</strong>, ce qui en fait l'un des départements les plus abordables de la région parisienne. Des villes comme Évry-Courcouronnes ou Massy attirent ainsi de nombreux acheteurs grâce à leur proximité avec les grands pôles économiques du sud francilien, notamment le plateau de Saclay et ses centres de recherche.</p>",
+    },
+    {
+      heading: 'Les facteurs d\'attractivité au-delà du prix',
+      content:
+        "<p>Au-delà du prix immobilier, l'accessibilité d'une ville dépend également de plusieurs autres facteurs déterminants. Les transports jouent un rôle central dans le choix des acheteurs. Les communes desservies par le RER, le métro ou les futures lignes du Grand Paris Express gagnent en attractivité car elles permettent de rejoindre rapidement les principaux pôles d'emploi de la région. La présence d'infrastructures, d'écoles, de commerces ou d'espaces verts influence également fortement la demande immobilière.</p><p>L'évolution des modes de vie contribue aussi à transformer les critères de recherche des acheteurs. Depuis la généralisation du télétravail dans certains secteurs, de nombreux ménages privilégient désormais des logements plus spacieux ou situés dans des villes offrant une meilleure qualité de vie. Cette tendance favorise les communes de grande couronne, où les prix restent plus accessibles et où les maisons avec jardin sont plus nombreuses.</p>",
+    },
+    {
+      heading: 'Un marché fragmenté et localisé',
+      content:
+        "<p>Dans ce contexte, l'Île-de-France devient un marché immobilier de plus en plus <strong>fragmenté et localisé</strong>, où chaque ville possède sa propre dynamique. Certaines communes voient leur attractivité augmenter rapidement grâce à de nouveaux projets de transports ou d'aménagement urbain, tandis que d'autres restent plus abordables mais présentent un potentiel de valorisation intéressant à long terme. Pour les acheteurs, il devient donc essentiel d'analyser non seulement le prix actuel d'un bien immobilier, mais aussi les perspectives de développement du territoire dans lequel il se situe.</p><p>Chez AQUIZ, l'objectif est justement d'aider les futurs acquéreurs à identifier les opportunités immobilières les plus cohérentes avec leur budget et leur capacité d'emprunt. En analysant à la fois les prix du marché, la capacité d'achat et les dynamiques territoriales, il devient possible de repérer des villes accessibles en Île-de-France tout en sécurisant son projet immobilier. Dans une région où les écarts de prix peuvent être considérables d'une commune à l'autre, cette approche permet aux acheteurs de prendre des décisions plus éclairées et d'optimiser leur stratégie d'acquisition.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 19 — Tendances immobilier IDF ───
-const tendancesImmobilierIdf: BlogArticle = {
-  slug: 'tendances-immobilier-ile-de-france-2026',
-  title: 'Tendances immobilières en Île-de-France : ce qui change en 2026',
-  excerpt: 'Grand Paris Express, JO 2024 legacy, télétravail : les grandes tendances qui transforment le marché immobilier francilien en 2026.',
-  category: 'marche',
-  tags: ['Île-de-France', 'tendances', 'Grand Paris Express', 'marché immobilier', '2026'],
-  publishedAt: '2026-02-24',
+// ─── ARTICLE 8 — Compromis de vente ───
+const compromisVente: BlogArticle = {
+  slug: 'compromis-de-vente-guide-pratique',
+  title: 'Compromis de vente : tout comprendre avant de signer',
+  excerpt:
+    'Le compromis de vente est une étape clé de l\'achat immobilier. Clauses suspensives, délai de rétractation, dépôt de garantie : guide complet.',
+  category: 'achat',
+  tags: ['compromis de vente', 'achat immobilier', 'clauses suspensives', 'notaire', 'rétractation'],
+  publishedAt: '2026-02-25',
+  updatedAt: '2026-03-15',
   author: AQUIZ_AUTHOR,
-  readingTime: 8,
-  coverImage: '/images/blog/tendances-immobilier-idf.jpg',
-  coverAlt: 'Skyline de La Défense vu depuis Paris, symbole du marché immobilier francilien',
+  readingTime: 9,
+  coverImage: '/images/blog/compromis-vente.jpg',
+  coverAlt: 'Signature d\'un compromis de vente immobilier chez le notaire',
   relatedTools: [
-    { label: 'Carte des prix', href: '/carte', description: 'Visualisez l\'évolution des prix en IDF' },
+    {
+      label: 'Simulateur Mode B',
+      href: '/simulateur/mode-b',
+      description: 'Vérifiez votre budget avant de signer le compromis',
+    },
   ],
   sections: [
     {
-      heading: 'Le Grand Paris Express : bouleversement en cours',
-      content: "<p>Le plus grand projet de transport en Europe transforme durablement la géographie immobilière de l'Île-de-France :</p><ul><li><strong>Ligne 15 Sud (en service partiel) :</strong> les villes desservies voient leurs prix augmenter de 5 à 15 %</li><li><strong>Ligne 16 (vers Le Bourget, Clichy-Montfermeil) :</strong> ouverture progressive, forte anticipation des prix</li><li><strong>Ligne 17 (vers Roissy CDG) :</strong> création d'un nouveau corridor économique et résidentiel</li><li><strong>Ligne 18 (vers Saclay) :</strong> le plateau de Saclay devient un pôle attractif</li></ul><p>L'effet \"gare GPE\" est mesurable : les biens situés à moins de 800 m d'une future station prennent en moyenne 10 % de plus que ceux plus éloignés.</p>",
+      heading: 'Qu\'est-ce qu\'un compromis de vente ?',
+      content:
+        "<p>Le compromis de vente est une étape clé dans un projet immobilier. Il s'agit d'un avant-contrat signé entre le vendeur et l'acheteur qui formalise leur accord sur la vente d'un bien immobilier, généralement une maison ou un appartement. Concrètement, cet acte permet de fixer les conditions de la transaction avant la signature définitive chez le notaire. Il marque le moment où les deux parties s'engagent juridiquement : le vendeur s'engage à vendre son bien et l'acheteur s'engage à l'acquérir au prix convenu. Dans le droit français, on parle souvent de <strong>promesse synallagmatique de vente</strong>, car l'engagement est réciproque entre les deux parties.</p><p>Le compromis de vente intervient généralement après l'acceptation d'une offre d'achat et constitue la première étape officielle de la transaction immobilière. Son rôle est de sécuriser l'opération en précisant tous les éléments essentiels de la vente : l'identité des parties, la description du bien immobilier, le prix de vente, les modalités de paiement et la date prévue pour la signature de l'acte authentique. Ce document possède une véritable valeur juridique puisqu'il s'agit d'un contrat qui engage les deux parties une fois signé.</p>",
     },
     {
-      heading: 'L\'héritage des JO 2024',
-      content: "<p>Les Jeux Olympiques de Paris 2024 ont laissé un héritage immobilier important :</p><ul><li><strong>Village olympique à Saint-Denis :</strong> reconverti en logements (2 500 unités), dopant le quartier</li><li><strong>Seine-Saint-Denis :</strong> image améliorée, investissements publics massifs, attractivité en hausse</li><li><strong>Infrastructures sportives :</strong> piscines, gymnases, améliorant la qualité de vie locale</li></ul>",
+      heading: 'Rédaction et contenu essentiel',
+      content:
+        "<p>Dans la plupart des transactions immobilières, le compromis de vente est rédigé par un professionnel, généralement un notaire ou un agent immobilier. Il peut cependant être signé directement entre particuliers sous seing privé. Même si cette possibilité existe, il est fortement recommandé de faire appel à un professionnel afin de vérifier la conformité juridique du document et de s'assurer que toutes les mentions obligatoires sont bien présentes. Le notaire joue notamment un rôle essentiel dans la vérification des documents, des diagnostics immobiliers et des informations liées au bien vendu.</p><p>Le compromis de vente contient un certain nombre d'informations indispensables pour sécuriser la transaction. Parmi les éléments essentiels figurent l'identité du vendeur et de l'acheteur, la description précise du bien immobilier, la surface et les caractéristiques du logement, ainsi que le prix de vente et les modalités de paiement. Le document précise également la date limite pour signer l'acte de vente définitif chez le notaire. Cette date correspond généralement à un délai d'environ <strong>trois mois</strong> après la signature du compromis, ce qui laisse le temps de réaliser les démarches administratives nécessaires et d'obtenir le financement bancaire.</p>",
     },
     {
-      heading: 'Télétravail et nouvelles attentes',
-      content: "<p>Le télétravail, désormais ancré dans les habitudes (2 à 3 jours/semaine en moyenne), modifie les critères d'achat :</p><ul><li><strong>Surface :</strong> besoin d'une pièce supplémentaire pour le bureau (+10 m2 en moyenne)</li><li><strong>Localisation :</strong> acceptation d'un trajet plus long (fréquence réduite au bureau)</li><li><strong>Cadre de vie :</strong> jardin, balcon, calme deviennent prioritaires</li></ul><p>Cette tendance profite aux villes de grande couronne et aux maisons individuelles.</p>",
+      heading: 'Le dépôt de garantie',
+      content:
+        "<p>Lors de la signature du compromis de vente, il est fréquent que l'acheteur verse un <strong>dépôt de garantie</strong>, aussi appelé acompte. Ce montant représente généralement entre <strong>5 % et 10 %</strong> du prix du bien immobilier. Cette somme est conservée par le notaire ou l'agent immobilier et sera déduite du prix final lors de la signature de l'acte authentique. Le dépôt de garantie constitue une preuve de l'engagement de l'acheteur dans la transaction et permet de sécuriser la vente pour le vendeur.</p>",
     },
     {
-      heading: 'Les zones à fort potentiel en 2026',
-      content: "<ul><li><strong>Corridor de la ligne 15 :</strong> Villejuif, Arcueil, Bagneux — valorisation en cours</li><li><strong>Saint-Denis / Saint-Ouen :</strong> héritage olympique + ligne 14 prolongée</li><li><strong>Saclay / Massy :</strong> pôle universitaire et technologique + ligne 18</li><li><strong>Bords de Marne :</strong> cadre de vie, prix contenus, RER A</li></ul>",
+      heading: 'Les clauses suspensives',
+      content:
+        "<p>Le compromis de vente inclut également ce que l'on appelle des <strong>clauses suspensives</strong>, qui jouent un rôle central dans la protection des deux parties. Ces clauses prévoient que la vente ne sera définitive que si certaines conditions sont remplies. La clause la plus fréquente concerne l'obtention d'un crédit immobilier par l'acheteur. Si la banque refuse le financement dans les délais prévus, la vente peut être annulée et l'acompte est alors intégralement restitué à l'acquéreur. D'autres conditions suspensives peuvent également être mentionnées, comme l'absence de servitude particulière, la non-préemption par une collectivité ou encore l'obtention d'un permis de construire dans certains cas.</p>",
+    },
+    {
+      heading: 'Le délai de rétractation et les documents obligatoires',
+      content:
+        "<p>La loi protège également l'acheteur grâce à un <strong>délai de rétractation de 10 jours</strong> à compter de la réception du compromis signé. Durant cette période, l'acquéreur peut renoncer à l'achat sans avoir à justifier sa décision et sans pénalité financière. Passé ce délai, l'engagement devient plus ferme et un désistement peut entraîner la perte du dépôt de garantie, sauf si une clause suspensive prévue dans le compromis se réalise.</p><p>Avant la signature du compromis de vente, plusieurs documents doivent être fournis à l'acheteur afin de garantir une transparence totale sur le bien immobilier. Le vendeur doit notamment remettre un <strong>dossier de diagnostics techniques</strong> comprenant par exemple le diagnostic de performance énergétique, l'état des installations électriques ou encore l'état des risques naturels. Lorsque le bien est situé en copropriété, des documents supplémentaires doivent également être fournis afin d'informer l'acheteur sur l'organisation et la situation financière de l'immeuble.</p>",
+    },
+    {
+      heading: 'Du compromis à l\'acte authentique',
+      content:
+        "<p>Une fois le compromis de vente signé et le délai de rétractation écoulé, la transaction entre dans une phase administrative durant laquelle plusieurs démarches doivent être réalisées. L'acheteur doit notamment finaliser son financement auprès de la banque, tandis que le notaire effectue différentes vérifications juridiques et administratives concernant le bien immobilier. Lorsque toutes les conditions sont réunies, les deux parties se retrouvent chez le notaire pour signer l'<strong>acte authentique de vente</strong>, qui officialise définitivement le transfert de propriété.</p><p>Le compromis de vente constitue donc une étape fondamentale dans le processus d'achat immobilier. Il permet de sécuriser la transaction, de fixer les engagements des parties et de préparer la signature de l'acte définitif. Pour les acheteurs comme pour les vendeurs, bien comprendre le fonctionnement de cet avant-contrat est essentiel afin d'éviter les erreurs et d'aborder la transaction immobilière avec une vision claire et sécurisée. Chez AQUIZ, l'analyse du projet immobilier ne se limite pas à la capacité d'emprunt : comprendre chaque étape du processus d'achat, du compromis de vente jusqu'à la signature finale chez le notaire, permet aux futurs acquéreurs de prendre des décisions plus éclairées et de sécuriser leur projet immobilier dans les meilleures conditions.</p>",
     },
   ],
 }
 
-// ─── ARTICLE 20 — LMNP meublé ───
-const lmnpMeuble: BlogArticle = {
-  slug: 'lmnp-location-meublee-guide-2026',
-  title: 'LMNP en 2026 : guide complet de la location meublée non professionnelle',
-  excerpt: 'Le statut LMNP reste l\'un des meilleurs leviers fiscaux pour l\'investissement locatif. Fonctionnement, fiscalité, comptabilité : tout savoir.',
-  category: 'investissement',
-  tags: ['LMNP', 'location meublée', 'fiscalité', 'investissement locatif', 'amortissement'],
-  publishedAt: '2026-02-15',
+// ─── ARTICLE 9 — Indivision ou SCI ───
+const indivisionOuSci: BlogArticle = {
+  slug: 'indivision-ou-sci-acheter-a-plusieurs',
+  title: 'Indivision ou SCI : quelle structure privilégier pour acheter un bien immobilier à plusieurs ?',
+  excerpt:
+    'Acheter à plusieurs : faut-il choisir l\'indivision ou créer une SCI ? Avantages, limites, fiscalité et conseils pour bien structurer votre achat.',
+  category: 'achat',
+  tags: ['indivision', 'SCI', 'achat à plusieurs', 'patrimoine', 'investissement'],
+  publishedAt: '2026-03-01',
+  author: AQUIZ_AUTHOR,
+  readingTime: 9,
+  coverImage: '/images/blog/investissement-locatif.jpg',
+  coverAlt: 'Maquette de maison posée sur des documents juridiques et financiers',
+  relatedTools: [
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: "Évaluez votre capacité d'achat à plusieurs",
+    },
+  ],
+  sections: [
+    {
+      heading: 'Acheter à plusieurs : deux options principales',
+      content:
+        "<p>Acheter un bien immobilier à plusieurs est une solution de plus en plus courante, que ce soit pour un couple, des membres d'une même famille ou des associés souhaitant investir ensemble. Cependant, cette situation soulève une question importante au moment de structurer l'achat : faut-il acheter en <strong>indivision</strong> ou créer une <strong>SCI (Société Civile Immobilière)</strong> ? Ces deux modes de détention permettent de devenir propriétaire à plusieurs, mais ils répondent à des logiques juridiques et patrimoniales différentes. Comprendre leurs caractéristiques, leurs avantages et leurs limites est essentiel afin de choisir la structure la plus adaptée à son projet immobilier.</p>",
+    },
+    {
+      heading: "L'indivision : simplicité et limites",
+      content:
+        "<p>L'indivision est la forme la plus simple pour acheter un bien immobilier à plusieurs. Dans ce cas, chaque acquéreur devient propriétaire d'une <strong>quote-part du bien</strong>, proportionnelle à sa participation financière dans l'achat. Par exemple, si deux personnes achètent un appartement ensemble et que l'une finance 60 % du prix et l'autre 40 %, ces proportions seront inscrites dans l'acte de vente chez le notaire. Chaque indivisaire possède donc une part du bien, sans que celui-ci soit physiquement divisé. L'indivision est souvent utilisée par les couples non mariés, les partenaires de PACS ou les héritiers lors d'une succession. Selon le Code civil, toutes les décisions importantes concernant le bien doivent être prises collectivement par les indivisaires, ce qui implique une gestion partagée du patrimoine immobilier.</p><p>L'un des principaux avantages de l'indivision est sa simplicité. Contrairement à la SCI, il n'est pas nécessaire de créer une structure juridique spécifique ni d'effectuer des formalités administratives complexes. L'achat se réalise directement chez le notaire, comme dans une transaction immobilière classique. Ce mode de détention permet également une certaine souplesse dans la répartition des parts, puisque chaque acquéreur peut financer une part différente du projet. Cependant, l'indivision présente aussi des limites. Le principe juridique fondamental de ce régime est que <em>\"nul ne peut être contraint de rester en indivision\"</em>, ce qui signifie qu'un indivisaire peut demander la vente du bien à tout moment. Cette règle peut entraîner des situations conflictuelles si les co-propriétaires ne sont pas d'accord sur la gestion ou sur la vente du logement.</p><p>Pour encadrer cette situation, il est possible de signer une <strong>convention d'indivision</strong> devant notaire. Ce document permet d'organiser la gestion du bien et de fixer certaines règles entre les propriétaires, par exemple la durée de l'indivision, la répartition des charges ou les modalités de revente. Cette convention peut sécuriser l'achat mais elle reste moins structurée qu'une société immobilière. C'est pour cette raison que certains acheteurs préfèrent se tourner vers la création d'une SCI, qui offre un cadre juridique plus stable.</p>",
+    },
+    {
+      heading: 'La SCI : une structure plus stable',
+      content:
+        "<p>La Société Civile Immobilière est une structure juridique qui permet à plusieurs personnes de détenir et de gérer un bien immobilier ensemble. Contrairement à l'indivision, ce n'est pas directement le bien qui appartient aux acheteurs mais <strong>la société qui en est propriétaire</strong>. Les associés détiennent des parts sociales proportionnelles à leur investissement dans la société. La SCI est créée lors de la rédaction de <strong>statuts</strong> qui définissent précisément les règles de fonctionnement, la gestion du bien et les pouvoirs du gérant. Cette organisation permet souvent d'éviter les blocages décisionnels que l'on peut rencontrer en indivision.</p><p>L'un des principaux avantages de la SCI est sa capacité à structurer la gestion du patrimoine immobilier sur le long terme. Les statuts permettent de définir les modalités de prise de décision, la répartition des charges ou encore les conditions de cession des parts. Cette structure est particulièrement utilisée dans les projets familiaux ou patrimoniaux, notamment pour organiser la <strong>transmission d'un bien immobilier</strong> entre plusieurs héritiers. En effet, la SCI facilite la transmission progressive du patrimoine, par exemple via la donation de parts sociales à ses enfants, tout en conservant une gestion centralisée du bien.</p><p>La SCI présente également un intérêt en matière de gestion et d'organisation. Un gérant, désigné dans les statuts, peut être chargé de prendre les décisions courantes concernant le bien immobilier, ce qui simplifie l'administration quotidienne. En revanche, la création d'une SCI implique certaines formalités administratives : rédaction des statuts, immatriculation de la société, publication d'une annonce légale et tenue d'une comptabilité minimale. Ces démarches entraînent donc des coûts et une gestion administrative plus importante que dans le cadre d'une indivision.</p>",
+    },
+    {
+      heading: 'Comment choisir entre indivision et SCI ?',
+      content:
+        "<p>Le choix entre indivision et SCI dépend avant tout de la nature du projet immobilier. Pour un achat simple entre deux personnes, notamment dans le cadre d'un couple ou d'un premier achat immobilier, l'indivision reste souvent la solution la plus rapide et la plus simple à mettre en place. Elle permet d'acheter facilement sans structure juridique supplémentaire. En revanche, pour des projets patrimoniaux plus complexes — par exemple un investissement locatif à plusieurs, une organisation familiale ou une stratégie de transmission — la SCI peut offrir davantage de sécurité et de flexibilité sur le long terme.</p><p>Il est également important de considérer les implications fiscales et juridiques de chaque solution. En indivision, chaque propriétaire est imposé individuellement sur sa part des revenus éventuels du bien. Dans une SCI, le régime fiscal dépend du choix effectué par les associés : la société peut être soumise à l'impôt sur le revenu ou à l'impôt sur les sociétés selon les objectifs du projet. Cette dimension fiscale doit donc être analysée avec attention avant de structurer l'investissement immobilier.</p><p>Dans tous les cas, acheter un bien immobilier à plusieurs nécessite une réflexion approfondie afin d'éviter les difficultés de gestion ou les conflits futurs. La répartition des charges, les modalités de prise de décision et les conditions de sortie du projet doivent être clairement définies dès le départ.</p>",
+    },
+  ],
+}
+
+// ─── ARTICLE 10 — Emprunt en SCI ───
+const empruntSci: BlogArticle = {
+  slug: 'emprunt-sci-financement-immobilier',
+  title: 'Emprunt en SCI : comment financer un achat immobilier avec une Société Civile Immobilière ?',
+  excerpt:
+    'Financement en SCI : fonctionnement, caution personnelle, apport, garanties et fiscalité. Guide complet pour emprunter via une Société Civile Immobilière.',
+  category: 'financement',
+  tags: ['SCI', 'emprunt', 'financement', 'investissement', 'patrimoine immobilier'],
+  publishedAt: '2026-03-05',
   author: AQUIZ_AUTHOR,
   readingTime: 10,
-  coverImage: '/images/blog/lmnp-meuble.jpg',
-  coverAlt: 'Salon d\'un appartement meublé prêt pour la location',
+  coverImage: '/images/blog/frais-notaire.jpg',
+  coverAlt: 'Documents juridiques et clés de maison symbolisant un montage immobilier en SCI',
   relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre capacité d\'investissement en LMNP' },
+    {
+      label: 'Simulateur Mode A',
+      href: '/simulateur/mode-a',
+      description: "Évaluez la capacité d'emprunt des associés de votre SCI",
+    },
   ],
   sections: [
     {
-      heading: 'Qu\'est-ce que le statut LMNP ?',
-      content: "<p>Le LMNP (Loueur Meublé Non Professionnel) est un statut fiscal qui permet de louer un bien meublé en bénéficiant d'une fiscalité avantageuse. Vous êtes LMNP si vos revenus locatifs meublés sont inférieurs à 23 000 EUR/an et représentent moins de 50 % de vos revenus globaux.</p><p>Contrairement à la location nue, la location meublée est considérée comme une activité commerciale (BIC), ce qui ouvre droit à des avantages fiscaux significatifs.</p>",
+      heading: 'Le fonctionnement d\'une SCI emprunteuse',
+      content:
+        "<p>L'emprunt en SCI (Société Civile Immobilière) est une solution de financement de plus en plus utilisée par les investisseurs et les familles souhaitant acheter un bien immobilier à plusieurs. Cette structure juridique permet d'organiser la détention et la gestion d'un patrimoine immobilier tout en facilitant la répartition des droits entre associés. Contrairement à un achat classique en nom propre, c'est <strong>la société qui devient propriétaire du bien</strong> et qui contracte le crédit immobilier auprès de la banque. Les associés détiennent quant à eux des parts sociales proportionnelles à leur investissement dans la société. Cette organisation peut offrir une grande souplesse patrimoniale, mais elle implique également des règles spécifiques en matière de financement, de fiscalité et de responsabilité.</p><p>Une SCI est une société civile composée d'<strong>au moins deux associés</strong>, dont l'objet principal est la détention et la gestion de biens immobiliers. Les associés rédigent des statuts qui définissent les règles de fonctionnement de la société : répartition des parts, pouvoirs du gérant, modalités de décision ou encore conditions de cession des parts sociales. Lorsque la SCI souhaite acquérir un bien immobilier, elle peut recourir à un prêt immobilier comme le ferait un particulier. Cependant, dans la pratique, la banque analyse le dossier différemment. Elle ne se contente pas d'évaluer la société : elle examine aussi la situation financière des associés qui la composent.</p>",
     },
     {
-      heading: 'Le régime réel : l\'atout majeur du LMNP',
-      content: "<p>Au régime réel, vous pouvez déduire de vos revenus locatifs :</p><ul><li><strong>L'amortissement du bien :</strong> environ 3 % de la valeur du bien par an (hors terrain)</li><li><strong>L'amortissement du mobilier :</strong> sur 5 à 10 ans</li><li><strong>Les charges réelles :</strong> intérêts d'emprunt, assurance, travaux, comptable, taxe foncière</li></ul><p>Résultat : pendant 15 à 20 ans, vos revenus locatifs imposables sont souvent à <strong>zéro</strong>. Vous percevez des loyers sans payer d'impôts dessus.</p>",
+      heading: "L'analyse bancaire d'un dossier SCI",
+      content:
+        "<p>Même si la SCI est juridiquement l'emprunteur, les banques demandent presque toujours que les associés se portent <strong>caution personnelle</strong> du prêt immobilier. Cette exigence s'explique par le fait que la responsabilité des associés d'une SCI est dite <strong>indéfinie mais non solidaire</strong>. Cela signifie que les associés peuvent être tenus responsables des dettes de la société à hauteur de leur participation au capital, mais seulement si la société elle-même ne peut pas rembourser ses engagements. Dans la pratique bancaire, cette responsabilité se traduit souvent par une analyse détaillée de la situation financière personnelle des associés : revenus, stabilité professionnelle, niveau d'endettement et patrimoine global.</p><p>L'étude d'un crédit immobilier en SCI repose donc sur une logique similaire à celle d'un emprunt classique, mais avec une analyse plus large. La banque examine notamment la solidité du projet immobilier, la qualité du bien financé, la capacité de remboursement globale des associés et la cohérence financière du montage. Lorsque le bien est destiné à la location, l'établissement prêteur prend également en compte les loyers futurs dans l'analyse du financement. Toutefois, comme pour les particuliers, les règles du crédit immobilier restent encadrées par les recommandations du Haut Conseil de stabilité financière, notamment en matière de durée d'emprunt et d'endettement global.</p>",
     },
     {
-      heading: 'Les obligations du bailleur meublé',
-      content: "<ul><li><strong>Mobilier obligatoire :</strong> literie, rideaux, plaques de cuisson, four/micro-ondes, réfrigérateur, vaisselle, table, chaises, luminaires, rangements (liste fixée par décret)</li><li><strong>Bail meublé :</strong> durée minimum 1 an (9 mois pour un étudiant)</li><li><strong>Inscription au greffe :</strong> obtention d'un numéro SIRET (gratuit)</li><li><strong>Comptabilité :</strong> nécessaire au régime réel (expert-comptable recommandé, ~500 EUR/an, déductible)</li></ul>",
+      heading: "L'apport personnel et les garanties",
+      content:
+        "<p>L'apport personnel joue également un rôle important dans un projet financé via une SCI. Les associés peuvent apporter des fonds directement au capital social de la société ou effectuer des apports en <strong>compte courant d'associé</strong>, qui correspondent à des avances remboursables par la société. Plus l'apport est élevé, plus le projet apparaît solide aux yeux de la banque, car il réduit le montant du financement demandé et démontre l'implication financière des associés dans le projet immobilier.</p><p>Comme pour tout crédit immobilier, la banque exige généralement une garantie afin de sécuriser le prêt. Cette garantie peut prendre la forme d'une <strong>hypothèque</strong> sur le bien immobilier détenu par la SCI ou d'une <strong>caution bancaire</strong>. L'hypothèque permet au prêteur de saisir et vendre le bien en cas de défaut de paiement afin de récupérer les sommes dues. Le cautionnement constitue une autre forme de garantie fréquemment utilisée, notamment dans les financements immobiliers modernes.</p>",
     },
     {
-      heading: 'LMNP en 2026 : quels changements ?',
-      content: "<p>Le gouvernement a apporté quelques modifications pour 2026 :</p><ul><li><strong>Micro-BIC :</strong> l'abattement reste à 50 % pour les locations classiques (plafond 77 700 EUR)</li><li><strong>Locations touristiques :</strong> abattement réduit à 30 % dans les zones tendues</li><li><strong>Plus-values :</strong> les amortissements déduits sont réintégrés dans le calcul de la plus-value lors de la revente — nouvelle mesure à anticiper</li></ul><p>Malgré ces ajustements, le LMNP au réel reste le régime fiscal le plus avantageux pour l'investissement locatif en 2026.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 21 — Pinel et Denormandie ───
-const pinelDenormandie: BlogArticle = {
-  slug: 'pinel-denormandie-2026-encore-interessant',
-  title: 'Pinel et Denormandie en 2026 : ces dispositifs sont-ils encore intéressants ?',
-  excerpt: 'Fin du Pinel, montée du Denormandie : analyse des dispositifs de défiscalisation immobilière encore actifs en 2026 et de leur rentabilité réelle.',
-  category: 'investissement',
-  tags: ['Pinel', 'Denormandie', 'défiscalisation', 'investissement', 'fiscalité', '2026'],
-  publishedAt: '2026-02-25',
-  author: AQUIZ_AUTHOR,
-  readingTime: 8,
-  coverImage: '/images/blog/pinel-denormandie.jpg',
-  coverAlt: 'Immeuble résidentiel neuf avec balcons, typique des programmes Pinel',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Évaluez votre capacité d\'investissement Denormandie' },
-  ],
-  sections: [
-    {
-      heading: 'La fin du dispositif Pinel',
-      content: "<p>Le dispositif Pinel a pris fin le <strong>31 décembre 2024</strong>. Si vous avez investi avant cette date, vous continuez à bénéficier de la réduction d'impôt selon votre engagement initial (6, 9 ou 12 ans). Mais il n'est plus possible de souscrire à de nouvelles opérations Pinel.</p><p>Le bilan du Pinel est mitigé : la réduction d'impôt a souvent masqué des prix d'achat surévalués, des emplacements discutables et des rendements locatifs faibles.</p>",
+      heading: 'La fiscalité d\'une SCI',
+      content:
+        "<p>La fiscalité constitue également un élément central dans un projet immobilier financé via une SCI. Par défaut, une SCI est soumise à l'<strong>impôt sur le revenu</strong>, ce qui signifie que les bénéfices ou les pertes de la société sont répartis entre les associés en fonction de leurs parts sociales. Chaque associé déclare ensuite sa quote-part dans sa déclaration personnelle, généralement dans la catégorie des revenus fonciers lorsque le bien est loué. Cette transparence fiscale est souvent privilégiée dans les projets patrimoniaux familiaux.</p><p>La SCI peut également opter pour l'<strong>impôt sur les sociétés</strong>, ce qui modifie profondément la logique fiscale du projet. Dans ce cas, c'est la société elle-même qui est imposée sur son résultat. Ce régime peut permettre d'amortir le bien immobilier et de réduire la fiscalité sur les revenus locatifs, mais il entraîne également une fiscalité différente en cas de revente du bien. Le choix entre l'impôt sur le revenu et l'impôt sur les sociétés doit donc être étudié avec attention avant de structurer le projet immobilier.</p>",
     },
     {
-      heading: 'Le Denormandie : l\'alternative en 2026',
-      content: "<p>Le dispositif <strong>Denormandie</strong> est le successeur naturel du Pinel pour l'ancien avec travaux. Il offre une réduction d'impôt identique :</p><ul><li><strong>12 % du prix</strong> pour un engagement de 6 ans</li><li><strong>18 %</strong> pour 9 ans</li><li><strong>21 %</strong> pour 12 ans</li></ul><p>Conditions : acheter dans une ville éligible (cœurs de ville en rénovation), réaliser des travaux représentant au moins 25 % du coût total, et respecter des plafonds de loyers et de ressources du locataire.</p>",
-    },
-    {
-      heading: 'Denormandie : avantages et limites',
-      content: "<p>Les avantages par rapport au Pinel :</p><ul><li>Prix d'achat plus raisonnables (ancien à rénover)</li><li>Meilleurs rendements locatifs (villes moyennes, prix contenus)</li><li>Double bénéfice : défiscalisation + plus-value grâce aux travaux</li></ul><p>Les limites :</p><ul><li>Gestion des travaux et des entreprises</li><li>Villes parfois peu attractives avec risque de vacance locative</li><li>Plafonds de loyers qui peuvent être inférieurs au marché</li></ul>",
-    },
-    {
-      heading: 'Notre recommandation pour 2026',
-      content: "<p>Si vous souhaitez investir avec un avantage fiscal en 2026, voici notre hiérarchie :</p><ol><li><strong>LMNP au réel :</strong> le plus rentable et le plus flexible (pas de contrainte de zone ni de plafond de loyers)</li><li><strong>Denormandie :</strong> intéressant si vous ciblez une ville à fort potentiel et que les travaux sont bien chiffrés</li><li><strong>Déficit foncier :</strong> pour les tranches d'imposition élevées, les travaux déductibles réduisent fortement l'impôt</li></ol><p>Dans tous les cas, privilégiez la qualité de l'emplacement et le rendement réel. La défiscalisation ne doit jamais être le critère principal.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 22 — Pourquoi utiliser un simulateur ───
-const pourquoiSimulateur: BlogArticle = {
-  slug: 'pourquoi-utiliser-simulateur-immobilier',
-  title: 'Pourquoi utiliser un simulateur immobilier avant d\'acheter ?',
-  excerpt: 'Un simulateur immobilier gratuit peut vous éviter des erreurs coûteuses. Découvrez comment il vous aide à définir votre budget et sécuriser votre projet.',
-  category: 'simulation',
-  tags: ['simulateur', 'capacité d\'achat', 'budget', 'projet immobilier', 'gratuit'],
-  publishedAt: '2026-01-18',
-  author: AQUIZ_AUTHOR,
-  readingTime: 5,
-  coverImage: '/images/blog/simulateur-capacite.jpg',
-  coverAlt: 'Personne utilisant un ordinateur pour simuler un projet immobilier',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre capacité d\'achat en 2 minutes' },
-    { label: 'Simulateur Mode B', href: '/simulateur/mode-b', description: 'Vérifiez la faisabilité d\'un bien précis' },
-  ],
-  sections: [
-    {
-      heading: 'Un budget réaliste dès le départ',
-      content: "<p>La première étape de tout projet immobilier devrait être la simulation. Trop d'acheteurs partent visiter des biens sans connaître leur budget réel, ce qui mène à de la frustration (coups de cœur hors budget) ou à des dossiers refusés par la banque.</p><p>Un bon simulateur prend en compte vos revenus, vos charges, votre apport, la durée souhaitée du prêt et les taux actuels pour vous donner un <strong>budget maximum réaliste</strong>.</p>",
-    },
-    {
-      heading: 'Les deux modes de simulation',
-      content: "<p>Un simulateur immobilier complet offre deux approches complémentaires :</p><ul><li><strong>Mode \"Que puis-je acheter ?\" :</strong> à partir de votre situation financière, il calcule le prix maximum du bien que vous pouvez acquérir</li><li><strong>Mode \"Puis-je acheter ce bien ?\" :</strong> vous avez repéré un bien précis ?  Indiquez son prix et vérifiez si votre financement tient la route</li></ul><p>Utilisez le premier mode en début de recherche, puis le second dès que vous visitez des biens.</p>",
-    },
-    {
-      heading: 'Ce qu\'un simulateur doit vérifier pour vous',
-      content: "<ul><li><strong>Taux d'endettement :</strong> respecte-t-il la norme HCSF de 35 % ?</li><li><strong>Reste à vivre :</strong> votre budget quotidien est-il suffisant après le paiement de la mensualité ?</li><li><strong>Frais de notaire :</strong> sont-ils intégrés dans le calcul ?</li><li><strong>Assurance emprunteur :</strong> le coût est-il pris en compte ?</li><li><strong>Aides disponibles :</strong> PTZ, Action Logement, aides locales</li></ul>",
-    },
-    {
-      heading: 'Les pièges des simulateurs trop simples',
-      content: "<p>Attention aux simulateurs basiques qui donnent des résultats trompeurs :</p><ul><li>Certains ne tiennent pas compte des 35 % d'endettement HCSF</li><li>D'autres oublient les frais de notaire ou l'assurance emprunteur</li><li>Beaucoup ne calculent pas le reste à vivre</li></ul><p>Le simulateur AQUIZ intègre l'ensemble de ces paramètres pour vous fournir un résultat fiable, conforme aux normes bancaires actuelles.</p>",
-    },
-  ],
-}
-
-// ─── ARTICLE 23 — Guide capacité d'emprunt ───
-const guideCapaciteEmprunt: BlogArticle = {
-  slug: 'capacite-emprunt-immobilier-comment-calculer',
-  title: 'Capacité d\'emprunt immobilier : comment la calculer précisément en 2026',
-  excerpt: 'Revenus, charges, taux, durée : tous les paramètres pour calculer votre capacité d\'emprunt. Méthode de calcul détaillée et exemples concrets.',
-  category: 'simulation',
-  tags: ['capacité d\'emprunt', 'calcul', 'endettement', 'mensualité', 'crédit immobilier'],
-  publishedAt: '2026-02-03',
-  author: AQUIZ_AUTHOR,
-  readingTime: 7,
-  coverImage: '/images/blog/capacite-emprunt-guide.jpg',
-  coverAlt: 'Couple calculant leur capacité d\'emprunt immobilier ensemble',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Calculez votre capacité en 2 minutes' },
-  ],
-  sections: [
-    {
-      heading: 'La formule de base de la capacité d\'emprunt',
-      content: "<p>La capacité d'emprunt est le montant maximum que vous pouvez emprunter pour acheter un bien immobilier. Le calcul repose sur une formule simple :</p><p><strong>Mensualité maximale = Revenus nets x 35 % - Charges existantes</strong></p><p>Ensuite, à partir de cette mensualité maximale, on calcule le capital empruntable en fonction du taux et de la durée du prêt.</p>",
-    },
-    {
-      heading: 'Les revenus pris en compte',
-      content: "<p>Les banques retiennent les revenus suivants :</p><ul><li><strong>Salaires nets :</strong> 100 % pour les CDI, 80 % pour les CDD/intérimaires (moyenne sur 3 ans)</li><li><strong>Primes :</strong> prises en compte si régulières et contractuelles</li><li><strong>Revenus locatifs :</strong> retenus à 70 % (pour compenser la vacance et les charges)</li><li><strong>Pensions / rentes :</strong> 100 % si durables</li><li><strong>Revenus non-salariés :</strong> moyenne des 3 derniers bilans</li></ul>",
-    },
-    {
-      heading: 'Les charges déduites',
-      content: "<ul><li>Crédits en cours (auto, consommation, étudiant)</li><li>Pensions alimentaires versées</li><li>Loyers si vous conservez un logement en parallèle</li></ul><p>Important : les charges courantes (alimentation, transports, loisirs) ne sont pas prises en compte dans le calcul du taux d'endettement. Elles impactent le reste à vivre.</p>",
-    },
-    {
-      heading: 'Exemples concrets de calcul',
-      content: "<p><strong>Exemple 1 — Célibataire :</strong></p><ul><li>Revenus nets : 3 000 EUR/mois</li><li>Charges : 200 EUR/mois (crédit auto)</li><li>Mensualité max : 3 000 x 35 % - 200 = 850 EUR</li><li>Capacité d'emprunt sur 25 ans à 3,2 % : environ 185 000 EUR</li></ul><p><strong>Exemple 2 — Couple :</strong></p><ul><li>Revenus nets : 5 500 EUR/mois (les deux salaires)</li><li>Charges : 0 EUR</li><li>Mensualité max : 5 500 x 35 % = 1 925 EUR</li><li>Capacité d'emprunt sur 25 ans à 3,2 % : environ 420 000 EUR</li></ul>",
-    },
-    {
-      heading: 'Comment augmenter sa capacité d\'emprunt ?',
-      content: "<ul><li><strong>Allonger la durée :</strong> passer de 20 à 25 ans augmente la capacité de ~20 %</li><li><strong>Rembourser les crédits en cours :</strong> solder un crédit auto libère de la capacité d'endettement</li><li><strong>Augmenter l'apport :</strong> chaque euro d'apport correspond à un euro de capacité d'achat en plus</li><li><strong>Intégrer les aides :</strong> le PTZ augmente directement votre budget total</li><li><strong>Optimiser l'assurance :</strong> une assurance moins chère libère de la mensualité pour rembourser plus de capital</li></ul>",
-    },
-  ],
-}
-
-// ─── ARTICLE 24 — Reste à vivre ───
-const resteAVivre: BlogArticle = {
-  slug: 'reste-a-vivre-immobilier-calcul-importance',
-  title: 'Reste à vivre : pourquoi c\'est aussi important que le taux d\'endettement',
-  excerpt: 'Le reste à vivre est le montant qui vous reste après avoir payé vos charges et votre crédit. Un indicateur essentiel que les banques scrutent de près.',
-  category: 'simulation',
-  tags: ['reste à vivre', 'endettement', 'budget', 'mensualité', 'banque'],
-  publishedAt: '2026-02-26',
-  author: AQUIZ_AUTHOR,
-  readingTime: 6,
-  coverImage: '/images/blog/reste-a-vivre.jpg',
-  coverAlt: 'Pièces et billets représentant le budget mensuel d\'un ménage',
-  relatedTools: [
-    { label: 'Simulateur Mode A', href: '/simulateur/mode-a', description: 'Vérifiez votre reste à vivre dans la simulation' },
-  ],
-  sections: [
-    {
-      heading: 'Qu\'est-ce que le reste à vivre ?',
-      content: "<p>Le reste à vivre est la somme qui vous reste chaque mois après avoir payé toutes vos charges fixes, y compris la mensualité de votre crédit immobilier. Formule :</p><p><strong>Reste à vivre = Revenus nets - Mensualité de crédit - Autres charges fixes</strong></p><p>C'est l'argent disponible pour vivre : alimentation, transports, loisirs, vêtements, santé, épargne. Un indicateur vital que les banques analysent en complément du taux d'endettement.</p>",
-    },
-    {
-      heading: 'Les minimums exigés par les banques',
-      content: "<p>Il n'existe pas de règle officielle, mais les banques appliquent généralement ces minimums :</p><ul><li><strong>Célibataire :</strong> 700 à 1 000 EUR/mois (800 EUR en moyenne)</li><li><strong>Couple sans enfant :</strong> 1 000 à 1 400 EUR/mois (1 200 EUR en moyenne)</li><li><strong>Par enfant à charge :</strong> +250 à 350 EUR/mois (+300 EUR en moyenne)</li></ul><p>Ces montants sont des minimums. En réalité, plus votre reste à vivre est élevé, plus la banque sera encline à vous accorder le prêt, même avec un taux d'endettement proche des 35 %.</p>",
-    },
-    {
-      heading: 'Reste à vivre vs taux d\'endettement : quel critère prime ?',
-      content: "<p>Les deux critères sont complémentaires :</p><ul><li><strong>Taux d'endettement (35 % max) :</strong> règle stricte imposée par le HCSF, difficilement négociable</li><li><strong>Reste à vivre :</strong> critère qualitatif, plus flexible, qui peut jouer en votre faveur</li></ul><p>Exemple : un couple gagnant 10 000 EUR/mois avec 35 % d'endettement a un reste à vivre de 6 500 EUR — très confortable. Le même taux pour un couple gagnant 4 000 EUR laisse seulement 2 600 EUR — beaucoup plus serré.</p><p>C'est pourquoi les banques analysent les deux critères ensemble. Un bon reste à vivre peut compenser un taux d'endettement à la limite.</p>",
-    },
-    {
-      heading: 'Comment améliorer son reste à vivre ?',
-      content: "<ul><li><strong>Réduire les charges fixes :</strong> renégociez vos abonnements, assurances, crédits en cours</li><li><strong>Augmenter l'apport :</strong> un apport plus important réduit la mensualité, donc augmente le reste à vivre</li><li><strong>Allonger la durée du prêt :</strong> une mensualité plus basse libère du reste à vivre</li><li><strong>Choisir une assurance emprunteur moins chère :</strong> économie directe sur la mensualité</li></ul><p>Notre simulateur calcule automatiquement votre reste à vivre et vous alerte si celui-ci est insuffisant.</p>",
+      heading: 'SCI et résidence principale : les limites',
+      content:
+        "<p>Il est également important de noter que l'achat d'une résidence principale via une SCI peut présenter certaines limites. Par exemple, certaines aides publiques destinées aux particuliers, comme le <strong>prêt à taux zéro</strong>, ne sont pas accessibles dans ce type de montage. Pour un premier achat immobilier, l'acquisition en nom propre reste donc souvent plus adaptée.</p><p>En revanche, la SCI peut être particulièrement intéressante dans des <strong>projets patrimoniaux ou d'investissement</strong>. Elle permet notamment d'organiser la gestion d'un bien entre plusieurs associés, d'éviter les blocages de l'indivision et de faciliter la transmission d'un patrimoine immobilier au sein d'une famille. Les parts sociales peuvent par exemple être transmises progressivement aux enfants dans le cadre d'une stratégie de donation.</p><p>En définitive, emprunter en SCI peut constituer un outil puissant pour structurer un projet immobilier à plusieurs. Cette solution offre une grande souplesse en matière de gestion et de transmission du patrimoine, mais elle implique également une analyse financière et fiscale approfondie. Avant de choisir ce type de montage, il est essentiel d'évaluer la cohérence du projet immobilier, la capacité d'emprunt des associés et les objectifs patrimoniaux à long terme.</p>",
     },
   ],
 }
@@ -1135,35 +552,32 @@ const resteAVivre: BlogArticle = {
 
 /** Liste de tous les articles du blog */
 export const BLOG_ARTICLES: BlogArticle[] = [
-  investissementLocatif2026,
-  tauxImmobilier2026,
-  ptz2026,
   premierAchatParis,
-  fraisNotaire2026,
   erreursPrimoAccedant,
-  marcheImmobilier2026,
-  apportPersonnel,
-  assuranceEmprunteur,
-  courtierVsBanque,
-  rachatCredit,
-  compromisVente,
-  diagnosticsImmobiliers,
-  visitesEfficaces,
   checklistDemenagement,
-  budgetRenovation,
-  prixArrondissementParis,
-  villesIdfAccessibles,
-  tendancesImmobilierIdf,
-  lmnpMeuble,
-  pinelDenormandie,
-  pourquoiSimulateur,
-  guideCapaciteEmprunt,
   resteAVivre,
+  apportPersonnel,
+  marcheImmobilier2026,
+  villesIdfAccessibles,
+  compromisVente,
+  indivisionOuSci,
+  empruntSci,
 ]
 
 /** Trouver un article par son slug */
 export function getArticleBySlug(slug: string): BlogArticle | undefined {
   return BLOG_ARTICLES.find((a) => a.slug === slug)
+}
+
+/** Obtenir les articles d'une catégorie */
+export function getArticlesByCategory(category: BlogCategory): BlogArticle[] {
+  return BLOG_ARTICLES.filter((a) => a.category === category)
+}
+
+/** Obtenir toutes les catégories qui ont au moins un article */
+export function getActiveCategories(): BlogCategory[] {
+  const cats = new Set(BLOG_ARTICLES.map((a) => a.category))
+  return [...cats]
 }
 
 /** Obtenir les articles recommandés (même catégorie, hors article courant) */

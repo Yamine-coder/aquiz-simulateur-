@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { qualifyLead } from '@/lib/qualifyLead'
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
 import { validateEmailServer } from '@/lib/validators/email.server'
 import { NextRequest, NextResponse } from 'next/server'
@@ -59,12 +60,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Auto-qualification
+    const { score, niveau } = qualifyLead(source, contexte)
+    const enrichedContexte = { ...contexte, score, niveau }
+
     const lead = await prisma.lead.create({
       data: {
         email,
         prenom: prenom || '',
         source,
-        contexte: contexte ? JSON.stringify(contexte) : '',
+        contexte: JSON.stringify(enrichedContexte),
         ip,
       },
     })

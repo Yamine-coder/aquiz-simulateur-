@@ -1,13 +1,14 @@
 'use client'
 
+import { trackEvent } from '@/lib/analytics'
 import {
-    ArrowRight,
-    Calendar,
-    Clock,
-    ExternalLink,
-    Mail,
-    MapPin,
-    Phone
+  ArrowRight,
+  Calendar,
+  Clock,
+  ExternalLink,
+  Mail,
+  MapPin,
+  Phone
 } from 'lucide-react'
 import Link from 'next/link'
 import { ContactForm } from './ContactForm'
@@ -49,6 +50,7 @@ export function ContactSection() {
               <div className="space-y-2.5 mb-5">
                 <a
                   href="tel:+33749520106"
+                  onClick={() => trackEvent('cta-click', { type: 'phone', position: 'contact-section', page: window.location.pathname })}
                   className="group flex items-center gap-4"
                 >
                   <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green group-hover:border-aquiz-green transition-all duration-300">
@@ -107,6 +109,7 @@ export function ContactSection() {
                 href="https://calendly.com/contact-aquiz/30min"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'contact-section', page: window.location.pathname })}
                 className="group inline-flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-aquiz-green hover:border-aquiz-green transition-all duration-300"
               >
                 <Calendar className="w-4.5 h-4.5 text-aquiz-green group-hover:text-white transition-colors" />

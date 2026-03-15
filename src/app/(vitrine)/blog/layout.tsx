@@ -39,7 +39,7 @@ function BlogJsonLd() {
       url: 'https://www.aquiz.eu',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://www.aquiz.eu/images/logo.png',
+        url: 'https://www.aquiz.eu/image%20AQUIZ.jpeg',
       },
     },
     blogPost: BLOG_ARTICLES.map((article) => ({

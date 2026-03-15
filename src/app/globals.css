@@ -215,6 +215,52 @@
   display: none;
 }
 
+/* Scrollbar slim dark — admin dashboard */
+.scrollbar-admin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(63, 63, 70, 0.5) transparent;
+}
+
+.scrollbar-admin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-admin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-admin::-webkit-scrollbar-thumb {
+  background: rgba(63, 63, 70, 0.5);
+  border-radius: 9999px;
+}
+
+.scrollbar-admin::-webkit-scrollbar-thumb:hover {
+  background: rgba(82, 82, 91, 0.7);
+}
+
+/* Scrollbar ultra-slim pour les sous-sections */
+.scrollbar-admin-sm {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(63, 63, 70, 0.3) transparent;
+}
+
+.scrollbar-admin-sm::-webkit-scrollbar {
+  width: 3px;
+}
+
+.scrollbar-admin-sm::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-admin-sm::-webkit-scrollbar-thumb {
+  background: rgba(63, 63, 70, 0.3);
+  border-radius: 9999px;
+}
+
+.scrollbar-admin-sm::-webkit-scrollbar-thumb:hover {
+  background: rgba(82, 82, 91, 0.5);
+}
+
 /* Taille tactile minimale pour les boutons */
 .touch-target {
   min-height: 44px;

@@ -1,4 +1,4 @@
-import { BLOG_ARTICLES } from '@/data/blog-articles'
+import { BLOG_ARTICLES, getActiveCategories } from '@/data/blog-articles'
 import type { MetadataRoute } from 'next'
 
 /**
@@ -29,13 +29,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 1.0,
     },
-    {
-      url: `${baseUrl}/a-propos`,
-      lastModified: DERNIERE_MAJ,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-
     // Blog
     {
       url: `${baseUrl}/blog`,
@@ -44,6 +37,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     ...blogEntries,
+
+    // Catégories blog
+    ...getActiveCategories().map((cat) => ({
+      url: `${baseUrl}/blog/categorie/${cat}`,
+      lastModified: DERNIERE_MAJ,
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    })),
 
     // Outils / App
     {

@@ -22,6 +22,7 @@ import {
     type CategorieAide
 } from '@/data/aides-accession'
 import { useAidesFreshness } from '@/hooks/useAidesFreshness'
+import { trackEvent } from '@/lib/analytics'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
     ArrowLeft,
@@ -46,7 +47,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useCallback, useMemo, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
 // =====================================================
 // CONSTANTS
@@ -410,6 +411,13 @@ function AidesPageContent() {
   const aidesParCategorie = useMemo(() => grouperAidesParCategorie(aidesEligibles), [aidesEligibles])
   const totalAides = useMemo(() => calculerTotalAides(aidesEligibles), [aidesEligibles])
 
+  // Track aides check when results change
+  useEffect(() => {
+    if (aidesEligibles.length > 0 && zoneSelectionnee) {
+      trackEvent('aides-check', { nbAides: aidesEligibles.length, totalAides, zone: 'commune' in zoneSelectionnee ? zoneSelectionnee.commune : undefined })
+    }
+  }, [aidesEligibles, totalAides, zoneSelectionnee])
+
   const countParCategorie = useMemo(() => {
     const counts: Record<CategorieAide, number> = {
       pret_aide: 0, avantage_fiscal: 0, subvention: 0,
@@ -668,7 +676,7 @@ function AidesPageContent() {
           <Button
             size="sm"
             className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-9 sm:h-10 px-4 sm:px-5 text-xs w-full sm:w-auto shrink-0"
-            onClick={() => setShowContactModal(true)}
+            onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'aides-results', page: 'aides' }) }}
           >
             Être rappelé
             <ArrowRight className="ml-1.5 w-3.5 h-3.5" />

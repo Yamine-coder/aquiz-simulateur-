@@ -90,6 +90,8 @@ export interface AnalyseQuartier {
   sante?: number
   espaceVerts?: number
   transportsProches?: TransportProche[]
+  /** Agrégation de tous les transports du rayon (toutes lignes, tous arrêts) */
+  transportSummary?: Array<{ type: string; lignes: string[]; count: number; nearestWalkMin?: number }>
   verdict?: 'excellent' | 'bon' | 'moyen' | 'faible'
   message?: string
   /** Comptages bruts de POIs par catégorie (rayon 800m) */
@@ -101,6 +103,8 @@ export interface AnalyseQuartier {
     loisirs: number
     vert: number
   }
+  /** Comptages détaillés par type d'amenity dans chaque catégorie */
+  detailedCounts?: Record<string, Array<{ type: string; label: string; count: number }>>
 }
 
 /** Informations clés de la commune */
@@ -424,7 +428,7 @@ async function analyserQuartier(
         return { success: false, message: 'Analyse quartier non disponible' }
       }
 
-      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches, counts } = result.data
+      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches, transportSummary, counts, detailedCounts } = result.data
 
       // Verdict
       let verdict: AnalyseQuartier['verdict']
@@ -449,9 +453,11 @@ async function analyserQuartier(
         sante,
         espaceVerts,
         transportsProches: transportsProches ?? [],
+        transportSummary: transportSummary ?? undefined,
         verdict,
         message,
         counts: counts ?? undefined,
+        detailedCounts: detailedCounts ?? undefined,
       }
 
     } catch (error) {

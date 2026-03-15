@@ -76,6 +76,8 @@ export async function POST(request: NextRequest) {
         },
       })
       rappelId = rappel.id
+      // Track rappel event (no PII)
+      prisma.analyticsEvent.create({ data: { event: 'rappel-form', data: JSON.stringify({ creneau: data.creneau, budget: data.budget ? Math.round(data.budget / 10000) * 10000 : null }) } }).catch(() => {})
     } catch (dbError) {
       console.error('❌ Erreur sauvegarde BDD rappel:', dbError)
     }

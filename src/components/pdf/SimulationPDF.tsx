@@ -5,7 +5,7 @@
  */
 import type { ScoreDetail } from '@/lib/calculs/scoreFaisabilite'
 import type { ResultatConseilsAvances } from '@/lib/conseils/genererConseilsAvances'
-import type { DonneesMarcheLocal, DonneesQuartier, SyntheseIA } from '@/lib/pdf/enrichirPourPDF'
+import type { DonneesMarcheLocal, DonneesQuartier } from '@/lib/pdf/enrichirPourPDF'
 import { Document, Image, Link, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ───
@@ -51,7 +51,6 @@ export interface SimulationPDFProps {
   // Enrichissements premium (optionnels)
   marche?: DonneesMarcheLocal | null
   quartier?: DonneesQuartier | null
-  syntheseIA?: SyntheseIA | null
 }
 
 // ─── Couleurs charte AQUIZ ───
@@ -69,6 +68,9 @@ const C = {
   orangeLight: '#fff3e0',
   red: '#ef4444',
   blue: '#3b82f6',
+  sectionBg: '#2d3748',
+  heroBg: '#f8fafb',
+  heroBorder: '#e2e8f0',
 }
 
 // ─── Styles ───
@@ -156,10 +158,14 @@ const s = StyleSheet.create({
   content: {
     paddingHorizontal: 28,
   },
-  // Grande carte capacité
+  // Grande carte capacité (style Mode B : accent vert gauche)
   capaciteCard: {
-    backgroundColor: C.grayBg,
+    backgroundColor: C.heroBg,
     borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: C.heroBorder,
+    borderLeftWidth: 3,
+    borderLeftColor: C.green,
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 16,
@@ -169,7 +175,7 @@ const s = StyleSheet.create({
   },
   capaciteLabel: {
     fontSize: 8,
-    color: C.gray,
+    color: C.greenDark,
     letterSpacing: 0.5,
   },
   capaciteValue: {
@@ -179,7 +185,7 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   probaBadge: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 4,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -228,7 +234,7 @@ const s = StyleSheet.create({
   },
   // Section title
   sectionTitle: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 3,
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -312,7 +318,7 @@ const s = StyleSheet.create({
   },
   // Page 2: Diagnostic
   diagnosticCard: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 6,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -388,25 +394,6 @@ const s = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 1.4,
   },
-  // Résumé
-  resumeCard: {
-    backgroundColor: C.grayBg,
-    borderRadius: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 12,
-  },
-  resumeTitle: {
-    fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
-    color: C.black,
-    marginBottom: 4,
-  },
-  resumeText: {
-    fontSize: 6.5,
-    color: C.gray,
-    lineHeight: 1.5,
-  },
   // Recommandations
   recoTitle: {
     fontSize: 10,
@@ -425,7 +412,7 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   recoBadge: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 4,
     width: 24,
     height: 24,
@@ -579,72 +566,6 @@ const s = StyleSheet.create({
     fontSize: 5,
     color: C.grayLight,
     marginTop: 1,
-  },
-  // IA Synthèse
-  iaCard: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 12,
-  },
-  iaBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 6,
-  },
-  iaBadgeIcon: {
-    backgroundColor: C.green,
-    borderRadius: 3,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  iaBadgeText: {
-    fontSize: 5.5,
-    fontFamily: 'Helvetica-Bold',
-    color: C.white,
-    letterSpacing: 0.5,
-  },
-  iaTitle: {
-    fontSize: 8,
-    fontFamily: 'Helvetica-Bold',
-    color: C.black,
-  },
-  iaText: {
-    fontSize: 7,
-    color: C.gray,
-    lineHeight: 1.6,
-  },
-  iaCliffhanger: {
-    fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
-    color: C.greenDark,
-    lineHeight: 1.5,
-    marginTop: 6,
-  },
-  iaEconomie: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    backgroundColor: C.white,
-    borderRadius: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderWidth: 0.5,
-    borderColor: '#bbf7d0',
-  },
-  iaEconomieValue: {
-    fontSize: 14,
-    fontFamily: 'Helvetica-Bold',
-    color: C.greenDark,
-  },
-  iaEconomieLabel: {
-    fontSize: 6,
-    color: C.gray,
   },
   // Marché local
   marcheGrid: {
@@ -881,7 +802,7 @@ export function SimulationPDF(props: SimulationPDFProps) {
     tauxEndettementProjet, resteAVivre, mensualiteAssurance,
     mensualiteMax, dureeAns, tauxInteret, apport,
     scoreFaisabilite, scoreDetails, pieData, conseils,
-    marche, quartier, syntheseIA,
+    marche, quartier,
   } = props
 
   const dateStr = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -1014,9 +935,9 @@ export function SimulationPDF(props: SimulationPDFProps) {
               <BudgetBar label="Apport personnel" value={pieData.apport} pct={pieData.pourcentageApport} color={C.blue} />
               <BudgetBar label="Prêt bancaire" value={pieData.pret} pct={pieData.pourcentagePret} color={C.black} />
               <BudgetBar label="Frais de notaire" value={pieData.frais} pct={pieData.pourcentageFrais} color={C.grayLight} />
-              <View style={s.budgetTotal}>
-                <Text style={s.budgetTotalLabel}>BUDGET TOTAL</Text>
-                <Text style={s.budgetTotalLabel}>{fmt(pieData.total)} EUR</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.sectionBg, borderRadius: 4, paddingVertical: 8, paddingHorizontal: 10, marginTop: 8 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>BUDGET TOTAL</Text>
+                <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.green }}>{fmt(pieData.total)} EUR</Text>
               </View>
             </View>
           </View>
@@ -1082,36 +1003,6 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           </View>
 
-          {/* Résumé */}
-          <View style={s.resumeCard} wrap={false}>
-            <Text style={s.resumeTitle}>RÉSUMÉ</Text>
-            <Text style={s.resumeText}>{conseils.resumeExecutif}</Text>
-          </View>
-
-          {/* ═══ SYNTHÈSE IA PERSONNALISÉE (premium) ═══ */}
-          {syntheseIA && (
-            <View style={s.iaCard} wrap={false}>
-              <View style={s.iaBadge}>
-                <View style={s.iaBadgeIcon}>
-                  <Text style={s.iaBadgeText}>IA</Text>
-                </View>
-                <Text style={[s.iaBadgeText, { color: C.green, fontWeight: 'bold', marginLeft: 4 }]}>Analyse personnalisée AQUIZ</Text>
-              </View>
-              <Text style={s.iaText}>{syntheseIA.synthese}</Text>
-              {syntheseIA.economieEstimee && syntheseIA.economieEstimee > 0 && (
-                <View style={s.iaEconomie}>
-                  <Text style={s.iaEconomieValue}>
-                    Jusqu&apos;à {fmt(syntheseIA.economieEstimee)} EUR
-                  </Text>
-                  <Text style={s.iaEconomieLabel}>
-                    d&apos;économie potentielle avec un accompagnement optimisé
-                  </Text>
-                </View>
-              )}
-              <Text style={s.iaCliffhanger}>{syntheseIA.cliffhanger}</Text>
-            </View>
-          )}
-
           {/* ═══ ÉTUDE DE MARCHÉ LOCALE (premium) ═══ */}
           {marche && (
             <View style={{ marginTop: 14 }} wrap={false}>
@@ -1145,46 +1036,75 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           )}
 
-          {/* Scores quartier */}
+          {/* Scores quartier — cards avec barre de couleur (style Mode B) */}
           {quartier && (
             <View style={{ marginTop: marche ? 8 : 14 }} wrap={false}>
-              {!marche && <SectionTitle title="QUALITÉ DU QUARTIER" />}
-              <View style={s.quartierRow}>
+              <SectionTitle title="QUALITÉ DU QUARTIER" />
+              <View style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}>
                 {[
-                  { label: 'Score global', score: quartier.scoreGlobal / 10, desc: 'Score composite' },
-                  { label: 'Commerces', score: quartier.commerces / 10, desc: 'Supermarchés, boulangeries' },
-                  { label: 'Écoles', score: quartier.ecoles / 10, desc: 'Écoles, collèges, lycées' },
-                  { label: 'Santé', score: quartier.sante / 10, desc: 'Médecins, pharmacies' },
-                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, desc: 'Parcs, jardins, aires de jeux' },
+                  { label: 'Score global', score: quartier.scoreGlobal / 10, color: C.green, desc: 'Score composite' },
+                  { label: 'Commerces', score: quartier.commerces / 10, color: C.orange, desc: 'Supermarchés, boulangeries' },
+                  { label: 'Écoles', score: quartier.ecoles / 10, color: C.blue, desc: 'Écoles, collèges, lycées' },
+                  { label: 'Santé', score: quartier.sante / 10, color: C.red, desc: 'Médecins, pharmacies' },
+                  { label: 'Espaces verts', score: quartier.espaceVerts / 10, color: C.greenDark, desc: 'Parcs, jardins' },
                 ].map((item) => (
-                  <View key={item.label} style={s.quartierItem}>
-                    <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
-                      {item.score.toFixed(1)}
-                    </Text>
-                    <Text style={s.quartierMax}>/10</Text>
-                    <Text style={s.quartierLabel}>{item.label}</Text>
-                    <Text style={s.quartierDesc}>{item.desc}</Text>
+                  <View key={item.label} style={{
+                    flex: 1,
+                    borderWidth: 0.5,
+                    borderColor: C.grayBorder,
+                    borderRadius: 5,
+                    overflow: 'hidden',
+                    backgroundColor: C.white,
+                  }}>
+                    <View style={{ height: 3, backgroundColor: item.color }} />
+                    <View style={{ padding: 5, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 11, fontFamily: 'Helvetica-Bold', color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }}>
+                        {item.score.toFixed(1)}
+                      </Text>
+                      <Text style={{ fontSize: 4.5, color: C.grayLight }}>/10</Text>
+                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginTop: 2 }}>{item.label}</Text>
+                      <Text style={{ fontSize: 4, color: C.grayLight, textAlign: 'center', marginTop: 1 }}>{item.desc}</Text>
+                    </View>
                   </View>
                 ))}
               </View>
-              {/* Nouveaux scores enrichis */}
+              {/* Enrichissements (niveau de vie, qualité air) — cards 2 colonnes */}
               {(quartier.niveauVie != null || quartier.qualiteAir != null) && (
-                <View style={[s.quartierRow, { marginTop: 4 }]}>
-                  {[
-                    quartier.niveauVie != null ? { label: 'Niveau de vie', score: quartier.niveauVie, desc: 'Revenu médian INSEE' } : null,
-                    quartier.qualiteAir != null ? { label: 'Qualité air', score: quartier.qualiteAir, desc: 'Indice ATMO pollution' } : null,
-                  ]
-                    .filter((item): item is { label: string; score: number; desc: string } => item !== null)
-                    .map((item) => (
-                      <View key={item.label} style={s.quartierItem}>
-                        <Text style={[s.quartierScore, { color: item.score >= 7 ? C.greenDark : item.score >= 4 ? C.orange : C.red }]}>
-                          {item.score.toFixed(1)}
-                        </Text>
-                        <Text style={s.quartierMax}>/10</Text>
-                        <Text style={s.quartierLabel}>{item.label}</Text>
-                        <Text style={s.quartierDesc}>{item.desc}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                  {quartier.niveauVie != null && (
+                    <View style={{
+                      width: '48.5%' as unknown as number,
+                      borderWidth: 0.5, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
+                    }}>
+                      <View style={{ height: 3, backgroundColor: C.orange }} />
+                      <View style={{ padding: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Niveau de vie</Text>
+                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: quartier.niveauVie >= 7 ? C.greenDark : quartier.niveauVie >= 4 ? C.orange : C.red }}>
+                            {quartier.niveauVie.toFixed(1)}/10
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 5.5, color: C.gray }}>Revenu médian INSEE</Text>
                       </View>
-                    ))}
+                    </View>
+                  )}
+                  {quartier.qualiteAir != null && (
+                    <View style={{
+                      width: '48.5%' as unknown as number,
+                      borderWidth: 0.5, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
+                    }}>
+                      <View style={{ height: 3, backgroundColor: quartier.qualiteAir >= 7 ? C.green : quartier.qualiteAir >= 4 ? C.orange : C.red }} />
+                      <View style={{ padding: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Qualité de l&apos;air</Text>
+                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: quartier.qualiteAir >= 7 ? C.greenDark : quartier.qualiteAir >= 4 ? C.orange : C.red }}>
+                            {quartier.qualiteAir.toFixed(1)}/10
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 5.5, color: C.gray }}>Indice ATMO pollution</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
               <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 3 }}>
@@ -1365,133 +1285,80 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           </View>
 
-          {/* ═══ VOTRE PARCOURS D'ACHAT (exclusif PDF) ═══ */}
-          <View style={{ marginTop: 14 }} wrap={false}>
-            <SectionTitle title="VOTRE PARCOURS D'ACHAT" />
-            <Text style={{ fontSize: 6.5, color: C.gray, marginTop: 2, marginBottom: 8 }}>
-              Les grandes étapes de votre projet — de la recherche à la remise des clés.
+          {/* ═══ ACCOMPAGNEMENT AQUIZ (style Mode B) ═══ */}
+          <View style={{
+            backgroundColor: C.white,
+            borderRadius: 6,
+            borderWidth: 1.5,
+            borderColor: C.green,
+            padding: 14,
+            marginTop: 14,
+          }} wrap={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <View style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: C.green,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
+              </View>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                ACCOMPAGNEMENT AQUIZ
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.6, marginBottom: 10 }}>
+              Pour concrétiser votre projet immobilier, un expert AQUIZ peut :
             </Text>
 
-            {/* Timeline verticale */}
             {[
-              {
-                etape: '1',
-                titre: 'Définir votre stratégie',
-                description: 'Budget validé, critères de recherche, type de bien, zones à cibler.',
-                duree: '1 à 2 semaines',
-                done: true,
-                aquiz: null,
-              },
-              {
-                etape: '2',
-                titre: 'Rechercher et visiter',
-                description: 'Repérer les biens, visiter, comparer les quartiers, vérifier les annonces.',
-                duree: '2 à 6 mois',
-                done: false,
-                aquiz: 'Identifie les biens à fort potentiel et les pièges à éviter.',
-              },
-              {
-                etape: '3',
-                titre: 'Analyser le bien',
-                description: 'Diagnostics, PV d\'AG, DPE, charges, état de la copropriété, PLU...',
-                duree: '1 à 2 semaines',
-                done: false,
-                aquiz: 'Vérifie tous les documents et détecte les risques invisibles.',
-              },
-              {
-                etape: '4',
-                titre: 'Négocier et faire une offre',
-                description: 'Offre argumentée, stratégie de négociation, contre-propositions.',
-                duree: '1 à 3 semaines',
-                done: false,
-                aquiz: 'Construit une offre chiffrée et argumentée pour maximiser la réduction.',
-              },
-              {
-                etape: '5',
-                titre: 'Compromis de vente',
-                description: 'Signature, délai de rétractation (10 jours), conditions suspensives.',
-                duree: 'J+10 rétractation',
-                done: false,
-                aquiz: null,
-              },
-              {
-                etape: '6',
-                titre: 'Obtenir le financement',
-                description: 'Comparaison des offres bancaires, assurance emprunteur, montage du dossier.',
-                duree: '45 à 60 jours',
-                done: false,
-                aquiz: 'Négocie le meilleur taux et optimise le montage financier.',
-              },
-              {
-                etape: '7',
-                titre: 'Acte authentique',
-                description: 'Signature chez le notaire, remise des clés, déblocage des fonds.',
-                duree: '3 mois après compromis',
-                done: false,
-                aquiz: null,
-              },
-            ].map((step, idx, arr) => (
-              <View key={step.etape} style={{ flexDirection: 'row', marginBottom: idx < arr.length - 1 ? 2 : 0 }}>
-                {/* Indicateur timeline */}
-                <View style={{ width: 24, alignItems: 'center' }}>
-                  <View style={{
-                    width: 16, height: 16, borderRadius: 8,
-                    backgroundColor: step.done ? C.green : C.white,
-                    borderWidth: 1,
-                    borderColor: step.done ? C.green : C.grayBorder,
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: step.done ? C.white : C.gray }}>{step.done ? 'OK' : step.etape}</Text>
-                  </View>
-                  {idx < arr.length - 1 && (
-                    <View style={{ width: 1, flex: 1, backgroundColor: C.grayBorder, marginVertical: 1 }} />
-                  )}
-                </View>
-
-                {/* Contenu */}
-                <View style={{ flex: 1, paddingBottom: 6, paddingLeft: 6 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{step.titre}</Text>
-                    <Text style={{ fontSize: 5.5, color: C.grayLight, fontFamily: 'Helvetica-Bold' }}>{step.duree}</Text>
-                  </View>
-                  <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>{step.description}</Text>
-                  {step.aquiz && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2, backgroundColor: C.greenLight, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 }}>
-                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.green }}>AQUIZ</Text>
-                      <Text style={{ fontSize: 5.5, color: C.greenDark }}>{step.aquiz}</Text>
-                    </View>
-                  )}
-                </View>
+              'Identifier les biens correspondant à votre budget et vos critères de recherche',
+              'Analyser les diagnostics obligatoires (DPE, amiante, plomb) et les éventuels travaux à prévoir',
+              'Structurer le meilleur plan de financement (taux, durée, assurance, garanties)',
+              'Rechercher les dispositifs d\'aide applicables à votre situation (PTZ, PAS, Action Logement)',
+              'Accompagner la visite, le compromis et chaque étape jusqu\'à la remise des clés',
+            ].map((item, idx) => (
+              <View key={idx} style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                gap: 6,
+                marginBottom: 5,
+                paddingLeft: 4,
+              }}>
+                <View style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 2.5,
+                  backgroundColor: C.green,
+                  marginTop: 3,
+                  flexShrink: 0,
+                }} />
+                <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.5, flex: 1 }}>
+                  {item}
+                </Text>
               </View>
             ))}
 
-            {/* CTA final parcours */}
-            <View style={{ backgroundColor: C.greenLight, borderRadius: 4, padding: 8, marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ fontSize: 8, color: C.white, fontFamily: 'Helvetica-Bold' }}>&gt;</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.greenDark }}>
-                  De la recherche à la signature, un conseiller AQUIZ vous accompagne à chaque étape.
-                </Text>
-                <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>
-                  Vous avez le budget — il vous manque le bon accompagnement pour faire le bon achat au meilleur prix.
-                </Text>
-              </View>
-            </View>
-          </View>
+            <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
+              Sécurisez votre achat : un expert AQUIZ vous aide à transformer cette étude en projet concret.
+            </Text>
 
-          {/* CTA final */}
-          <View style={s.ctaCard} wrap={false}>
-            <View>
-              <Text style={s.ctaTitle}>Prêt à passer à l&apos;action ?</Text>
-              <Text style={s.ctaSub}>
-                Un conseiller AQUIZ vous accompagne de la recherche du bien à la signature chez le notaire.
-              </Text>
-            </View>
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
-              <View style={s.ctaBtn}>
-                <Text style={s.ctaBtnText}>Prendre rendez-vous</Text>
+              <View style={{
+                backgroundColor: C.green,
+                borderRadius: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                alignSelf: 'center',
+                alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                  Prendre rendez-vous
+                </Text>
               </View>
             </Link>
           </View>

@@ -9,19 +9,20 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { trackEvent } from '@/lib/analytics'
 import { logger } from '@/lib/logger'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
-    ArrowRight,
-    Calendar,
-    Check,
-    Clock,
-    Moon,
-    Phone,
-    Sun,
-    Sunrise,
-    Video,
-    X
+  ArrowRight,
+  Calendar,
+  Check,
+  Clock,
+  Moon,
+  Phone,
+  Sun,
+  Sunrise,
+  Video,
+  X
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -69,9 +70,12 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
     setFormData({ prenom: '', telephone: '', email: '', creneau: 'matin', accepte: false })
   }
 
-  // Ref pour tracker l'état précédent
+  // Track modal open
   const wasOpen = useRef(isOpen)
   useEffect(() => {
+    if (!wasOpen.current && isOpen) {
+      trackEvent('cta-click', { type: 'contact-modal', action: 'open', page: window.location.pathname })
+    }
     // Seulement reset quand on passe de ouvert à fermé
     if (wasOpen.current && !isOpen) {
       const timer = setTimeout(resetForm, 200) // Délai pour l'animation
@@ -400,6 +404,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
                 href="https://calendly.com/contact-aquiz/30min"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'modal-rdv', page: window.location.pathname })}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-aquiz-black hover:bg-aquiz-black/90 text-white font-medium rounded-lg transition-colors"
               >
                 <Calendar className="w-4 h-4" />

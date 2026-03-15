@@ -1,36 +1,88 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AQUIZ — Simulateur Immobilier
 
-## Getting Started
+Simulateur immobilier complet pour primo-accédants à Paris & Île-de-France.  
+Calcul de capacité d'achat, vérification de faisabilité, carte DVF, aides (PTZ, PAS), comparateur d'annonces.
 
-First, run the development server:
+## Stack
+
+- **Framework** : Next.js 16 (App Router, React Compiler)
+- **Langage** : TypeScript (strict)
+- **Style** : Tailwind CSS + shadcn/ui
+- **Base de données** : Prisma + LibSQL (Turso)
+- **Emails** : Resend
+- **Monitoring** : Sentry (client + server + edge)
+- **Déploiement** : Vercel
+
+## Démarrage rapide
 
 ```bash
+# 1. Installer les dépendances
+npm install
+
+# 2. Copier les variables d'environnement
+cp .env.example .env.local
+# → Remplir les valeurs (voir .env.example pour la doc)
+
+# 3. Initialiser la base de données
+npx prisma migrate dev
+
+# 4. Lancer le serveur de développement
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le site tourne sur [http://localhost:3001](http://localhost:3001).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Commande | Description |
+|----------|-------------|
+| `npm run dev` | Serveur de développement (port 3001) |
+| `npm run build` | Build production (Prisma generate + Next.js build) |
+| `npm run lint` | ESLint |
+| `npm run type-check` | Vérification TypeScript (`tsc --noEmit`) |
+| `npm run test` | Tests unitaires (Vitest, watch mode) |
+| `npm run test:run` | Tests unitaires (single run) |
+| `npm run test:coverage` | Tests + couverture de code |
+| `npm run test:e2e` | Tests E2E (Playwright) |
+| `npm run db:migrate` | Migration Prisma |
+| `npm run db:studio` | Interface Prisma Studio |
 
-## Learn More
+## Architecture
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/              # Routes Next.js (App Router)
+│   ├── (app)/        # Pages applicatives (simulateur, carte, aides, comparateur)
+│   ├── (vitrine)/    # Pages vitrine (accueil, blog, à propos)
+│   ├── admin/        # Back-office admin
+│   └── api/          # Routes API
+├── components/       # Composants React
+│   ├── ui/           # shadcn/ui
+│   ├── simulateur/   # Formulaires & résultats simulateur
+│   ├── map/          # Carte interactive
+│   └── vitrine/      # Navbar, Footer, sections landing
+├── lib/
+│   ├── calculs/      # Fonctions de calcul pures (endettement, mensualité, etc.)
+│   ├── conseils/     # Génération de conseils personnalisés
+│   ├── scraping/     # Extraction d'annonces immobilières
+│   └── pdf/          # Génération de rapports PDF
+├── stores/           # State management (Zustand)
+├── types/            # Types TypeScript partagés
+└── config/           # Configuration (taux, plafonds, zones PTZ)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Voir [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) pour le détail complet.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Variables d'environnement
 
-## Deploy on Vercel
+Voir [.env.example](.env.example) — toutes les variables sont documentées avec des commentaires.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Déploiement
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Le projet est déployé sur **Vercel**. Chaque push sur `main` déclenche un déploiement automatique.
+
+Le pipeline CI (GitHub Actions) vérifie automatiquement :
+1. **Lint** (ESLint)
+2. **Types** (TypeScript)
+3. **Tests unitaires** (Vitest)
+4. **Build** (Next.js)

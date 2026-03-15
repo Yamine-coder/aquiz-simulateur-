@@ -1,12 +1,12 @@
 import {
-    BlogPreviewSection,
-    HeroSection,
-    OutilsSection,
-    ProcessSection,
-    ServicesSection,
-    StatsBar,
-    TarifsSection,
-    TestimonialsSection,
+  BlogPreviewSection,
+  HeroSection,
+  OutilsSection,
+  ProcessSection,
+  ServicesSection,
+  StatsBar,
+  TarifsSection,
+  TestimonialsSection,
 } from '@/components/vitrine'
 import { ContactSection } from '@/components/vitrine/ContactSection'
 import type { Metadata } from 'next'
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   },
 }
 
-/** @deprecated — moved to app/layout.tsx <head> to avoid SSR hydration mismatch */
+/** JSON-LD LocalBusiness + WebApplication + HowTo — homepage uniquement */
 function JsonLd() {
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -111,7 +111,7 @@ function JsonLd() {
           {
             '@type': 'Review',
             author: { '@type': 'Person', name: 'Karim B.' },
-            datePublished: '2026-01-10',
+            datePublished: '2025-01-10',
             reviewRating: { '@type': 'Rating', ratingValue: '5', bestRating: '5' },
             reviewBody: 'Le simulateur est vraiment bien fait, avec les données de prix réelles. Et l\'accompagnement ensuite est à la hauteur des promesses.',
           },
@@ -208,15 +208,7 @@ function JsonLd() {
           },
         ],
       },
-      // ── WebSite avec SearchAction potentiel ──
-      {
-        '@type': 'WebSite',
-        '@id': 'https://www.aquiz.eu/#website',
-        name: 'AQUIZ',
-        url: 'https://www.aquiz.eu',
-        publisher: { '@id': 'https://www.aquiz.eu/#org' },
-        inLanguage: 'fr-FR',
-      },
+
     ],
   }
 
@@ -348,6 +340,7 @@ function FaqSection() {
 export default function HomePage() {
   return (
     <>
+      <JsonLd />
       <HeroSection />
       <StatsBar />
       <ServicesSection />

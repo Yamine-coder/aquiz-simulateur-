@@ -13,6 +13,7 @@
  * Si lead chaud → affiche le CTA expert callback
  */
 
+import { trackEvent } from '@/lib/analytics'
 import { ArrowRight, Bell, Check, ChevronRight, Home, Phone, Search, Sparkles, Target, Timer, TrendingUp } from 'lucide-react'
 import { useCallback, useState } from 'react'
 
@@ -207,7 +208,7 @@ export function ExpertCallbackCta({ onRequestCallback }: ExpertCallbackCtaProps)
               Un expert AQUIZ peut vous rappeler gratuitement sous 2h pour analyser vos biens ensemble et vous aider à négocier.
             </p>
             <button
-              onClick={onRequestCallback}
+              onClick={() => { onRequestCallback(); trackEvent('cta-click', { type: 'callback-cta', position: 'comparateur-hot', page: 'comparateur' }) }}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-aquiz-green/20 cursor-pointer"
             >
               <Phone className="w-4 h-4" />

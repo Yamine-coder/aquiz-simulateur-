@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
+import { AdminShell } from './AdminShell'
 
 export const metadata: Metadata = {
-  title: 'Admin',
+  title: 'Admin — AQUIZ',
   robots: { index: false, follow: false },
 }
 
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-white">
-      {children}
+      <AdminShell>{children}</AdminShell>
     </div>
   )
 }

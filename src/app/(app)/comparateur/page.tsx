@@ -1,5 +1,8 @@
 'use client'
 
+import { trackEvent } from '@/lib/analytics'
+import { getUtmData } from '@/lib/utm'
+
 /**
  * Page Comparateur d'Annonces Immobilières
  * Sprint 6 - AQUIZ
@@ -178,6 +181,7 @@ export default function ComparateurPage() {
     setManageIds(new Set())
     // Scroll vers le haut pour voir la nouvelle annonce
     window.scrollTo({ top: 0, behavior: 'smooth' })
+    trackEvent('comparaison', { prix: data.prix, surface: data.surface, ville: data.ville, type: data.type, nbAnnonces: comparateur.annonces.length + 1 })
   }
   
   const handleModifierAnnonce = (data: NouvelleAnnonce) => {
@@ -423,7 +427,7 @@ export default function ComparateurPage() {
           body: JSON.stringify({
             email: pdfEmailValue,
             source: 'comparateur',
-            contexte: { nbBiens: annoncesSelectionnees.length, budgetMax: comparateur.budgetMax }
+            contexte: { nbBiens: annoncesSelectionnees.length, budgetMax: comparateur.budgetMax, ...getUtmData() }
           })
         })
         if (res.ok) {

@@ -148,6 +148,8 @@ export async function POST(request: NextRequest) {
         },
       })
       contactId = contact.id
+      // Track contact event (no PII)
+      prisma.analyticsEvent.create({ data: { event: 'contact-form', data: '{}' } }).catch(() => {})
     } catch (dbError) {
       console.error('❌ Erreur sauvegarde BDD:', dbError)
       // On continue même si la BDD échoue (email en fallback)

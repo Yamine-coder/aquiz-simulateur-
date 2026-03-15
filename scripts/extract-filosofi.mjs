@@ -72,3 +72,4 @@ for (const c of check) {
     console.log(`  ${c} → ${result[c]} €/an (${Math.round(result[c] / 12)} €/mois)`)
   }
 }
+

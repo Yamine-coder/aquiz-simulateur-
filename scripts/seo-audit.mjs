@@ -108,7 +108,7 @@ if (robotsFile) {
 const sitemapFile = readFile('src/app/sitemap.ts')
 check('Fichiers SEO', 'sitemap.ts existe', !!sitemapFile, 2)
 if (sitemapFile) {
-  const routes = ['/simulateur', '/carte', '/aides', '/comparateur', '/a-propos', '/mentions-legales']
+  const routes = ['/simulateur', '/carte', '/aides', '/comparateur', '/mentions-legales']
   let found = 0
   for (const route of routes) {
     if (sitemapFile.includes(route)) found++
@@ -180,7 +180,6 @@ checkPartial('Metadata', 'Layouts avec canonical', layoutsWithCanonical, routeLa
 // Vitrine pages metadata
 const vitrinePages = [
   { path: 'src/app/(vitrine)/page.tsx', name: 'Homepage' },
-  { path: 'src/app/(vitrine)/a-propos/page.tsx', name: '/a-propos' },
   { path: 'src/app/(vitrine)/mentions-legales/page.tsx', name: '/mentions-legales' },
 ]
 

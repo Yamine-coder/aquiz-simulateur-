@@ -68,10 +68,6 @@ export default function NotFound() {
           <Link href="/aides" className="hover:text-white/60 transition-colors">
             Aides & PTZ
           </Link>
-          <span className="text-white/10">·</span>
-          <Link href="/a-propos" className="hover:text-white/60 transition-colors">
-            À propos
-          </Link>
         </div>
 
         {/* Branding */}

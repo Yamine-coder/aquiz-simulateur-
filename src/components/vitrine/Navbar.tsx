@@ -1,5 +1,6 @@
 'use client'
 
+import { trackEvent } from '@/lib/analytics'
 import { Calculator, ChevronDown, Gift, Map, Menu, Phone, Scale, X } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -29,7 +30,7 @@ const NAV_LINKS: NavLink[] = [
   { label: 'Méthode', href: '/#methode', sectionId: 'methode' },
   { label: 'Tarifs', href: '/#tarifs', sectionId: 'tarifs' },
   { label: 'Avis', href: '/#temoignages', sectionId: 'temoignages' },
-  { label: 'Blog', href: '/#blog', sectionId: 'blog' },
+  { label: 'Blog', href: '/blog', sectionId: 'blog' },
   { label: 'Contact', href: '/#contact', sectionId: 'contact' },
 ]
 
@@ -426,6 +427,7 @@ export function Navbar() {
           <div className="hidden lg:flex items-center gap-1.5 xl:gap-2.5 shrink-0">
             <a
               href="tel:+33749520106"
+              onClick={() => trackEvent('cta-click', { type: 'phone', position: 'navbar', page: window.location.pathname })}
               className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-200 ${
                 showSolid
                   ? 'text-gray-400 hover:text-aquiz-green hover:bg-aquiz-green/5'
@@ -439,6 +441,7 @@ export function Navbar() {
               href="https://calendly.com/contact-aquiz/30min"
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'navbar', page: window.location.pathname })}
               className="px-3 xl:px-5 py-2 xl:py-2.5 text-[13px] xl:text-[14px] font-semibold bg-aquiz-green whitespace-nowrap text-white rounded-xl transition-all duration-200 shadow-sm hover:shadow-lg hover:brightness-110 hover:-translate-y-px active:translate-y-0 shrink-0"
             >
               Prendre rendez-vous
@@ -543,6 +546,7 @@ export function Navbar() {
           <div className="pt-3 border-t border-gray-100/60 space-y-2">
             <a
               href="tel:+33749520106"
+              onClick={() => trackEvent('cta-click', { type: 'phone', position: 'navbar-mobile', page: window.location.pathname })}
               className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400 hover:text-gray-900 transition-colors duration-200"
             >
               <Phone className="w-4 h-4" />
@@ -552,7 +556,7 @@ export function Navbar() {
               href="https://calendly.com/contact-aquiz/30min"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={closeMenu}
+              onClick={() => { closeMenu(); trackEvent('cta-click', { type: 'calendly', position: 'navbar-mobile', page: window.location.pathname }) }}
               className="block px-4 py-3 text-sm font-semibold text-center bg-aquiz-green text-white rounded-xl shadow-sm"
             >
               Prendre rendez-vous

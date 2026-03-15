@@ -9,34 +9,36 @@ import { MoneyInput } from '@/components/ui/MoneyInput'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Slider } from '@/components/ui/slider'
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
 } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
+import { trackEvent } from '@/lib/analytics'
 import { logger } from '@/lib/logger'
 import type { EnrichissementPDF } from '@/lib/pdf/enrichirPourPDF'
 import { enrichirPourPDF } from '@/lib/pdf/enrichirPourPDF'
 import { formatMontant } from '@/lib/utils/formatters'
 import { calculerMontantPTZ, getInfoPTZ } from '@/lib/utils/zonePTZ'
+import { getUtmData } from '@/lib/utm'
 import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
 import {
-    AlertTriangle,
-    ArrowLeft,
-    ArrowRight,
-    Building,
-    Check,
-    CheckCircle,
-    FileDown,
-    Home,
-    Info,
-    Loader2,
-    Mail,
-    MapPin,
-    Phone,
-    TrendingUp
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Building,
+  Check,
+  CheckCircle,
+  FileDown,
+  Home,
+  Info,
+  Loader2,
+  Mail,
+  MapPin,
+  Phone,
+  TrendingUp
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
@@ -63,6 +65,7 @@ export default function ModeBPage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
+  const hasTrackedResults = useRef(false)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfEmailValue, setPdfEmailValue] = useState('')
   const [pdfEmailSent, setPdfEmailSent] = useState(false)
@@ -251,12 +254,29 @@ export default function ModeBPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Track simulation start (once per mount)
+  const hasTrackedStart = useRef(false)
+  useEffect(() => {
+    if (!hasTrackedStart.current) {
+      hasTrackedStart.current = true
+      trackEvent('simulation-b-start', {})
+    }
+  }, [])
+
   const goToNextEtape = () => {
-    setEtape((e) => Math.min(e + 1, 3))
+    setEtape((e) => {
+      const next = Math.min(e + 1, 3)
+      if (next !== e) trackEvent('simulation-b-step', { from: e, to: next })
+      return next
+    })
     scrollToTop()
   }
   const goToPrevEtape = () => {
-    setEtape((e) => Math.max(e - 1, 1))
+    setEtape((e) => {
+      const prev = Math.max(e - 1, 1)
+      if (prev !== e) trackEvent('simulation-b-step', { from: e, to: prev })
+      return prev
+    })
     scrollToTop()
   }
 
@@ -401,7 +421,6 @@ export default function ModeBPage() {
           nbVentes: infoLocalisation.nbVentes,
         } : null}
         quartier={enrichissement?.quartier}
-        syntheseIA={enrichissement?.syntheseIA}
       />
     ).toBlob()
 
@@ -414,6 +433,7 @@ export default function ModeBPage() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    trackEvent('pdf-download', { source: 'simulation-b' })
   }, [prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs, infoLocalisation])
 
   /** Capture email bonus + génère le PDF en local */
@@ -429,7 +449,7 @@ export default function ModeBPage() {
           body: JSON.stringify({
             email: pdfEmailValue,
             source: 'simulateur-b',
-            contexte: { prixBien, typeBien, dureeAns, apport }
+            contexte: { prixBien, typeBien, dureeAns, apport, ...getUtmData() }
           })
         })
         if (res.ok) {
@@ -546,7 +566,18 @@ export default function ModeBPage() {
       } : null
     })
     setCurrentSaveId(savedSim.id)
-  }, [save, currentSaveId, etape, prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs.mensualiteTotal])
+  }, [save, currentSaveId, etape, prixBien, typeBien, typeLogement, codePostal, nomCommune, apport, dureeAns, tauxInteret, calculs.mensualiteTotal, calculs.fraisNotaire])
+
+  // Track when user reaches results (step 3)
+  useEffect(() => {
+    if (etape === 3 && prixBien > 0 && !hasTrackedResults.current) {
+      hasTrackedResults.current = true
+      trackEvent('simulation-b', { prixBien, typeBien, typeLogement, codePostal, apport, dureeAns, mensualite: Math.round(calculs.mensualiteTotal), fraisNotaire: Math.round(calculs.fraisNotaire) })
+    }
+    if (etape !== 3) {
+      hasTrackedResults.current = false
+    }
+  }, [etape, prixBien, typeBien, typeLogement, codePostal, apport, dureeAns, calculs.mensualiteTotal, calculs.fraisNotaire])
 
   // Auto-save : Ctrl+S + auto-save au changement d'étape
   const autoSave = useAutoSave(handleSave, prixBien === 0)
@@ -582,7 +613,7 @@ export default function ModeBPage() {
     if (targetEtape === 3) return prixBien >= 50000
     return false
   }
-  const goToEtape = (targetEtape: number) => { if (canGoToEtape(targetEtape)) { setEtape(targetEtape); scrollToTop() } }
+  const goToEtape = (targetEtape: number) => { if (canGoToEtape(targetEtape)) { if (targetEtape !== etape) trackEvent('simulation-b-step', { from: etape, to: targetEtape }); setEtape(targetEtape); scrollToTop() } }
 
   return (
     <TooltipProvider>
@@ -1021,7 +1052,7 @@ export default function ModeBPage() {
                     {/* Option 1 : Être accompagné (CTA principal) */}
                     <button
                       type="button"
-                      onClick={() => setShowContactModal(true)}
+                      onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-b-accompagne', page: 'mode-b' }) }}
                       className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 flex items-center gap-4"
                     >
                       <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
@@ -1720,6 +1751,7 @@ export default function ModeBPage() {
                     href="https://calendly.com/contact-aquiz/30min"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'mode-b-results', page: 'mode-b' })}
                     className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
                   >
                     Échanger avec un conseiller
@@ -1755,7 +1787,7 @@ export default function ModeBPage() {
                   </Button>
                   <Button
                     type="button"
-                    onClick={() => setShowContactModal(true)}
+                    onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-b-bottombar', page: 'mode-b' }) }}
                     className="flex-1 h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-1.5 text-xs"
                   >
                     <Phone className="w-3.5 h-3.5 shrink-0" />

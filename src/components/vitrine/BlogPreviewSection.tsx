@@ -8,7 +8,7 @@ import { FadeIn, StaggerContainer, StaggerItem } from './Motion'
 /** Featured article slugs — hand-picked for visual diversity on the homepage. */
 const FEATURED_SLUGS = [
   'premier-achat-immobilier-paris-guide',
-  'investissement-locatif-2026-rentabilite-fiscalite',
+  'marche-immobilier-2026-tendances-prix-regions',
   'primo-accedant-10-erreurs-a-eviter',
 ]
 

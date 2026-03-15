@@ -54,6 +54,14 @@ export async function generateMetadata({
     alternates: {
       canonical: `https://www.aquiz.eu/blog/${article.slug}`,
     },
+    twitter: {
+      card: 'summary_large_image',
+      title: article.title,
+      description: article.excerpt,
+      images: article.coverImage
+        ? [`https://www.aquiz.eu${article.coverImage}`]
+        : undefined,
+    },
   }
 }
 

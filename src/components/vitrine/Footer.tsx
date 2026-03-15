@@ -1,5 +1,6 @@
 'use client'
 
+import { trackEvent } from '@/lib/analytics'
 import { Mail, MapPin, Phone } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -77,7 +78,7 @@ export function Footer() {
   const pathname = usePathname()
 
   // Masquer la bande CTA sur les pages outils et pages avec leur propre CTA
-  const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats') || pathname.startsWith('/comparateur') || pathname.startsWith('/a-propos') || pathname.startsWith('/mentions-legales')
+  const isToolPage = pathname.startsWith('/simulateur') || pathname.startsWith('/carte') || pathname.startsWith('/aides') || pathname.startsWith('/resultats') || pathname.startsWith('/comparateur') || pathname.startsWith('/mentions-legales')
 
   return (
     <footer className="bg-aquiz-black text-white">
@@ -100,6 +101,7 @@ export function Footer() {
                 href="https://calendly.com/contact-aquiz/30min"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'footer-banner', page: window.location.pathname })}
                 className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white/15 text-white font-semibold rounded-xl hover:bg-white/25 border border-white/25 transition-colors text-[11px] sm:text-xs"
               >
                 Prendre rendez-vous
@@ -131,7 +133,7 @@ export function Footer() {
 
             {/* Contacts */}
             <div className="space-y-2 sm:space-y-2.5 text-xs sm:text-[13px] mb-5 sm:mb-6">
-              <a href="tel:+33749520106" className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
+              <a href="tel:+33749520106" onClick={() => trackEvent('cta-click', { type: 'phone', position: 'footer', page: window.location.pathname })} className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Phone className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                 07 49 52 01 06
               </a>

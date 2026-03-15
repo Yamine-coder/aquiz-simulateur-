@@ -8,6 +8,7 @@
 import { Button } from '@/components/ui/button'
 import { CENTRES_REGIONS, ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
 import { useDVFData } from '@/hooks/useDVFData'
+import { trackEvent } from '@/lib/analytics'
 import {
     calculerToutesZones,
     filtrerParDepartement,
@@ -389,7 +390,10 @@ function CartePageContent() {
           <CarteMapLibre
             zonesCalculees={zonesFiltrees}
             onSelectZone={(zone) => {
-              if (zone && zone.prixM2 > 0) setZoneSelectionnee(zone)
+              if (zone && zone.prixM2 > 0) {
+                setZoneSelectionnee(zone)
+                trackEvent('carte-view', { commune: zone.nom, prixM2: Math.round(zone.prixM2), departement: zone.departement })
+              }
             }}
             zoneSelectionnee={zoneSelectionnee}
             centreInitial={centreRegion.centre}

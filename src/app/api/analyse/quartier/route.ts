@@ -72,7 +72,7 @@ interface POI {
 }
 
 /** Type de transport enrichi pour l'affichage */
-type TypeTransport = 'metro' | 'rer' | 'train' | 'tram' | 'bus' | 'velo'
+type TypeTransport = 'metro' | 'rer' | 'train' | 'tram' | 'bus' | 'velo' | 'velib'
 
 /** Rayon max par mode de transport (norme urbanisme APUR) */
 const RAYON_PAR_MODE: Record<string, number> = {
@@ -114,6 +114,7 @@ function determinerCategorie(amenity: string): string {
   if (['doctor', 'doctors', 'dentist', 'clinic', 'hospital'].includes(amenity)) return 'sante'
   if (['childcare'].includes(amenity)) return 'education'
   if (['fitness_centre', 'sports_centre'].includes(amenity)) return 'loisirs'
+  if (amenity === 'fuel') return 'commerce'
   return 'loisirs'
 }
 
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Vérifier le cache serveur (v2 : inclut rayon transport lourd dans la clé)
-    const cacheKey = `v22_${lat}_${lon}_${rayon}`
+    const cacheKey = `v30_${lat}_${lon}_${rayon}`
     const cached = quartierCache.get(cacheKey)
     if (cached) {
       return NextResponse.json(cached)
@@ -177,6 +178,8 @@ export async function GET(request: NextRequest) {
         node["amenity"="childcare"](around:${rayon},${lat},${lon});
         node["social_facility"="day_care"](around:${rayon},${lat},${lon});
         node["amenity"="bicycle_rental"](around:${rayon},${lat},${lon});
+        node["amenity"="fuel"](around:${rayon},${lat},${lon});
+        way["amenity"="fuel"](around:${rayon},${lat},${lon});
         node["railway"~"^(station|halt)$"](around:${rayon},${lat},${lon});
       );
       out center;
@@ -198,9 +201,13 @@ export async function GET(request: NextRequest) {
     `
     
     // Requête 3 : Relations de route (enrichissement lignes — optionnel)
+    // Inclut "bus" en rayon réduit pour récupérer TOUTES les lignes de bus (pas juste les tags directs)
     const queryRelations = `
       [out:json][timeout:20];
-      rel["route"~"^(train|subway|light_rail|tram)$"]["ref"](around:${rayonTransportLourd},${lat},${lon});
+      (
+        rel["route"~"^(train|subway|light_rail|tram)$"]["ref"](around:${rayonTransportLourd},${lat},${lon});
+        rel["route"="bus"]["ref"](around:${rayon},${lat},${lon});
+      );
       out body;
     `
 
@@ -293,14 +300,23 @@ export async function GET(request: NextRequest) {
 
     // Construire le mapping stationNodeId → lignes depuis les relations de route
     const stationToLines = new Map<number, Set<string>>()
+    // Regex pour valider un identifiant de ligne de transport (bus: "34", "124", "N12", "T3a", RER: "A", etc.)
+    const VALID_LINE_REF = /^[A-Za-z]?\d{1,4}[A-Za-z]?(?:bis)?$/
+    const VALID_RAIL_REF = /^[A-Z0-9]{1,4}(?:bis)?$/i
     for (const rel of routeRelations as Array<{ tags?: Record<string, string>; members?: Array<{ type: string; ref: number; role: string }> }>) {
       const ref = rel.tags?.ref // ex: "C", "A", "1", "T3a", "H", "J"
       if (!ref) continue
+      // Valider le ref : doit être un identifiant court (pas "Selected", pas une phrase)
+      const routeType = rel.tags?.route || ''
+      const isRailRoute = ['train', 'subway', 'light_rail', 'tram'].includes(routeType)
+      const refPattern = isRailRoute ? VALID_RAIL_REF : VALID_LINE_REF
+      if (!refPattern.test(ref.trim())) continue
+      const cleanRef = ref.trim()
       const members = rel.members || []
       for (const m of members) {
         if (m.type === 'node' && (m.role === 'stop' || m.role === 'stop_entry_only' || m.role === 'stop_exit_only' || m.role === '')) {
           if (!stationToLines.has(m.ref)) stationToLines.set(m.ref, new Set())
-          stationToLines.get(m.ref)!.add(ref)
+          stationToLines.get(m.ref)!.add(cleanRef)
         }
       }
     }
@@ -373,7 +389,7 @@ export async function GET(request: NextRequest) {
         const skipRef = enrichedType === 'bicycle_rental' || amenity === 'subway_entrance' || enrichedType === 'subway_entrance'
         const ligneTag = !skipRef ? (tags.ref || undefined) : undefined
         // Mots à ignorer dans les lignes (ce ne sont pas des identifiants de ligne)
-        const IGNORED_LINE_WORDS = new Set(['NAVETTE', 'NOCTILIEN', 'EXPRESS', 'DIRECT', 'SPECIAL', 'SCOLAIRE', 'TAD', 'FLEXO', 'FILEO'])
+        const IGNORED_LINE_WORDS = new Set(['NAVETTE', 'NOCTILIEN', 'EXPRESS', 'DIRECT', 'SPECIAL', 'SCOLAIRE', 'TAD', 'FLEXO', 'FILEO', 'SELECTED', 'NULL', 'UNDEFINED', 'NONE', 'TEST'])
         const isIgnoredLine = (l: string): boolean => {
           const upper = l.toUpperCase()
           // Ignorer si le mot complet ou un de ses mots est dans la liste
@@ -659,10 +675,13 @@ export async function GET(request: NextRequest) {
       couleur?: string
     }>()
 
-    // Groupe de transport : "heavy" (metro/rer/train/tram) vs "bus" vs "velo"
-    // On ne fusionne JAMAIS un arrêt de bus avec une gare du même nom
+    // Groupe de transport pour la fusion par nom :
+    // Séparer metro / RER+train / tram / bus / velo
+    // On ne fusionne JAMAIS un métro avec une gare RER du même nom
     function getTransportGroup(type: string): string {
-      if (['subway_entrance', 'rer_station', 'station', 'halt', 'train_station', 'tram_stop'].includes(type)) return 'heavy'
+      if (type === 'subway_entrance') return 'metro'
+      if (['rer_station', 'station', 'halt', 'train_station'].includes(type)) return 'rer_train'
+      if (type === 'tram_stop') return 'tram'
       if (type === 'bicycle_rental') return 'velo'
       return 'bus'
     }
@@ -785,11 +804,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Reclassifier le type selon les lignes résolues :
-    // - Si toutes les lignes sont des lignes de métro (1-14) → c'est un métro, pas un RER
-    // - Si toutes les lignes sont des lignes RER (A-E) → c'est un RER
+    // Reclassifier le type selon les lignes résolues
+    // ET nettoyer les lignes qui ne correspondent pas au type
     const KNOWN_METRO = new Set(['1','2','3','3bis','4','5','6','7','7bis','8','9','10','11','12','13','14'])
     const KNOWN_RER = new Set(['A','B','C','D','E'])
+    const KNOWN_TRANSILIEN = new Set(['H','J','K','L','N','P','R','U'])
     for (const s of selected) {
       if (s.lignes.length > 0) {
         const allMetro = s.lignes.every(l => KNOWN_METRO.has(l))
@@ -798,6 +817,14 @@ export async function GET(request: NextRequest) {
           s.type = 'subway_entrance' // Reclassifier en métro
         } else if (allRER && s.type !== 'rer_station') {
           s.type = 'rer_station' // Reclassifier en RER
+        }
+        // Nettoyer les lignes qui ne correspondent pas au type final
+        if (s.type === 'subway_entrance') {
+          s.lignes = s.lignes.filter(l => KNOWN_METRO.has(l))
+        } else if (s.type === 'rer_station') {
+          s.lignes = s.lignes.filter(l => KNOWN_RER.has(l.toUpperCase()) || KNOWN_TRANSILIEN.has(l.toUpperCase()))
+        } else if (s.type === 'train_station' || s.type === 'station' || s.type === 'halt') {
+          s.lignes = s.lignes.filter(l => KNOWN_TRANSILIEN.has(l.toUpperCase()) || KNOWN_RER.has(l.toUpperCase()))
         }
       }
     }
@@ -825,8 +852,115 @@ export async function GET(request: NextRequest) {
         couleur: s.couleur,
       }))
 
+    // ── Transport summary (agrégation de TOUTES les stations du rayon) ──
+    // Utilisé pour la section "Transports à proximité" style Bien'ici dans le PDF
+    const summaryMap: Record<string, { lignes: Set<string>; count: number; minWalk: number }> = {}
+    for (const s of filteredStations) {
+      const t = getTypeTransport(s.type, s.operateur) as string
+      if (!summaryMap[t]) summaryMap[t] = { lignes: new Set(), count: 0, minWalk: Infinity }
+      summaryMap[t].count++
+      const walk = Math.max(1, Math.round(s.distance / VITESSE_PIETON_M_PAR_MIN))
+      if (walk < summaryMap[t].minWalk) summaryMap[t].minWalk = walk
+      for (const l of s.lignes) {
+        const clean = l.split(':')[0].split(' ')[0].trim()
+        if (!clean) continue
+        // Validate line against type
+        if (t === 'metro' && !KNOWN_METRO.has(clean)) continue
+        if (t === 'rer' && !KNOWN_RER.has(clean.toUpperCase())) continue
+        if (t === 'train' && !KNOWN_TRANSILIEN.has(clean.toUpperCase())) continue
+        // Bus/tram: only keep valid short alphanumeric refs (no garbage words like "Selected")
+        if ((t === 'bus' || t === 'tram') && !/^[A-Za-z]?\d{1,4}[A-Za-z]?(?:bis)?$/.test(clean)) continue
+        summaryMap[t].lignes.add(clean)
+      }
+    }
+    // Count fuel stations (station service)
+    const fuelCount = pois.filter(p => p.type === 'fuel').length
+    // Count bicycle_rental — split Vélib' (operator=Smovengo) vs generic vélo
+    const velibCount = filteredStations.filter(s => {
+      if (s.type !== 'bicycle_rental') return false
+      const op = (s.operateur || '').toLowerCase()
+      return op.includes('vélib') || op.includes('velib') || op.includes('smovengo')
+    }).length
+    const veloGenericCount = filteredStations.filter(s => {
+      if (s.type !== 'bicycle_rental') return false
+      const op = (s.operateur || '').toLowerCase()
+      return !(op.includes('vélib') || op.includes('velib') || op.includes('smovengo'))
+    }).length
+    const transportSummary = Object.entries(summaryMap)
+      .map(([type, data]) => ({
+        type,
+        lignes: [...data.lignes].sort(),
+        count: type === 'velib' ? velibCount : type === 'velo' ? veloGenericCount : data.count,
+        nearestWalkMin: data.minWalk === Infinity ? undefined : data.minWalk,
+      }))
+      .filter(t => t.count > 0 || t.lignes.length > 0)
+    if (fuelCount > 0) {
+      transportSummary.push({ type: 'fuel', lignes: [], count: fuelCount, nearestWalkMin: undefined })
+    }
+
     // Extraire les comptages bruts par catégorie
     const getCount = (cat: string) => categories.find(c => c.categorie === cat)?.count || 0
+
+    // Comptages détaillés par type d'amenity (style Bien'ici "Dans le quartier")
+    const AMENITY_LABELS: Record<string, string> = {
+      // Loisirs & Sorties
+      bar: 'Bar', restaurant: 'Restaurant', cafe: 'Café', cinema: 'Cinéma', theatre: 'Théâtre',
+      park: 'Parc', garden: 'Jardin', playground: 'Aire de jeux',
+      fitness_centre: 'Salle de sport', sports_centre: 'Salle de sport',
+      // Commerces
+      supermarket: 'Supermarché', bakery: 'Boulangerie', convenience: 'Supérette',
+      bank: 'Banque', post_office: 'Bureau de poste', marketplace: 'Marché',
+      fuel: 'Station service',
+      // Éducation
+      school: 'École primaire', kindergarten: 'École maternelle', college: 'Collège',
+      university: 'Lycée / Université', library: 'Bibliothèque', childcare: 'Crèche',
+      // Santé
+      hospital: 'Hôpital', clinic: 'Clinique', doctors: 'Médecin',
+      doctor: 'Médecin', dentist: 'Dentiste', pharmacy: 'Pharmacie',
+      // Transports
+      bus_stop: 'Arrêt de bus', tram_stop: 'Arrêt de tram',
+      subway_entrance: 'Station de métro', train_station: 'Gare',
+      bicycle_rental: 'Vélo en libre-service',
+      rer_station: 'Gare RER', station: 'Gare', halt: 'Halte ferroviaire',
+      stop_position: 'Arrêt', platform: 'Quai', stop: 'Arrêt',
+    }
+
+    /**
+     * Sous-catégorise un POI `school` par son nom OSM.
+     * Le tag amenity=school dans OSM couvre TOUT : maternelles, primaires,
+     * collèges, lycées, groupes scolaires, écoles privées.
+     */
+    function getSchoolLabel(nom?: string): string {
+      if (!nom) return 'École'
+      const lower = nom.toLowerCase()
+      if (lower.includes('maternelle')) return 'École maternelle'
+      if (lower.includes('élémentaire') || lower.includes('elementaire') || lower.includes('primaire')) return 'École primaire'
+      if (lower.includes('collège') || lower.includes('college')) return 'Collège'
+      if (lower.includes('lycée') || lower.includes('lycee')) return 'Lycée'
+      if (lower.includes('université') || lower.includes('universite') || lower.includes('dnmade') || lower.includes('iut') || lower.includes('bts')) return 'Université'
+      if (lower.includes('groupe scolaire')) return 'Groupe scolaire'
+      return 'École'
+    }
+
+    const detailedCounts: Record<string, Array<{ type: string; label: string; count: number }>> = {}
+    for (const [catKey] of Object.entries(CATEGORIES)) {
+      const poisCat = pois.filter(p => p.categorie === catKey)
+      // Grouper par label (pas par type brut) pour fusionner doctor/doctors → Médecin
+      const labelCounts = new Map<string, number>()
+      for (const p of poisCat) {
+        let label: string
+        if (p.type === 'school') {
+          // Sous-catégoriser école par nom (lycée, collège, primaire, etc.)
+          label = getSchoolLabel(p.nom)
+        } else {
+          label = AMENITY_LABELS[p.type] || p.type
+        }
+        labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
+      }
+      detailedCounts[catKey] = [...labelCounts.entries()]
+        .map(([label, count]) => ({ type: label, label, count }))
+        .sort((a, b) => b.count - a.count)
+    }
 
     const responseData = {
       success: true,
@@ -839,6 +973,7 @@ export async function GET(request: NextRequest) {
         espaceVerts: getScore('vert'),
         synthese,
         transportsProches,
+        transportSummary,
         /** Comptages bruts de POIs par catégorie (rayon 800m) */
         counts: {
           transport: getCount('transport'),
@@ -848,6 +983,8 @@ export async function GET(request: NextRequest) {
           loisirs: getCount('loisirs'),
           vert: getCount('vert'),
         },
+        /** Comptages détaillés par type d'amenity dans chaque catégorie */
+        detailedCounts,
       },
       source: 'OpenStreetMap'
     }
@@ -904,7 +1041,12 @@ function getTypeTransport(osmType: string, operateur?: string): TypeTransport {
     case 'train_station': return 'train'
     case 'tram_stop': return 'tram'
     case 'bus_stop': return 'bus'
-    case 'bicycle_rental': return 'velo'
+    case 'bicycle_rental': {
+      // Distinguer Vélib' (Smovengo) des vélos génériques
+      const bikeOp = (operateur || '').toLowerCase()
+      if (bikeOp.includes('vélib') || bikeOp.includes('velib') || bikeOp.includes('smovengo')) return 'velib'
+      return 'velo'
+    }
     default: return 'bus'
   }
 }

@@ -1,4 +1,5 @@
 import { ScrollToTop } from '@/components/ScrollToTop'
+import { UtmCapture } from '@/components/UtmCapture'
 import { Footer, Navbar, ScrollToTopButton } from '@/components/vitrine'
 
 /**
@@ -8,6 +9,7 @@ import { Footer, Navbar, ScrollToTopButton } from '@/components/vitrine'
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <UtmCapture />
       <ScrollToTop />
       <a
         href="#main-content"

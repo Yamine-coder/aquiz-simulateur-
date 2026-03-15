@@ -71,3 +71,14 @@ model NewsletterSubscriber {
   @@index([email])
   @@index([status])
 }
+
+/// Événements analytics anonymes (usage outils, simulations, conversions)
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  event     String   // simulation-a | simulation-b | comparaison | carte-view | aides-check | lead-capture | contact-form | rappel-form
+  data      String   @default("") // JSON : budget, zone, taux, nbBiens, etc. (anonyme, pas de PII)
+  createdAt DateTime @default(now())
+
+  @@index([event])
+  @@index([createdAt])
+}

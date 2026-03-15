@@ -77,13 +77,6 @@ const PAGES: ScreenCapture[] = [
     viewport: DESKTOP,
     waitFor: 'main',
   },
-  {
-    name: '09-a-propos-desktop',
-    url: '/a-propos',
-    viewport: DESKTOP,
-    waitFor: 'main',
-  },
-
   // ─── MOBILE ───
   {
     name: '10-homepage-mobile',

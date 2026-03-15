@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,32 +18,34 @@ import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
 import { useDVFData } from '@/hooks/useDVFData'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
+import { trackEvent } from '@/lib/analytics'
 import { calculerScoreFaisabilite } from '@/lib/calculs/scoreFaisabilite'
 import { genererConseilsAvances } from '@/lib/conseils/genererConseilsAvances'
 import type { EnrichissementPDF } from '@/lib/pdf/enrichirPourPDF'
 import { enrichirPourPDF } from '@/lib/pdf/enrichirPourPDF'
+import { getUtmData } from '@/lib/utm'
 import { modeASchema, type ModeAFormData } from '@/lib/validators/schemas'
 import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-    AlertCircle,
-    ArrowLeft,
-    ArrowRight,
-    Check,
-    CheckCircle,
-    ChevronDown,
-    Clock,
-    CreditCard,
-    FileDown,
-    Info,
-    Loader2,
-    Mail,
-    MapPin,
-    Percent,
-    Phone,
-    PiggyBank,
-    Shield
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  CreditCard,
+  FileDown,
+  Info,
+  Loader2,
+  Mail,
+  MapPin,
+  Percent,
+  Phone,
+  PiggyBank,
+  Shield
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -101,6 +103,7 @@ function ModeAPageContent() {
   const leadStore = useLeadStore()
   const hasLead = useLeadStore(hasValidEmail)
   const [currentSaveId, setCurrentSaveId] = useState<string | null>(null)
+  const hasTrackedResults = useRef(false)
   const { 
     setMode, setProfil, setParametresModeA, setResultats, reset: resetStore,
     resultats: storedResultats, 
@@ -111,15 +114,29 @@ function ModeAPageContent() {
   } = useSimulateurStore()
   const { simulations, isLoaded, save, getPending } = useSimulationSave()
   
-  // Fonction setEtape qui synchronise local + store + scroll haut
+  // Flag pour éviter double restauration
+  const [hasRestoredFromStore, setHasRestoredFromStore] = useState(false)
+  
+  // Track simulation start (once per mount)
+  const hasTrackedStart = useRef(false)
+  useEffect(() => {
+    if (!hasTrackedStart.current) {
+      hasTrackedStart.current = true
+      trackEvent('simulation-a-start', {})
+    }
+  }, [])
+
+  // Fonction setEtape qui synchronise local + store + scroll haut + track step
   const setEtape = useCallback((newEtape: EtapeId) => {
-    setEtapeLocal(newEtape)
+    setEtapeLocal((prev) => {
+      if (prev !== newEtape) {
+        trackEvent('simulation-a-step', { from: prev, to: newEtape })
+      }
+      return newEtape
+    })
     setEtapeStore(getEtapeNumberFromId(newEtape))
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [setEtapeStore])
-  
-  // Flag pour éviter double restauration
-  const [hasRestoredFromStore, setHasRestoredFromStore] = useState(false)
   
   // Données DVF réelles - utiliser la constante externe
   const { zones: zonesReelles } = useDVFData(DEPARTEMENTS_IDF)
@@ -592,7 +609,6 @@ function ModeAPageContent() {
         conseils={resultatsConseils}
         marche={enrichissement?.marche}
         quartier={enrichissement?.quartier}
-        syntheseIA={enrichissement?.syntheseIA}
       />
     ).toBlob()
 
@@ -605,6 +621,7 @@ function ModeAPageContent() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+    trackEvent('pdf-download', { source: 'simulation-a' })
   }, [calculs, mensualiteMax, mensualiteRecommandee, dureeAns, apport, typeBien, tauxInteret, age, statutProfessionnel, situationFoyer, nombreEnfants, scoreFaisabilite, scoreDetails, pieData])
 
   const onSubmit = (data: ModeAFormData) => {
@@ -648,6 +665,18 @@ function ModeAPageContent() {
   const goToEtape = (targetEtape: EtapeId) => { if (canGoToEtape(targetEtape)) { setEtape(targetEtape) } }
   const goToNextEtape = () => { const nextIndex = etapeActuelleIndex + 1; if (nextIndex < ETAPES.length) { const nextEtape = ETAPES[nextIndex].id; if (canGoToEtape(nextEtape)) { setEtape(nextEtape) } } }
   const goToPrevEtape = () => { const prevIndex = etapeActuelleIndex - 1; if (prevIndex >= 0) setEtape(ETAPES[prevIndex].id) }
+
+  // Track when user reaches results
+  useEffect(() => {
+    if (etape === 'resultats' && calculs.prixAchatMax > 0 && !hasTrackedResults.current) {
+      hasTrackedResults.current = true
+      trackEvent('simulation-a', { budgetMax: Math.round(calculs.prixAchatMax), capaciteEmprunt: Math.round(calculs.capitalEmpruntable), tauxEndettement: Math.round(calculs.tauxEndettementProjet), dureeAns, apport, typeBien, scoreFaisabilite })
+    }
+    if (etape !== 'resultats') {
+      hasTrackedResults.current = false
+    }
+  }, [etape, calculs.prixAchatMax, calculs.capitalEmpruntable, calculs.tauxEndettementProjet, dureeAns, apport, typeBien, scoreFaisabilite])
+
   const formatMontant = (montant: number) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(montant)
 
   // Handler: envoyer le PDF par email (bonus, pas de gate)
@@ -671,6 +700,7 @@ function ModeAPageContent() {
               tauxEndettement: calculs.tauxEndettementProjet,
               dureeAns,
               apport,
+              ...getUtmData(),
             },
           }),
         })
@@ -1953,7 +1983,7 @@ function ModeAPageContent() {
                           <p className="text-xs text-red-600 mt-1">Réduisez la mensualité ou augmentez votre apport.</p>
                           <button 
                             type="button"
-                            onClick={() => setShowContactModal(true)}
+                            onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-a-error', page: 'mode-a' }) }}
                             className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
                           >
                             <Phone className="w-3.5 h-3.5" />
@@ -2039,6 +2069,7 @@ function ModeAPageContent() {
                         href="https://calendly.com/contact-aquiz/30min"
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'mode-a-results', page: 'mode-a' })}
                         className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
                       >
                         Échanger avec un conseiller
@@ -2076,7 +2107,7 @@ function ModeAPageContent() {
                     </Button>
                     <Button 
                       type="button" 
-                      onClick={() => setShowContactModal(true)}
+                      onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-a-bottombar', page: 'mode-a' }) }}
                       className="flex-1 h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl gap-1.5 text-xs font-semibold"
                     >
                       <Phone className="w-3.5 h-3.5" />

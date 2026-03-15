@@ -45,6 +45,8 @@ export interface DonneesQuartier {
   synthese: string
   // ── Transports proches (source OSM) ──
   transportsProches?: TransportProche[]
+  /** Agrégation de tous les transports du rayon (toutes lignes, tous arrêts) */
+  transportSummary?: Array<{ type: string; lignes: string[]; count: number; nearestWalkMin?: number }>
   /** Coordonnées GPS du bien (centre de la recherche) */
   bienLat?: number
   bienLon?: number
@@ -59,6 +61,8 @@ export interface DonneesQuartier {
     loisirs: number
     vert: number
   }
+  /** Comptages détaillés par type d'amenity dans chaque catégorie */
+  detailedCounts?: Record<string, Array<{ type: string; label: string; count: number }>>
   // ── Enrichissements (optionnels) ──
   /** Score risques 0-10 (10 = très sûr, 0 = très exposé) — source Géorisques */
   risques?: number | null

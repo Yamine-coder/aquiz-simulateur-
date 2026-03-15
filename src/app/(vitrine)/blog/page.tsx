@@ -229,7 +229,7 @@ function SimulateurCTA() {
 
 // ─── Page ───
 
-const ITEMS_PER_LOAD = 6
+const ITEMS_PER_LOAD = 3
 
 type SortOption = 'recent' | 'oldest' | 'reading-time'
 

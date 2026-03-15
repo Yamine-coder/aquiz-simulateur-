@@ -65,6 +65,7 @@ interface EnrichissementData {
     sante?: number
     espaceVerts?: number
     transportsProches?: Array<{ type: string; typeTransport: string; nom: string; distance: number; lat?: number; lon?: number; walkMin?: number; lignes?: string[]; operateur?: string; couleur?: string }>
+    transportSummary?: Array<{ type: string; lignes: string[]; count: number; nearestWalkMin?: number }>
     counts?: {
       transport: number
       commerce: number
@@ -73,6 +74,7 @@ interface EnrichissementData {
       loisirs: number
       vert: number
     }
+    detailedCounts?: Record<string, Array<{ type: string; label: string; count: number }>>
   }
   communeInfos?: {
     success: boolean
@@ -178,7 +180,9 @@ const TRANSPORT_COLORS: Record<string, { bg: string; text: string; label: string
   train:  { bg: '#E05206', text: '#ffffff', label: 'Train', abbr: 'T' },
   tram:   { bg: '#00814F', text: '#ffffff', label: 'Tram', abbr: 'Tr' },
   bus:    { bg: '#7B2D8E', text: '#ffffff', label: 'Bus', abbr: 'B' },
-  velo:   { bg: '#00A88F', text: '#ffffff', label: 'Vélo', abbr: 'V' },
+  velo:   { bg: '#00A88F', text: '#ffffff', label: 'Location de vélo', abbr: 'V' },
+  velib:  { bg: '#A4C639', text: '#ffffff', label: 'Vélib\'', abbr: 'V' },
+  fuel:   { bg: '#6B7280', text: '#ffffff', label: 'Station service', abbr: 'S' },
 }
 
 /** Couleurs IDFM officielles pour badges lignes dans le PDF */
@@ -207,11 +211,22 @@ const PDF_TRANSILIEN_COLORS: Record<string, { bg: string; fg: string }> = {
   R: { bg: '#F3A4BA', fg: '#1a1a1a' }, U: { bg: '#B90845', fg: '#fff' },
 }
 
+const PDF_TRAM_COLORS: Record<string, { bg: string; fg: string }> = {
+  'T1': { bg: '#003CA6', fg: '#fff' }, 'T2': { bg: '#CF76A7', fg: '#fff' },
+  'T3a': { bg: '#F28E42', fg: '#fff' }, 'T3b': { bg: '#00814F', fg: '#fff' },
+  'T4': { bg: '#F3A4BA', fg: '#1a1a1a' }, 'T5': { bg: '#9B993A', fg: '#fff' },
+  'T6': { bg: '#E3051C', fg: '#fff' }, 'T7': { bg: '#8D5E2A', fg: '#fff' },
+  'T8': { bg: '#9B993A', fg: '#fff' }, 'T9': { bg: '#003CA6', fg: '#fff' },
+  'T10': { bg: '#F28E42', fg: '#fff' }, 'T11': { bg: '#E3051C', fg: '#fff' },
+  'T13': { bg: '#77C695', fg: '#1a1a1a' },
+}
+
 /** Résout la couleur d'un badge ligne PDF selon type+ligne */
 function getPdfLineColor(typeTransport: string, ligne: string): { bg: string; fg: string } {
   if (typeTransport === 'rer') return PDF_RER_COLORS[ligne.toUpperCase()] ?? { bg: '#1a1a1a', fg: '#fff' }
   if (typeTransport === 'metro') return PDF_METRO_COLORS[ligne] ?? { bg: '#003CA6', fg: '#fff' }
   if (typeTransport === 'train') return PDF_TRANSILIEN_COLORS[ligne.toUpperCase()] ?? { bg: '#E05206', fg: '#fff' }
+  if (typeTransport === 'tram') return PDF_TRAM_COLORS[ligne] ?? PDF_TRAM_COLORS[`T${ligne}`] ?? { bg: '#00814F', fg: '#fff' }
   const tc = TRANSPORT_COLORS[typeTransport] ?? TRANSPORT_COLORS.bus
   return { bg: tc.bg, fg: tc.text }
 }
@@ -787,52 +802,44 @@ function estimerValeur5Ans(prix: number, evolution12Mois?: number): number {
 interface ArgumentNego {
   argument: string
   impact: 'fort' | 'moyen' | 'faible'
-  /** Pondération estimée sur le prix en % (ex: -2 = -2%) */
-  decotePct: number
 }
 
-/** Estime un prix négociable en fonction des faiblesses du bien */
-function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTotale: number; arguments: ArgumentNego[] } {
+/** Identifie les leviers de négociation d'un bien */
+function identifierLeviersNego(a: AnnoncePDF): ArgumentNego[] {
   const args: ArgumentNego[] = []
 
   // 1. Écart vs marché DVF
   const ecart = a.enrichissement?.marche?.ecartPrixM2
   if (ecart != null && ecart > 5) {
-    const decote = Math.min(ecart * 0.6, 12)
     args.push({
-      argument: `Le prix/m² (${fmt(a.prixM2)} €) est ${ecart > 0 ? '+' : ''}${ecart.toFixed(0)}% au-dessus de la médiane DVF (${a.enrichissement?.marche?.prixM2MedianMarche ? fmt(a.enrichissement.marche.prixM2MedianMarche) + ' €/m²' : 'secteur'})`,
+      argument: `Le prix/m² (${fmt(a.prixM2)} €) est +${ecart.toFixed(0)}% au-dessus de la médiane DVF (${a.enrichissement?.marche?.prixM2MedianMarche ? fmt(a.enrichissement.marche.prixM2MedianMarche) + ' €/m²' : 'secteur'})`,
       impact: ecart > 15 ? 'fort' : 'moyen',
-      decotePct: -decote,
     })
   } else if (ecart != null && ecart > 0 && ecart <= 5) {
     args.push({
       argument: `Prix légèrement au-dessus du marché (+${ecart.toFixed(0)}%) — marge de négociation limitée`,
       impact: 'faible',
-      decotePct: -1.5,
     })
   }
 
   // 2. DPE défavorable
   if (['F', 'G'].includes(a.dpe)) {
     args.push({
-      argument: `DPE ${a.dpe} — passoire thermique, rénovation énergétique obligatoire (loi Climat). Coût travaux estimé : 15 000 à 40 000 €`,
+      argument: `DPE ${a.dpe} — passoire thermique, rénovation énergétique obligatoire (loi Climat)`,
       impact: 'fort',
-      decotePct: -5,
     })
   } else if (['D', 'E'].includes(a.dpe)) {
     args.push({
       argument: `DPE ${a.dpe} — performance énergétique moyenne, travaux d'amélioration à prévoir`,
       impact: 'moyen',
-      decotePct: -2,
     })
   }
 
   // 3. Absence de parking
   if (!a.parking) {
     args.push({
-      argument: 'Absence de stationnement — coût d\'un parking en sus (10 000 à 30 000 € en zone tendue)',
+      argument: 'Absence de stationnement — coût d\'un parking en sus',
       impact: 'moyen',
-      decotePct: -2,
     })
   }
 
@@ -841,7 +848,6 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: `${a.etage}e étage sans ascenseur — accessibilité réduite, revente plus difficile`,
       impact: 'moyen',
-      decotePct: -2.5,
     })
   }
 
@@ -850,13 +856,11 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: 'Orientation non communiquée — potentiellement nord ou peu lumineux',
       impact: 'faible',
-      decotePct: -1,
     })
   } else if (['nord', 'Nord', 'N'].includes(a.orientation)) {
     args.push({
       argument: 'Exposition nord — luminosité réduite, chauffage plus élevé',
       impact: 'moyen',
-      decotePct: -2,
     })
   }
 
@@ -865,7 +869,6 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: 'Absence de balcon ou terrasse — pas d\'espace extérieur privatif',
       impact: 'faible',
-      decotePct: -1.5,
     })
   }
 
@@ -874,7 +877,6 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: `Charges mensuelles élevées (${fmt(a.chargesMensuelles)} €/mois) — impact sur le budget global`,
       impact: 'moyen',
-      decotePct: -1,
     })
   }
 
@@ -883,7 +885,6 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: 'Bien situé en zone inondable — risque assurance et revente',
       impact: 'fort',
-      decotePct: -3,
     })
   }
 
@@ -892,7 +893,6 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
     args.push({
       argument: `Zone radon niveau ${a.enrichissement.risques.niveauRadon}/3 — travaux de ventilation possibles`,
       impact: 'faible',
-      decotePct: -1,
     })
   }
 
@@ -903,16 +903,11 @@ function estimerPrixNegociable(a: AnnoncePDF): { prixNegocie: number; decoteTota
       args.push({
         argument: `Construction de ${a.anneeConstruction} (${age} ans) — risque de travaux lourds (toiture, plomberie, électricité)`,
         impact: 'moyen',
-        decotePct: -2,
       })
     }
   }
 
-  // Calculer décote totale (plafonné à -20%)
-  const decoteTotale = Math.max(args.reduce((sum, arg) => sum + arg.decotePct, 0), -20)
-  const prixNegocie = Math.round(a.prix * (1 + decoteTotale / 100))
-
-  return { prixNegocie, decoteTotale, arguments: args }
+  return args
 }
 
 function getImpactColor(impact: 'fort' | 'moyen' | 'faible'): string {
@@ -1386,23 +1381,24 @@ export function ComparateurPDF({
             const avantages = annonce.points.filter(p => p.type === 'avantage').slice(0, 3)
             const attentions = annonce.points.filter(p => p.type === 'attention').slice(0, 3)
 
-            // Build transport lines map (Mode B style — inline pastilles)
-            const transportLinesMap: Record<string, string[]> = {}
-            if (annonce.enrichissement?.quartier?.transportsProches) {
-              for (const tp of annonce.enrichissement.quartier.transportsProches) {
-                if (!tp.lignes || tp.lignes.length === 0) continue
-                if (tp.typeTransport === 'bus' || tp.typeTransport === 'velo') continue
-                const cleaned = tp.lignes
-                  .map(l => l.split(':')[0].split(' ')[0].trim())
-                  .filter(Boolean)
-                const uniq = [...new Set(cleaned)]
-                for (const l of uniq) {
-                  if (!transportLinesMap[tp.typeTransport]) transportLinesMap[tp.typeTransport] = []
-                  if (!transportLinesMap[tp.typeTransport].includes(l)) transportLinesMap[tp.typeTransport].push(l)
-                }
-              }
+            // Build transport groups from transportSummary (aggregated from ALL stations in radius)
+            const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo', 'fuel']
+            const typeLabels: Record<string, string> = {
+              metro: 'Métro', rer: 'RER', train: 'Train', tram: 'Tramway',
+              bus: 'Bus', velib: 'Vélib\'', velo: 'Location de vélo', fuel: 'Station service',
             }
-            const hasTransportLines = Object.keys(transportLinesMap).length > 0
+            const summary = annonce.enrichissement?.quartier?.transportSummary
+            const transportGroups = (summary ?? [])
+              .filter(s => typeOrder.includes(s.type))
+              .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type))
+              .map(s => ({
+                type: s.type,
+                label: typeLabels[s.type] ?? s.type,
+                lignes: s.lignes,
+                stations: s.count,
+                nearestWalkMin: s.nearestWalkMin,
+              }))
+            const hasTransport = transportGroups.length > 0
 
             return (
               <View key={annonce.id} style={{
@@ -1478,79 +1474,191 @@ export function ComparateurPDF({
                   </View>
                 </View>
 
-                {/* ── Chiffres clés commune + transport pastilles ── */}
+                {/* ── Dans le quartier (style Bien'ici) ── */}
                 {(() => {
-                  const ci = annonce.enrichissement?.communeInfos
-                  const counts = ci?.counts ?? annonce.enrichissement?.quartier?.counts
-                  const items: { label: string; value: string }[] = []
+                  const dc = annonce.enrichissement?.quartier?.detailedCounts
+                  if (!dc) return null
 
-                  if (ci?.revenuMensuel) items.push({ label: 'Revenu médian', value: `${fmt(ci.revenuMensuel)} EUR/mois` })
-                  if (counts?.education) items.push({ label: 'Écoles', value: `${counts.education}` })
-                  if (counts?.commerce) items.push({ label: 'Commerces', value: `${counts.commerce}` })
-                  if (counts?.sante) items.push({ label: 'Santé', value: `${counts.sante}` })
-                  if (counts?.loisirs) items.push({ label: 'Loisirs', value: `${counts.loisirs}` })
-                  if (counts?.transport) items.push({ label: 'Transports', value: `${counts.transport}` })
+                  const QUARTIER_CATEGORIES: Array<{
+                    key: string
+                    title: string
+                    color: string
+                    bgLight: string
+                  }> = [
+                    { key: 'loisirs', title: 'Si on sortait ?', color: '#E91E63', bgLight: '#FCE4EC' },
+                    { key: 'commerce', title: 'Au quotidien', color: '#FF9800', bgLight: '#FFF3E0' },
+                    { key: 'education', title: 'Éducation', color: '#4CAF50', bgLight: '#E8F5E9' },
+                    { key: 'sante', title: 'Santé', color: '#2196F3', bgLight: '#E3F2FD' },
+                    { key: 'vert', title: 'Nature', color: '#8BC34A', bgLight: '#F1F8E9' },
+                  ]
 
-                  const hasChiffres = items.length > 0
-                  if (!hasChiffres && !hasTransportLines) return null
+                  const catsWithData = QUARTIER_CATEGORIES.filter(cat => {
+                    const items = dc[cat.key]
+                    return items && items.length > 0
+                  })
+
+                  if (catsWithData.length === 0) return null
 
                   return (
-                    <View style={{ paddingHorizontal: 7, paddingVertical: 4, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
-                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: 2 }}>
-                        Chiffres clés{ci?.nomCommune ? ` — ${ci.nomCommune}` : ''}
+                    <View style={{ paddingHorizontal: 7, paddingTop: 5, paddingBottom: 4, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                      {/* Section header */}
+                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
+                        Dans le quartier
                       </Text>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
-                        {items.map((item, i) => (
-                          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.grayBg, borderRadius: 3, paddingHorizontal: 5, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 5, color: C.gray }}>{item.label} : </Text>
-                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{item.value}</Text>
-                          </View>
-                        ))}
-                        {hasTransportLines && transportLinesMap['metro'] && transportLinesMap['metro'].length > 0 && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                            <View style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFF', marginTop: -0.5 }}>M</Text>
+
+                      {/* Category blocks — 2 columns */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                        {catsWithData.map(cat => {
+                          const items = dc[cat.key] || []
+                          const total = items.reduce((s, i) => s + i.count, 0)
+                          return (
+                            <View key={cat.key} style={{
+                              width: '48%',
+                              backgroundColor: cat.bgLight,
+                              borderRadius: 4,
+                              padding: 5,
+                              marginBottom: 1,
+                            }}>
+                              {/* Category header */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                                <View style={{
+                                  width: 10, height: 10, borderRadius: 2,
+                                  backgroundColor: cat.color,
+                                  alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                  <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
+                                    {total}
+                                  </Text>
+                                </View>
+                                <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: cat.color }}>
+                                  {cat.title}
+                                </Text>
+                              </View>
+                              {/* Items */}
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
+                                {items.slice(0, 5).map(item => (
+                                  <View key={item.type} style={{
+                                    flexDirection: 'row', alignItems: 'center',
+                                    backgroundColor: '#ffffff', borderRadius: 2,
+                                    paddingHorizontal: 3, paddingVertical: 1,
+                                  }}>
+                                    <Text style={{ fontSize: 4.5, color: C.black }}>
+                                      {item.label}
+                                    </Text>
+                                    <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: cat.color, marginLeft: 2 }}>
+                                      {item.count}
+                                    </Text>
+                                  </View>
+                                ))}
+                              </View>
                             </View>
-                            {transportLinesMap['metro'].map(l => {
-                              const lc = getPdfLineColor('metro', l)
-                              return <View key={`m-${l}`} style={{ width: l.length > 2 ? 14 : 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: l.length > 2 ? 4 : 5.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text></View>
-                            })}
-                          </View>
-                        )}
-                        {hasTransportLines && transportLinesMap['rer'] && transportLinesMap['rer'].length > 0 && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                            <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF', letterSpacing: 0.3 }}>RER</Text>
+                          )
+                        })}
+                        {/* ── Transport block (same card style, horizontal badges) ── */}
+                        {hasTransport && (
+                          <View style={{
+                            width: '48%',
+                            backgroundColor: '#ECFDF5',
+                            borderRadius: 4,
+                            padding: 5,
+                            marginBottom: 1,
+                          }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                              <View style={{
+                                width: 10, height: 10, borderRadius: 2,
+                                backgroundColor: '#10b981',
+                                alignItems: 'center', justifyContent: 'center',
+                              }}>
+                                <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
+                                  {transportGroups.reduce((s, t) => s + t.stations, 0)}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#10b981' }}>
+                                Transports
+                              </Text>
                             </View>
-                            {transportLinesMap['rer'].map(l => {
-                              const lc = getPdfLineColor('rer', l)
-                              return <View key={`r-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>
-                            })}
-                          </View>
-                        )}
-                        {hasTransportLines && transportLinesMap['train'] && transportLinesMap['train'].length > 0 && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                            <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#1D4A8C', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Train</Text>
+                            {/* All badges on one horizontal wrap line */}
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+                              {transportGroups.flatMap(tg => {
+                                const SZ = 9
+                                const SZ_INNER = 6
+                                const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
+                                const isBus = tg.type === 'bus'
+                                const badges: React.ReactNode[] = []
+
+                                if (isRail && tg.lignes.length > 0) {
+                                  // Type badge + each line badge
+                                  if (tg.type === 'metro') {
+                                    badges.push(
+                                      <View key="metro-icon" style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>M</Text>
+                                      </View>
+                                    )
+                                    tg.lignes.forEach(l => {
+                                      const lc = getPdfLineColor('metro', l)
+                                      badges.push(
+                                        <View key={`m-${l}`} style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
+                                          <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
+                                        </View>
+                                      )
+                                    })
+                                  } else if (tg.type === 'rer' || tg.type === 'train') {
+                                    badges.push(
+                                      <View key="rer-icon" style={{ width: 13, height: SZ, borderRadius: 1.5, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: '#fff' }}>{tg.type === 'rer' ? 'RER' : 'TER'}</Text>
+                                      </View>
+                                    )
+                                    tg.lignes.forEach(l => {
+                                      const lc = getPdfLineColor(tg.type, l)
+                                      badges.push(
+                                        <View key={`r-${l}`} style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
+                                          <View style={{ width: SZ_INNER, height: SZ_INNER, borderRadius: SZ_INNER / 2, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
+                                            <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: lc.bg }}>{l}</Text>
+                                          </View>
+                                        </View>
+                                      )
+                                    })
+                                  } else {
+                                    // tram
+                                    tg.lignes.forEach(l => {
+                                      const lc = getPdfLineColor(tg.type, l)
+                                      badges.push(
+                                        <View key={`t-${l}`} style={{ paddingHorizontal: 2.5, height: SZ, borderRadius: 1.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
+                                          <Text style={{ fontSize: 3.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
+                                        </View>
+                                      )
+                                    })
+                                  }
+                                } else if (isBus && tg.lignes.length > 0) {
+                                  badges.push(
+                                    <View key="bus-pill" style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
+                                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#60a917', alignItems: 'center', justifyContent: 'center', marginRight: 2 }}>
+                                        <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: '#fff' }}>B</Text>
+                                      </View>
+                                      <Text style={{ fontSize: 4, color: C.black }}>
+                                        {tg.lignes.slice(0, 4).join(', ')}{tg.lignes.length > 4 ? ` +${tg.lignes.length - 4}` : ''}
+                                      </Text>
+                                    </View>
+                                  )
+                                } else {
+                                  // Vélib', vélo, fuel, etc. — simple pill
+                                  badges.push(
+                                    <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
+                                      <Text style={{ fontSize: 4.5, color: C.black }}>{tg.label}</Text>
+                                      <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#10b981', marginLeft: 2 }}>{tg.stations}</Text>
+                                    </View>
+                                  )
+                                }
+                                return badges
+                              })}
                             </View>
-                            {transportLinesMap['train'].map(l => {
-                              const lc = getPdfLineColor('train', l)
-                              return <View key={`t-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text></View>
-                            })}
-                          </View>
-                        )}
-                        {hasTransportLines && transportLinesMap['tram'] && transportLinesMap['tram'].length > 0 && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                            <View style={{ paddingHorizontal: 3, height: 11, borderRadius: 2, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Tram</Text>
-                            </View>
-                            {transportLinesMap['tram'].map(l => <View key={`tr-${l}`} style={{ paddingHorizontal: 2, height: 11, borderRadius: 5.5, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>)}
                           </View>
                         )}
                       </View>
                     </View>
                   )
                 })()}
+
               </View>
             )
           })}
@@ -1560,223 +1668,160 @@ export function ComparateurPDF({
       </Page>
 
       {/* ══════════════════════════════════════════
-          PAGE — 4. ANALYSE MARCHÉ
-          ══════════════════════════════════════════ */}
-      {sorted.some(a => a.enrichissement?.marche?.success) && (
-        <Page size="A4" style={s.pageWithFixedHeader}>
-          <FixedHeader logoUrl={logoUrl} nbBiens={n} />
-          <View style={[s.content, { marginTop: 52 }]}>
-
-            <View style={{ marginTop: 6 }}>
-              <SectionTitle title="4. ANALYSE MARCHÉ" />
-            </View>
-
-            <Text style={{ fontSize: 7.5, color: C.gray, marginTop: 4, marginBottom: 10, lineHeight: 1.5 }}>
-              Positionnement tarifaire de chaque bien par rapport aux transactions récentes du secteur (données DVF).
-            </Text>
-
-            {/* ── Per-city market overview ── */}
-            {(() => {
-              const villeMap = new Map<string, typeof sorted>()
-              sorted.forEach(a => {
-                const key = a.ville
-                if (!villeMap.has(key)) villeMap.set(key, [])
-                villeMap.get(key)!.push(a)
-              })
-
-              return Array.from(villeMap.entries()).map(([ville, biens], cityIdx) => {
-                const withMarche = biens.find(b => b.enrichissement?.marche?.success)
-                const m = withMarche?.enrichissement?.marche
-
-                return (
-                  <View key={ville} style={{
-                    marginTop: cityIdx === 0 ? 0 : 10,
-                    backgroundColor: C.white,
-                    borderRadius: 6,
-                    borderWidth: 1,
-                    borderColor: C.grayBorder,
-                    overflow: 'hidden',
-                  }}>
-                    {/* City header */}
-                    <View style={{
-                      backgroundColor: C.white,
-                      paddingVertical: 8,
-                      paddingHorizontal: 14,
-                      borderBottomWidth: 1,
-                      borderBottomColor: C.grayBorder,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                    }}>
-                      <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                        {cleanVille(ville)}
-                      </Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        {m?.prixM2MedianMarche && (
-                          <View style={{
-                            backgroundColor: C.grayBg,
-                            borderRadius: 4,
-                            paddingVertical: 3,
-                            paddingHorizontal: 8,
-                            alignItems: 'center',
-                          }}>
-                            <Text style={{ fontSize: 5, color: C.grayLight }}>Médiane</Text>
-                            <Text style={{ fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                              {fmt(Math.round(m.prixM2MedianMarche))} €/m²
-                            </Text>
-                          </View>
-                        )}
-                        {m?.evolution12Mois != null && m.evolution12Mois !== 0 && (
-                          <View style={{
-                            backgroundColor: C.grayBg,
-                            borderRadius: 4,
-                            paddingVertical: 3,
-                            paddingHorizontal: 8,
-                            alignItems: 'center',
-                          }}>
-                            <Text style={{ fontSize: 5, color: C.grayLight }}>Évol. 5 ans</Text>
-                            <Text style={{
-                              fontSize: 9.5,
-                              fontFamily: 'Helvetica-Bold',
-                              color: (m.evolution12Mois ?? 0) >= 0 ? C.greenDark : C.red,
-                            }}>
-                              {(m.evolution12Mois ?? 0) > 0 ? '+' : ''}{((m.evolution12Mois ?? 0) * 5).toFixed(0)}%
-                            </Text>
-                          </View>
-                        )}
-
-                      </View>
-                    </View>
-
-                    {/* Table header */}
-                    <View style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      paddingVertical: 6,
-                      paddingHorizontal: 14,
-                      backgroundColor: '#f0f1f3',
-                      borderBottomWidth: 1,
-                      borderBottomColor: C.grayBorder,
-                    }}>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, width: 28 }}>#</Text>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, flex: 1 }}>Bien</Text>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, width: 62, textAlign: 'right' }}>Prix/m²</Text>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, width: 62, textAlign: 'right' }}>Médiane</Text>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, width: 46, textAlign: 'center' }}>Écart</Text>
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, width: 72, textAlign: 'center' }}>Verdict</Text>
-                    </View>
-
-                    {/* Table rows */}
-                    {biens.map((a, bIdx) => {
-                      const am = a.enrichissement?.marche
-                      const ecart = am?.ecartPrixM2 ?? 0
-                      const ecartColor = ecart <= -10 ? C.greenDark : ecart <= 0 ? C.green : ecart <= 5 ? C.amber : ecart <= 15 ? C.orange : C.red
-                      const ecartBg = ecart <= 0 ? C.greenLight : ecart <= 5 ? C.amberLight : ecart <= 15 ? C.orangeLight : C.redLight
-                      const verdictScore = am?.verdict === 'excellent' ? 90 : am?.verdict === 'bon' ? 75 : am?.verdict === 'correct' ? 55 : 30
-
-                      return (
-                        <View key={a.id} style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          paddingVertical: 7,
-                          paddingHorizontal: 14,
-                          backgroundColor: bIdx % 2 === 0 ? C.white : '#fafbfc',
-                          ...(bIdx < biens.length - 1 ? { borderBottomWidth: 0.5, borderBottomColor: C.grayBorder } : {}),
-                        }}>
-                          <View style={{ width: 28, flexDirection: 'row', alignItems: 'center' }}>
-                            <View style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: 10,
-                              backgroundColor: getScoreColor(a.scoreGlobal),
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}>
-                              <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
-                            </View>
-                          </View>
-                          <Text style={{ fontSize: 8, color: C.black, flex: 1 }}>
-                            {a.type === 'maison' ? 'Maison' : 'Appt.'} {a.surface} m²
-                          </Text>
-                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black, width: 62, textAlign: 'right' }}>
-                            {fmt(a.prixM2)} €
-                          </Text>
-                          <Text style={{ fontSize: 8, color: C.gray, width: 62, textAlign: 'right' }}>
-                            {am?.prixM2MedianMarche ? `${fmt(Math.round(am.prixM2MedianMarche))} €` : '—'}
-                          </Text>
-                          <View style={{ width: 46, alignItems: 'center' }}>
-                            <View style={{
-                              backgroundColor: ecartBg,
-                              borderRadius: 3,
-                              paddingHorizontal: 5,
-                              paddingVertical: 1.5,
-                              minWidth: 32,
-                              alignItems: 'center',
-                            }}>
-                              <Text style={{
-                                fontSize: 7.5,
-                                fontFamily: 'Helvetica-Bold',
-                                color: ecartColor,
-                              }}>
-                                {ecart > 0 ? '+' : ''}{ecart.toFixed(0)}%
-                              </Text>
-                            </View>
-                          </View>
-                          <View style={{ width: 72, alignItems: 'center' }}>
-                            {am?.verdict && (
-                              <View style={{
-                                backgroundColor: getScoreBg(verdictScore),
-                                borderRadius: 3,
-                                paddingHorizontal: 6,
-                                paddingVertical: 2,
-                                minWidth: 54,
-                                alignItems: 'center',
-                              }}>
-                                <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: getScoreColor(verdictScore) }}>
-                                  {getVerdictMarcheLabel(am.verdict)}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                        </View>
-                      )
-                    })}
-                  </View>
-                )
-              })
-            })()}
-
-
-
-            {/* Disclaimer */}
-            <View style={{ flex: 1 }} />
-            <Text style={{ fontSize: 6, color: C.grayLight, marginTop: 12, lineHeight: 1.4 }}>
-              Source : DVF (transactions notariales). L&apos;écart mesure la différence entre le prix/m² du bien et la médiane des ventes récentes du secteur. L&apos;évolution sur 5 ans est extrapolée à partir de la tendance annuelle.
-            </Text>
-          </View>
-          <Footer logoUrl={logoUrl} />
-        </Page>
-      )}
-
-      {/* ══════════════════════════════════════════
-          PAGE — 5. PROJECTION FINANCIÈRE
+          PAGE — 4. ANALYSE MARCHÉ & PROJECTION FINANCIÈRE
           ══════════════════════════════════════════ */}
       <Page size="A4" style={s.pageWithFixedHeader}>
         <FixedHeader logoUrl={logoUrl} nbBiens={n} />
         <View style={[s.content, { marginTop: 52 }]}>
 
-          <View style={{ marginTop: 6 }}>
+          {/* ── 4A. Analyse Marché ── */}
+          {sorted.some(a => a.enrichissement?.marche?.success) && (
+            <View>
+              <View style={{ marginTop: 6 }}>
+                <SectionTitle title="4. ANALYSE MARCHÉ" />
+              </View>
+
+              <Text style={{ fontSize: 7, color: C.gray, marginTop: 3, marginBottom: 6, lineHeight: 1.5 }}>
+                Positionnement tarifaire par rapport aux transactions récentes (données DVF).
+              </Text>
+
+              {(() => {
+                const villeMap = new Map<string, typeof sorted>()
+                sorted.forEach(a => {
+                  const key = a.ville
+                  if (!villeMap.has(key)) villeMap.set(key, [])
+                  villeMap.get(key)!.push(a)
+                })
+
+                return Array.from(villeMap.entries()).map(([ville, biens], cityIdx) => {
+                  const withMarche = biens.find(b => b.enrichissement?.marche?.success)
+                  const m = withMarche?.enrichissement?.marche
+
+                  return (
+                    <View key={ville} style={{
+                      marginTop: cityIdx === 0 ? 0 : 6,
+                      backgroundColor: C.white,
+                      borderRadius: 5,
+                      borderWidth: 1,
+                      borderColor: C.grayBorder,
+                      overflow: 'hidden',
+                    }}>
+                      {/* City header */}
+                      <View style={{
+                        backgroundColor: C.white,
+                        paddingVertical: 5,
+                        paddingHorizontal: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: C.grayBorder,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                          {cleanVille(ville)}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {m?.prixM2MedianMarche && (
+                            <View style={{ backgroundColor: C.grayBg, borderRadius: 3, paddingVertical: 2, paddingHorizontal: 6, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 4.5, color: C.grayLight }}>Médiane</Text>
+                              <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(Math.round(m.prixM2MedianMarche))} €/m²</Text>
+                            </View>
+                          )}
+                          {m?.evolution12Mois != null && m.evolution12Mois !== 0 && (
+                            <View style={{ backgroundColor: C.grayBg, borderRadius: 3, paddingVertical: 2, paddingHorizontal: 6, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 4.5, color: C.grayLight }}>Évol. 5 ans</Text>
+                              <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: (m.evolution12Mois ?? 0) >= 0 ? C.greenDark : C.red }}>
+                                {(m.evolution12Mois ?? 0) > 0 ? '+' : ''}{((m.evolution12Mois ?? 0) * 5).toFixed(0)}%
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Table header */}
+                      <View style={{
+                        flexDirection: 'row', alignItems: 'center',
+                        paddingVertical: 4, paddingHorizontal: 10,
+                        backgroundColor: '#f0f1f3',
+                        borderBottomWidth: 1, borderBottomColor: C.grayBorder,
+                      }}>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, width: 22 }}>#</Text>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, flex: 1 }}>Bien</Text>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, width: 55, textAlign: 'right' }}>Prix/m²</Text>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, width: 55, textAlign: 'right' }}>Médiane</Text>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, width: 40, textAlign: 'center' }}>Écart</Text>
+                        <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.gray, width: 60, textAlign: 'center' }}>Verdict</Text>
+                      </View>
+
+                      {/* Table rows */}
+                      {biens.map((a, bIdx) => {
+                        const am = a.enrichissement?.marche
+                        const ecart = am?.ecartPrixM2 ?? 0
+                        const ecartColor = ecart <= -10 ? C.greenDark : ecart <= 0 ? C.green : ecart <= 5 ? C.amber : ecart <= 15 ? C.orange : C.red
+                        const ecartBg = ecart <= 0 ? C.greenLight : ecart <= 5 ? C.amberLight : ecart <= 15 ? C.orangeLight : C.redLight
+                        const verdictScore = am?.verdict === 'excellent' ? 90 : am?.verdict === 'bon' ? 75 : am?.verdict === 'correct' ? 55 : 30
+
+                        return (
+                          <View key={a.id} style={{
+                            flexDirection: 'row', alignItems: 'center',
+                            paddingVertical: 5, paddingHorizontal: 10,
+                            backgroundColor: bIdx % 2 === 0 ? C.white : '#fafbfc',
+                            ...(bIdx < biens.length - 1 ? { borderBottomWidth: 0.5, borderBottomColor: C.grayBorder } : {}),
+                          }}>
+                            <View style={{ width: 22 }}>
+                              <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: getScoreColor(a.scoreGlobal), alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ fontSize: 7, color: C.black, flex: 1 }}>
+                              {a.type === 'maison' ? 'Maison' : 'Appt.'} {a.surface} m²
+                            </Text>
+                            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, width: 55, textAlign: 'right' }}>{fmt(a.prixM2)} €</Text>
+                            <Text style={{ fontSize: 7, color: C.gray, width: 55, textAlign: 'right' }}>
+                              {am?.prixM2MedianMarche ? `${fmt(Math.round(am.prixM2MedianMarche))} €` : '—'}
+                            </Text>
+                            <View style={{ width: 40, alignItems: 'center' }}>
+                              <View style={{ backgroundColor: ecartBg, borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: ecartColor }}>
+                                  {ecart > 0 ? '+' : ''}{ecart.toFixed(0)}%
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={{ width: 60, alignItems: 'center' }}>
+                              {am?.verdict && (
+                                <View style={{ backgroundColor: getScoreBg(verdictScore), borderRadius: 3, paddingHorizontal: 5, paddingVertical: 1.5 }}>
+                                  <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: getScoreColor(verdictScore) }}>
+                                    {getVerdictMarcheLabel(am.verdict)}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  )
+                })
+              })()}
+
+              <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 4, lineHeight: 1.3 }}>
+                Source : DVF (transactions notariales). Écart = différence prix/m² vs médiane. Évol. 5 ans extrapolée.
+              </Text>
+            </View>
+          )}
+
+          {/* ── 4B. Projection Financière ── */}
+          <View style={{ marginTop: 10 }}>
             <SectionTitle title="5. PROJECTION FINANCIÈRE" />
           </View>
 
-          <Text style={{ fontSize: 7.5, color: C.gray, marginTop: 4, marginBottom: 12, lineHeight: 1.5 }}>
-            Projection patrimoniale estimée sur 5 ans — hors fiscalité et frais d&apos;entretien courant.
+          <Text style={{ fontSize: 7, color: C.gray, marginTop: 3, marginBottom: 6, lineHeight: 1.5 }}>
+            Projection patrimoniale estimée sur 5 ans — hors fiscalité et frais d&apos;entretien.
           </Text>
 
-          {/* Unified table card */}
           <View style={{
             backgroundColor: C.white,
-            borderRadius: 6,
+            borderRadius: 5,
             borderWidth: 1,
             borderColor: C.grayBorder,
             overflow: 'hidden',
@@ -1784,19 +1829,19 @@ export function ComparateurPDF({
             {/* Table header */}
             <View style={{
               flexDirection: 'row',
-              paddingVertical: 7,
-              paddingHorizontal: 14,
+              paddingVertical: 5,
+              paddingHorizontal: 10,
               backgroundColor: C.grayBg,
               borderBottomWidth: 0.5,
               borderBottomColor: C.grayBorder,
             }}>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 28 }}>#</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, flex: 1 }}>Bien</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 60, textAlign: 'right' }}>Coût total</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 58, textAlign: 'right' }}>Val. 5 ans</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Potentiel</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 52, textAlign: 'right' }}>Mensualité**</Text>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Rendt brut</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 22 }}>#</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, flex: 1 }}>Bien</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 55, textAlign: 'right' }}>Coût total</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 50, textAlign: 'right' }}>Val. 5 ans</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 42, textAlign: 'right' }}>Potentiel</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Mensualité**</Text>
+              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 42, textAlign: 'right' }}>Rendt brut</Text>
             </View>
 
             {/* Table rows */}
@@ -1812,54 +1857,35 @@ export function ComparateurPDF({
 
               return (
                 <View key={a.id} style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
+                  flexDirection: 'row', alignItems: 'center',
+                  paddingVertical: 5, paddingHorizontal: 10,
                   backgroundColor: i % 2 === 0 ? C.white : C.grayBg,
                   ...(i < sorted.length - 1 ? { borderBottomWidth: 0.5, borderBottomColor: C.grayBorder } : {}),
                 }}>
-                  <View style={{ width: 28 }}>
-                    <View style={{
-                      width: 20, height: 20, borderRadius: 10,
-                      backgroundColor: getScoreColor(a.scoreGlobal),
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
+                  <View style={{ width: 22 }}>
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: getScoreColor(a.scoreGlobal), alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 7.5, color: C.black, flex: 1 }}>
+                  <Text style={{ fontSize: 7, color: C.black, flex: 1 }}>
                     {a.type === 'maison' ? 'Maison' : 'Appt.'} {a.surface} m² — {cleanVille(a.ville)}
                   </Text>
-                  <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black, width: 60, textAlign: 'right' }}>
-                    {fmt(coutTotal)} €
-                  </Text>
-                  <Text style={{ fontSize: 7.5, color: C.black, width: 58, textAlign: 'right' }}>
-                    {fmt(valeur5Ans)} €
-                  </Text>
-                  <View style={{ width: 48, alignItems: 'flex-end' }}>
-                    <View style={{
-                      backgroundColor: potentiel > 0 ? C.greenLight : '#fef2f2',
-                      borderRadius: 3,
-                      paddingHorizontal: 5,
-                      paddingVertical: 1.5,
-                    }}>
-                      <Text style={{
-                        fontSize: 7,
-                        fontFamily: 'Helvetica-Bold',
-                        color: potentiel > 0 ? C.greenDark : C.red,
-                      }}>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, width: 55, textAlign: 'right' }}>{fmt(coutTotal)} €</Text>
+                  <Text style={{ fontSize: 7, color: C.black, width: 50, textAlign: 'right' }}>{fmt(valeur5Ans)} €</Text>
+                  <View style={{ width: 42, alignItems: 'flex-end' }}>
+                    <View style={{ backgroundColor: potentiel > 0 ? C.greenLight : '#fef2f2', borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
+                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: potentiel > 0 ? C.greenDark : C.red }}>
                         {potentiel > 0 ? '+' : ''}{potentiel.toFixed(1)}%
                       </Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 7.5, color: C.black, width: 52, textAlign: 'right' }}>
+                  <Text style={{ fontSize: 7, color: C.black, width: 48, textAlign: 'right' }}>
                     {mensualite > 0 ? `${fmt(mensualite)} €` : '—'}
                   </Text>
                   {a.dpe === 'G' ? (
-                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.red, width: 48, textAlign: 'right' }}>Interdit*</Text>
+                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.red, width: 42, textAlign: 'right' }}>Interdit*</Text>
                   ) : (
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: (a.estimations?.rendementBrut ?? 0) > 0 ? C.black : C.grayLight, width: 48, textAlign: 'right' }}>
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: (a.estimations?.rendementBrut ?? 0) > 0 ? C.black : C.grayLight, width: 42, textAlign: 'right' }}>
                       {a.estimations?.rendementBrut != null ? `${a.estimations.rendementBrut.toFixed(1)}%` : '—'}
                     </Text>
                   )}
@@ -1869,84 +1895,42 @@ export function ComparateurPDF({
           </View>
 
           {/* Footnotes */}
-          <View style={{ marginTop: 4, paddingHorizontal: 14, gap: 2 }}>
+          <View style={{ marginTop: 3, paddingHorizontal: 10, gap: 1 }}>
             {sorted.some(a => a.dpe === 'G') && (
-              <Text style={{ fontSize: 6, color: C.gray }}>
+              <Text style={{ fontSize: 5.5, color: C.gray }}>
                 * Location interdite pour les DPE G depuis le 1er janvier 2025 (loi Climat & Résilience)
               </Text>
             )}
-            <Text style={{ fontSize: 6, color: C.gray }}>
-              ** Mensualité estimée : taux {effectiveTaux.toFixed(1)} %, {effectiveDuree} ans{apport ? `, apport ${fmt(apport)} €` : ', hors apport'}{!tauxInteret && !dureeAns ? ' (hypothèses par défaut — personnalisez via le simulateur AQUIZ)' : ''}
+            <Text style={{ fontSize: 5.5, color: C.gray }}>
+              ** Mensualité estimée : taux {effectiveTaux.toFixed(1)} %, {effectiveDuree} ans{apport ? `, apport ${fmt(apport)} €` : ', hors apport'}{!tauxInteret && !dureeAns ? ' (hypothèses par défaut)' : ''}
             </Text>
           </View>
 
-          {/* Detail cards per bien */}
-          <View style={{ marginTop: 14 }}>
-            <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 8 }}>
-              Détail par bien
-            </Text>
-            {sorted.map((a, i) => {
-              const isNeuf = a.anneeConstruction && (new Date().getFullYear() - a.anneeConstruction) <= 5
-              const fraisNotaire = Math.round(a.prix * (isNeuf ? 0.025 : 0.075))
-              const budgetTravaux = a.estimations?.budgetTravauxEstime || 0
-              const coutTotal = a.prix + fraisNotaire + budgetTravaux
-              const mensualite = calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree)
-
-              return (
-                <View key={`det-${a.id}`} style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  backgroundColor: i % 2 === 0 ? C.grayBg : C.white,
-                  borderRadius: 4,
-                  marginTop: i === 0 ? 0 : 4,
-                  gap: 8,
-                }}>
-                  <View style={{
-                    width: 20, height: 20, borderRadius: 10,
-                    backgroundColor: getScoreColor(a.scoreGlobal),
-                    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
-                  </View>
-                  <Text style={{ fontSize: 7, color: C.gray, flex: 1, lineHeight: 1.4 }}>
-                    <Text style={{ fontFamily: 'Helvetica-Bold', color: C.black }}>{cleanTitleShort(a)} : </Text>
-                    {fmt(a.prix)} € + {fmt(fraisNotaire)} € notaire{budgetTravaux > 0 ? ` + ${fmt(budgetTravaux)} € travaux` : ''} = {fmt(coutTotal)} €
-                    {mensualite > 0 ? ` · Mensualité ${fmt(mensualite)} €/mois` : ''}
-                    {a.estimations?.loyerMensuelEstime ? ` · Loyer estimé ${fmt(a.estimations.loyerMensuelEstime)} €/mois` : ''}
-                  </Text>
-                </View>
-              )
-            })}
-          </View>
-
-          {/* Disclaimer */}
           <View style={{ flex: 1 }} />
-          <Text style={{ fontSize: 6, color: C.grayLight, marginTop: 12, lineHeight: 1.4 }}>
-            Les projections à 5 ans sont basées sur l&apos;évolution observée des prix dans le secteur (données DVF). Elles ne constituent pas une garantie de valorisation future.
+          <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 6, lineHeight: 1.3 }}>
+            Les projections à 5 ans sont basées sur l&apos;évolution observée des prix (données DVF). Elles ne constituent pas une garantie.
           </Text>
         </View>
         <Footer logoUrl={logoUrl} />
       </Page>
 
       {/* ══════════════════════════════════════════
-          PAGE — 6. STRATÉGIE DE NÉGOCIATION
+          PAGE — 5. STRATÉGIE DE NÉGOCIATION
           ══════════════════════════════════════════ */}
       <Page size="A4" style={s.pageWithFixedHeader}>
         <FixedHeader logoUrl={logoUrl} nbBiens={n} />
         <View style={[s.content, { marginTop: 52 }]}>
 
           <View style={{ marginTop: 6 }}>
-            <SectionTitle title="6. STRATÉGIE DE NÉGOCIATION" />
+            <SectionTitle title="5. STRATÉGIE DE NÉGOCIATION" />
           </View>
           <Text style={{ fontSize: 7.5, color: C.gray, marginTop: 4, marginBottom: 12, lineHeight: 1.5 }}>
             Leviers de négociation identifiés pour chaque bien, basés sur les données DVF et les caractéristiques du bien.
           </Text>
 
           {sorted.map((a, aIdx) => {
-            const nego = estimerPrixNegociable(a)
-            const hasArgs = nego.arguments.length > 0
+            const leviers = identifierLeviersNego(a)
+            const hasArgs = leviers.length > 0
 
             return (
               <View key={`nego-${a.id}`} style={{
@@ -1958,7 +1942,7 @@ export function ComparateurPDF({
                 overflow: 'hidden',
               }} wrap={false}>
 
-                {/* Header : rang + titre + prix affiché → prix négocié */}
+                {/* Header : rang + titre + nb leviers */}
                 <View style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -1984,25 +1968,17 @@ export function ComparateurPDF({
                       {cleanTitleShort(a)}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={{ fontSize: 8, color: C.gray }}>{fmt(a.prix)} €</Text>
-                    <Text style={{ fontSize: 9, color: hasArgs ? C.green : C.grayLight }}>→</Text>
-                    <Text style={{
-                      fontSize: 9.5,
-                      fontFamily: 'Helvetica-Bold',
-                      color: hasArgs ? C.greenDark : C.grayLight,
-                    }}>
-                      {hasArgs ? `${fmt(nego.prixNegocie)} €` : `${fmt(a.prix)} €`}
-                    </Text>
                     {hasArgs && (
                       <View style={{
-                        backgroundColor: C.greenLight,
+                        backgroundColor: C.orangeLight,
                         borderRadius: 3,
                         paddingHorizontal: 6,
                         paddingVertical: 2,
                       }}>
-                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.greenDark }}>
-                          -{Math.abs(nego.decoteTotale).toFixed(1)}%
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.orange }}>
+                          {leviers.length} levier{leviers.length > 1 ? 's' : ''}
                         </Text>
                       </View>
                     )}
@@ -2012,45 +1988,30 @@ export function ComparateurPDF({
                 {/* Arguments */}
                 <View style={{ paddingVertical: 8, paddingHorizontal: 14 }}>
                   {hasArgs ? (
-                    <>
-                      {nego.arguments.map((arg, argIdx) => (
-                        <View key={argIdx} style={{
-                          flexDirection: 'row',
-                          alignItems: 'flex-start',
-                          gap: 6,
-                          marginBottom: argIdx < nego.arguments.length - 1 ? 5 : 0,
+                    leviers.map((arg, argIdx) => (
+                      <View key={argIdx} style={{
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        gap: 6,
+                        marginBottom: argIdx < leviers.length - 1 ? 5 : 0,
+                      }}>
+                        <View style={{
+                          backgroundColor: getImpactColor(arg.impact),
+                          borderRadius: 2,
+                          paddingHorizontal: 4,
+                          paddingVertical: 1.5,
+                          flexShrink: 0,
+                          marginTop: 1,
                         }}>
-                          <View style={{
-                            backgroundColor: getImpactColor(arg.impact),
-                            borderRadius: 2,
-                            paddingHorizontal: 4,
-                            paddingVertical: 1.5,
-                            flexShrink: 0,
-                            marginTop: 1,
-                          }}>
-                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.white }}>
-                              {getImpactLabel(arg.impact)}
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
-                            {arg.argument}
-                          </Text>
-                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: getImpactColor(arg.impact), flexShrink: 0 }}>
-                            {arg.decotePct.toFixed(1)}%
+                          <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                            {getImpactLabel(arg.impact)}
                           </Text>
                         </View>
-                      ))}
-                      <View style={{ marginTop: 6, paddingTop: 5, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
-                        <Text style={{ fontSize: 7, color: C.greenDark, lineHeight: 1.4 }}>
-                          {Math.abs(nego.decoteTotale) >= 8
-                            ? `Offre recommandée : ${fmt(nego.prixNegocie)} € (${Math.abs(nego.decoteTotale).toFixed(0)}% sous le prix affiché)`
-                            : Math.abs(nego.decoteTotale) >= 4
-                              ? `Offre justifiable : ${fmt(nego.prixNegocie)} € (${Math.abs(nego.decoteTotale).toFixed(0)}% sous le prix)`
-                              : `Marge limitée — offre possible à ${fmt(nego.prixNegocie)} €`
-                          }
+                        <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
+                          {arg.argument}
                         </Text>
                       </View>
-                    </>
+                    ))
                   ) : (
                     <Text style={{ fontSize: 7.5, color: C.grayLight, lineHeight: 1.4 }}>
                       Peu de leviers identifiés — le prix semble cohérent avec le marché.
@@ -2064,170 +2025,18 @@ export function ComparateurPDF({
           {/* Disclaimer */}
           <View style={{ flex: 1 }} />
           <Text style={{ fontSize: 6, color: C.grayLight, marginTop: 12, lineHeight: 1.4 }}>
-            Estimations basées sur les données DVF et les caractéristiques du bien. La marge réelle dépend du contexte de vente (urgence vendeur, nombre d&apos;offres). Ces éléments servent de base de discussion.
+            Estimations basées sur les données DVF et les caractéristiques du bien. Ces leviers servent de base de discussion avec le vendeur ou l&apos;agent immobilier.
           </Text>
         </View>
         <Footer logoUrl={logoUrl} />
       </Page>
 
       {/* ══════════════════════════════════════════
-          PAGE FINALE — SYNTHÈSE + ACCOMPAGNEMENT + CTA
+          PAGE FINALE — ACCOMPAGNEMENT AQUIZ
           ══════════════════════════════════════════ */}
       <Page size="A4" style={s.pageWithFixedHeader}>
         <FixedHeader logoUrl={logoUrl} nbBiens={n} />
         <View style={[s.content, { marginTop: 52 }]}>
-
-          {/* ═══ 7. SYNTHÈSE AQUIZ ═══ */}
-          <SectionTitle title="7. SYNTHÈSE AQUIZ" />
-
-          {/* ── Carte synthèse ── */}
-          <View style={{
-            marginTop: 8,
-            backgroundColor: C.white,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: C.grayBorder,
-            overflow: 'hidden',
-          }}>
-            {/* Header */}
-            <View style={{
-              backgroundColor: C.grayBg,
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: C.grayBorder,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-            }}>
-              <View style={{
-                width: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: C.green,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
-              </View>
-              <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                Analyse comparative AQUIZ
-              </Text>
-            </View>
-
-            {/* Body */}
-            {(() => {
-              const fullText = syntheseIA?.synthese || syntheseDeterministe || ''
-              const sentences = fullText.split(/(?<=\.)\s+/).filter(Boolean)
-              const verdict = sentences[0] || ''
-              const body = sentences.slice(1)
-
-              return (
-                <View style={{ padding: 12 }}>
-                  {/* Verdict — première phrase en gras */}
-                  <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black, lineHeight: 1.6, marginBottom: 8 }}>
-                    {verdict}
-                  </Text>
-
-                  {/* Analyse — phrases suivantes */}
-                  {body.map((sentence, sIdx) => (
-                    <Text key={sIdx} style={{ fontSize: 7.5, color: C.gray, lineHeight: 1.7, marginBottom: sIdx < body.length - 1 ? 5 : 0 }}>
-                      {sentence}
-                    </Text>
-                  ))}
-                </View>
-              )
-            })()}
-
-            {/* Verdict final — barre verte en bas */}
-            {(syntheseIA?.verdictFinal || conseilGeneral) && (
-              <View style={{
-                borderTopWidth: 1,
-                borderTopColor: C.grayBorder,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                backgroundColor: C.greenLight,
-                borderLeftWidth: 3,
-                borderLeftColor: C.green,
-              }}>
-                <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.greenDark, lineHeight: 1.6 }}>
-                  {syntheseIA?.verdictFinal || conseilGeneral}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* ── Classement ── */}
-          <View style={{
-            marginTop: 8,
-            backgroundColor: C.white,
-            borderRadius: 6,
-            borderWidth: 1,
-            borderColor: C.grayBorder,
-            overflow: 'hidden',
-          }}>
-            <View style={{
-              backgroundColor: C.grayBg,
-              paddingVertical: 6,
-              paddingHorizontal: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: C.grayBorder,
-            }}>
-              <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Classement final</Text>
-            </View>
-            <View style={{ flexDirection: 'row' }}>
-              {sorted.map((a, i) => (
-                <View key={a.id} style={{
-                  flex: 1,
-                  paddingVertical: 10,
-                  paddingHorizontal: 6,
-                  alignItems: 'center',
-                  backgroundColor: i === 0 ? C.greenLight : C.white,
-                  borderRightWidth: i < sorted.length - 1 ? 1 : 0,
-                  borderRightColor: C.grayBorder,
-                }}>
-                  <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: i === 0 ? C.green : C.grayLight }}>
-                    {i + 1}
-                  </Text>
-                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, textAlign: 'center', marginTop: 3 }}>
-                    {cleanTitle(a)}
-                  </Text>
-                  <Text style={{ fontSize: 6, color: C.gray, marginTop: 1 }}>{cleanSubtitle(a)}</Text>
-                  <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: getScoreColor(a.scoreGlobal), marginTop: 4 }}>
-                    {a.scoreGlobal}
-                    <Text style={{ fontSize: 6, color: C.grayLight }}> / 100</Text>
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* ── Conseil négociation (si IA) ── */}
-          {syntheseIA?.conseilNego && (
-            <View style={{
-              marginTop: 8,
-              backgroundColor: C.white,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: C.grayBorder,
-              overflow: 'hidden',
-            }} wrap={false}>
-              <View style={{
-                backgroundColor: C.amberLight,
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                borderBottomWidth: 1,
-                borderBottomColor: C.grayBorder,
-              }}>
-                <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.orange }}>Conseil négociation</Text>
-              </View>
-              <View style={{ padding: 12 }}>
-                <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.6 }}>
-                  {syntheseIA.conseilNego}
-                </Text>
-              </View>
-            </View>
-          )}
 
           {/* ═══ ACCOMPAGNEMENT AQUIZ ═══ */}
           <View style={{

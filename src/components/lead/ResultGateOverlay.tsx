@@ -9,6 +9,7 @@
  * L'état débloqué est stocké en localStorage (clé par source).
  */
 
+import { trackEvent } from '@/lib/analytics'
 import { validateEmailClient } from '@/lib/validators/email'
 import { Calculator, Calendar, CheckCircle, ChevronRight, ClipboardCheck, Euro, FileBarChart, Loader2, Lock, LockOpen, Mail, RefreshCw, ShieldCheck, User } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -402,6 +403,7 @@ export function ResultGateOverlay({
                     href="https://calendly.com/contact-aquiz/30min"
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'gate-overlay', page: window.location.pathname })}
                     className="inline-flex items-center gap-1.5 text-[11px] text-aquiz-gray hover:text-aquiz-green transition-colors"
                   >
                     <Calendar className="w-3 h-3" />
