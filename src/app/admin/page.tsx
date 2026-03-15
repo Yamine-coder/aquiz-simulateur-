@@ -150,6 +150,7 @@ const CTA_POS_LABELS: Record<string, string> = {
   'aides-results': 'Aides (résultats)',
   'comparateur-hot': 'Comparateur (hot)',
   'about-footer': 'À propos (bas)',
+  'modal-open': 'Ouverture modale contact',
 }
 
 const STATUS_PILL: Record<string, string> = {
@@ -333,7 +334,7 @@ export default function AdminDashboard() {
     ? Object.entries(analytics.toolUsage).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ key: k, name: TOOL_LABELS[k] ?? k, value: v, week: analytics.toolUsageWeek[k] ?? 0, color: TOOL_COLORS[k] ?? '#6b7280' }))
     : []
   const totalSims = analytics?.totalSimulations ?? 0
-  const enoughSimData = totalSims >= 5
+  const enoughSimData = totalSims >= 1
   const filteredTimeline = timeline.slice(period === '7j' ? -7 : -30)
   const last7 = timeline.slice(-7)
   const sparkLeads = last7.map(d => d.leads)

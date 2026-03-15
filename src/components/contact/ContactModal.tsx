@@ -74,7 +74,7 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
   const wasOpen = useRef(isOpen)
   useEffect(() => {
     if (!wasOpen.current && isOpen) {
-      trackEvent('cta-click', { type: 'contact-modal', action: 'open', page: window.location.pathname })
+      trackEvent('cta-click', { type: 'contact-modal', position: 'modal-open', page: window.location.pathname })
     }
     // Seulement reset quand on passe de ouvert à fermé
     if (wasOpen.current && !isOpen) {
