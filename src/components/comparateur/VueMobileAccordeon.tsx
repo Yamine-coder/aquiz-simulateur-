@@ -12,24 +12,23 @@ import type { AnalyseComplete } from '@/lib/api/analyseIntelligente'
 import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import { COULEURS_DPE, type Annonce } from '@/types/annonces'
 import {
-    AlertTriangle,
-    Building2,
-    CreditCard,
-    ExternalLink,
-    Home,
-    Key,
-    MapPin,
-    ShieldCheck,
-    Sparkles,
-    Train,
-    TrendingDown,
-    TrendingUp,
-    X,
-    Zap
+  AlertTriangle,
+  Building2,
+  CreditCard,
+  ExternalLink,
+  Home,
+  Key,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
+  X,
+  Zap
 } from 'lucide-react'
 import Image from 'next/image'
 import { EditableCell } from './EditableCell'
-import { LineBadge, TypeBadge } from './TransportIcons'
+import { LineBadge } from './TransportIcons'
 
 /** Score Pro result type (subset needed for mobile) */
 interface ScoreProResult {
@@ -293,26 +292,65 @@ export function VueMobileAccordeon({
                     </div>
                   )}
 
-                  {/* Transports proches */}
-                  {enrichi?.quartier?.success && enrichi.quartier.transportsProches && enrichi.quartier.transportsProches.length > 0 && (
-                    <div className="bg-aquiz-gray-lightest/50 rounded-lg p-3">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-aquiz-gray uppercase mb-2">
-                        <Train className="w-3.5 h-3.5" />
-                        Transports ({enrichi.quartier.transports ?? '?'}/100)
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {enrichi.quartier.transportsProches
-                          .filter((t) => t.distance <= 1000)
-                          .slice(0, 6)
-                          .map((t, i) => (
-                            <div key={i} className="flex items-center gap-1 text-[10px]">
-                              <TypeBadge typeTransport={t.typeTransport} />
-                              {t.lignes?.slice(0, 3).map((l, j) => (
-                                <LineBadge key={j} ligne={l} typeTransport={t.typeTransport} />
-                              ))}
-                              <span className="text-aquiz-gray">{t.distance}m</span>
-                            </div>
-                          ))}
+                  {/* Transports — style Bien'ici épuré */}
+                  {enrichi?.quartier?.success && enrichi.quartier.transportSummary && enrichi.quartier.transportSummary.length > 0 && (
+                    <div className="rounded-lg p-3">
+                      <h4 className="text-sm font-bold text-gray-900 mb-2">
+                        Et au niveau des transports ?
+                      </h4>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        {enrichi.quartier.transportSummary
+                          .filter(tg => ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo'].includes(tg.type))
+                          .sort((a, b) => {
+                            const order = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo']
+                            return order.indexOf(a.type) - order.indexOf(b.type)
+                          })
+                          .map(tg => {
+                            const typeLabels: Record<string, string> = {
+                              metro: 'Métro', rer: 'RER', train: 'Train', tram: 'Tramway',
+                              bus: 'Bus', velib: 'Vélib\'', velo: 'Location de vélo',
+                            }
+                            const label = typeLabels[tg.type] ?? tg.type
+                            const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
+                            const isBus = tg.type === 'bus'
+
+                            if (isRail && tg.lignes.length > 0) {
+                              return (
+                                <div key={tg.type} className="flex items-center gap-1 text-sm">
+                                  <span className="text-gray-500">{label}</span>
+                                  <span className="text-gray-300">(</span>
+                                  {tg.lignes.map((l, j) => (
+                                    <LineBadge key={j} ligne={l} typeTransport={tg.type} />
+                                  ))}
+                                  <span className="text-gray-300">)</span>
+                                </div>
+                              )
+                            }
+
+                            if (isBus && tg.lignes.length > 0) {
+                              return (
+                                <div key={tg.type} className="flex items-center gap-1 text-sm">
+                                  <span className="text-gray-500">Bus</span>
+                                  <span className="text-gray-300">(</span>
+                                  {tg.lignes.slice(0, 6).map((l, j) => (
+                                    <span key={j} className="bg-gray-200 rounded px-1.5 py-0.5 text-xs font-bold text-gray-900">{l}</span>
+                                  ))}
+                                  {tg.lignes.length > 6 && (
+                                    <span className="text-xs text-gray-400">+{tg.lignes.length - 6}</span>
+                                  )}
+                                  <span className="text-gray-300">)</span>
+                                </div>
+                              )
+                            }
+
+                            // Other types — plain text + count
+                            return (
+                              <div key={tg.type} className="text-sm">
+                                <span className="text-gray-500">{label}</span>
+                                <span className="font-bold text-gray-900"> ({tg.count})</span>
+                              </div>
+                            )
+                          })}
                       </div>
                     </div>
                   )}

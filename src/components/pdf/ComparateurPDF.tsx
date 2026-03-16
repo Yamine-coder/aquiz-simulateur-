@@ -189,11 +189,11 @@ const TRANSPORT_COLORS: Record<string, { bg: string; text: string; label: string
 
 /** Couleurs IDFM officielles pour badges lignes dans le PDF */
 const PDF_RER_COLORS: Record<string, { bg: string; fg: string }> = {
-  A: { bg: '#E3051C', fg: '#E3051C' },
-  B: { bg: '#5291CE', fg: '#5291CE' },
-  C: { bg: '#FFCD00', fg: '#9B870C' },
-  D: { bg: '#00814F', fg: '#00814F' },
-  E: { bg: '#CF76A7', fg: '#CF76A7' },
+  A: { bg: '#E3051C', fg: '#fff' },
+  B: { bg: '#5291CE', fg: '#fff' },
+  C: { bg: '#FFCD00', fg: '#1a1a1a' },
+  D: { bg: '#00814F', fg: '#fff' },
+  E: { bg: '#CF76A7', fg: '#fff' },
 }
 
 const PDF_METRO_COLORS: Record<string, { bg: string; fg: string }> = {
@@ -291,7 +291,7 @@ function genererPointsExpert(a: AnnoncePDF): { forts: string[]; verifier: string
     verifier.push('Desserte transports limitée — véhicule nécessaire, impact potentiel sur la revente')
   }
   if (scoreCommerces !== undefined && scoreCommerces >= 70 && forts.length < 2) {
-    forts.push('Quartier bien équipé en commerces et services — confort de vie au quotidien')
+    forts.push('Commune bien équipée en commerces et services — confort de vie au quotidien')
   }
 
   // ── Rendement locatif ──
@@ -1563,7 +1563,7 @@ export function ComparateurPDF({
                   </View>
                 </View>
 
-                {/* ── Dans le quartier (style Bien'ici) ── */}
+                {/* ── Dans la commune (style Bien'ici) ── */}
                 {(() => {
                   const dc = annonce.enrichissement?.quartier?.detailedCounts
                   if (!dc) return null
@@ -1575,10 +1575,9 @@ export function ComparateurPDF({
                     bgLight: string
                   }> = [
                     { key: 'loisirs', title: 'Si on sortait ?', color: C.green, bgLight: C.greenLight },
-                    { key: 'commerce', title: 'Au quotidien', color: C.greenDark, bgLight: C.greenLight },
+                    { key: 'commerce', title: 'N\'oubliez pas de faire les courses', color: C.greenDark, bgLight: C.greenLight },
                     { key: 'education', title: 'Éducation', color: C.gray, bgLight: C.grayBg },
                     { key: 'sante', title: 'Santé', color: C.gray, bgLight: C.grayBg },
-                    { key: 'vert', title: 'Nature', color: C.green, bgLight: C.greenLight },
                   ]
 
                   const catsWithData = QUARTIER_CATEGORIES.filter(cat => {
@@ -1592,14 +1591,15 @@ export function ComparateurPDF({
                     <View style={{ paddingHorizontal: 6, paddingTop: 3, paddingBottom: 3, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
                       {/* Section header */}
                       <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 3 }}>
-                        Dans le quartier
+                        Dans la commune
                       </Text>
 
                       {/* Category blocks — 2 columns */}
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
                         {catsWithData.map(cat => {
                           const items = dc[cat.key] || []
-                          const total = items.reduce((s, i) => s + i.count, 0)
+                          const topItems = items.slice(0, 3)
+                          const total = topItems.reduce((s, i) => s + i.count, 0)
                           return (
                             <View key={cat.key} style={{
                               width: '48%',
@@ -1625,7 +1625,7 @@ export function ComparateurPDF({
                               </View>
                               {/* Items */}
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
-                                {items.slice(0, 3).map(item => (
+                                {topItems.map(item => (
                                   <View key={item.type} style={{
                                     flexDirection: 'row', alignItems: 'center',
                                     backgroundColor: '#ffffff', borderRadius: 2,
@@ -1643,107 +1643,67 @@ export function ComparateurPDF({
                             </View>
                           )
                         })}
-                        {/* ── Transport block (same card style, horizontal badges) ── */}
-                        {hasTransport && (
-                          <View style={{
-                            width: '48%',
-                            backgroundColor: C.greenLight,
-                            borderRadius: 3,
-                            padding: 3,
-                            marginBottom: 1,
-                          }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
-                              <View style={{
-                                width: 9, height: 9, borderRadius: 2,
-                                backgroundColor: C.green,
-                                alignItems: 'center', justifyContent: 'center',
-                              }}>
-                                <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
-                                  {transportGroups.reduce((s, t) => s + t.stations, 0)}
-                                </Text>
-                              </View>
-                              <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.green }}>
-                                Transports
-                              </Text>
-                            </View>
-                            {/* All badges on one horizontal wrap line */}
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-                              {transportGroups.flatMap(tg => {
-                                const SZ = 9
-                                const SZ_INNER = 6
-                                const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
-                                const isBus = tg.type === 'bus'
-                                const badges: React.ReactNode[] = []
+                      </View>
 
-                                if (isRail && tg.lignes.length > 0) {
-                                  // Type badge + each line badge
-                                  if (tg.type === 'metro') {
-                                    badges.push(
-                                      <View key="metro-icon" style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>M</Text>
-                                      </View>
-                                    )
-                                    tg.lignes.forEach(l => {
-                                      const lc = getPdfLineColor('metro', l)
-                                      badges.push(
-                                        <View key={`m-${l}`} style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
-                                          <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
-                                        </View>
-                                      )
-                                    })
-                                  } else if (tg.type === 'rer' || tg.type === 'train') {
-                                    badges.push(
-                                      <View key="rer-icon" style={{ width: 13, height: SZ, borderRadius: 1.5, backgroundColor: '#1a1a1a', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: '#fff' }}>{tg.type === 'rer' ? 'RER' : 'TER'}</Text>
-                                      </View>
-                                    )
-                                    tg.lignes.forEach(l => {
-                                      const lc = getPdfLineColor(tg.type, l)
-                                      badges.push(
-                                        <View key={`r-${l}`} style={{ width: SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
-                                          <View style={{ width: SZ_INNER, height: SZ_INNER, borderRadius: SZ_INNER / 2, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: lc.bg }}>{l}</Text>
+                      {/* ── Transport block — style Bien'ici épuré ── */}
+                      {hasTransport && (
+                        <View style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 2 }}>
+                            Et au niveau des transports ?
+                          </Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                            {transportGroups.map(tg => {
+                              const SZ = 9
+                              const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
+                              const isBus = tg.type === 'bus'
+
+                              if (isRail && tg.lignes.length > 0) {
+                                  return (
+                                    <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
+                                      <Text style={{ fontSize: 5, color: C.gray }}>{tg.label}</Text>
+                                      <Text style={{ fontSize: 5, color: C.grayLight }}>(</Text>
+                                      {tg.lignes.map(l => {
+                                        const lc = getPdfLineColor(tg.type, l)
+                                        return (
+                                          <View key={`${tg.type}-${l}`} style={{ width: l.length > 2 ? 13 : SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
+                                            <Text style={{ fontSize: l.length > 2 ? 3.5 : 4.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
                                           </View>
-                                        </View>
-                                      )
-                                    })
-                                  } else {
-                                    // tram
-                                    tg.lignes.forEach(l => {
-                                      const lc = getPdfLineColor(tg.type, l)
-                                      badges.push(
-                                        <View key={`t-${l}`} style={{ paddingHorizontal: 2.5, height: SZ, borderRadius: 1.5, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
-                                          <Text style={{ fontSize: 3.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
-                                        </View>
-                                      )
-                                    })
-                                  }
-                                } else if (isBus && tg.lignes.length > 0) {
-                                  badges.push(
-                                    <View key="bus-pill" style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
-                                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#60a917', alignItems: 'center', justifyContent: 'center', marginRight: 2 }}>
-                                        <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: '#fff' }}>B</Text>
-                                      </View>
-                                      <Text style={{ fontSize: 4, color: C.black }}>
-                                        {tg.lignes.slice(0, 4).join(', ')}{tg.lignes.length > 4 ? ` +${tg.lignes.length - 4}` : ''}
-                                      </Text>
-                                    </View>
-                                  )
-                                } else {
-                                  // Vélib', vélo, fuel, etc. — simple pill
-                                  badges.push(
-                                    <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
-                                      <Text style={{ fontSize: 4.5, color: C.black }}>{tg.label}</Text>
-                                      <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: C.green, marginLeft: 2 }}>{tg.stations}</Text>
+                                        )
+                                      })}
+                                      <Text style={{ fontSize: 5, color: C.grayLight }}>)</Text>
                                     </View>
                                   )
                                 }
-                                return badges
+
+                                if (isBus && tg.lignes.length > 0) {
+                                  return (
+                                    <View key="bus" style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
+                                      <Text style={{ fontSize: 5, color: C.gray }}>Bus</Text>
+                                      <Text style={{ fontSize: 5, color: C.grayLight }}>(</Text>
+                                      {tg.lignes.slice(0, 5).map(l => (
+                                        <View key={`bus-${l}`} style={{ backgroundColor: '#e5e7eb', borderRadius: 1.5, paddingHorizontal: 2, paddingVertical: 0.5 }}>
+                                          <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: C.black }}>{l}</Text>
+                                        </View>
+                                      ))}
+                                      {tg.lignes.length > 5 && (
+                                        <Text style={{ fontSize: 4, color: C.grayLight }}>+{tg.lignes.length - 5}</Text>
+                                      )}
+                                      <Text style={{ fontSize: 5, color: C.grayLight }}>)</Text>
+                                    </View>
+                                  )
+                                }
+
+                                // Other types (vélib', vélo, etc.) — plain text + count
+                                return (
+                                  <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 3 }}>
+                                    <Text style={{ fontSize: 5, color: C.gray }}>{tg.label}</Text>
+                                    <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.black }}> ({tg.stations})</Text>
+                                  </View>
+                                )
                               })}
                             </View>
                           </View>
                         )}
-                      </View>
                     </View>
                   )
                 })()}

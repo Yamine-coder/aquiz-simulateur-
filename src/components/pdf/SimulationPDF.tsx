@@ -1029,10 +1029,10 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           )}
 
-          {/* Scores quartier — cards avec barre de couleur (style Mode B) */}
+          {/* Scores commune — cards avec barre de couleur (style Mode B) */}
           {quartier && (
             <View style={{ marginTop: marche ? 8 : 14 }} wrap={false}>
-              <SectionTitle title="QUALITÉ DU QUARTIER" />
+              <SectionTitle title="QUALITÉ DE LA COMMUNE" />
               <View style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}>
                 {[
                   { label: 'Score global', score: quartier.scoreGlobal / 10, color: C.green, desc: 'Score composite' },

@@ -94,7 +94,7 @@ export interface AnalyseQuartier {
   transportSummary?: Array<{ type: string; lignes: string[]; count: number; nearestWalkMin?: number }>
   verdict?: 'excellent' | 'bon' | 'moyen' | 'faible'
   message?: string
-  /** Comptages bruts de POIs par catégorie (rayon 800m) */
+  /** Comptages bruts de POIs par catégorie (rayon 500m) */
   counts?: {
     transport: number
     commerce: number

@@ -69,6 +69,8 @@ interface TableauComparaisonProps {
   onRemove: (id: string) => void
   /** Callback quand les scores sont prêts (pour PDF) */
   onScoresReady?: (scores: AnnonceScoreData[]) => void
+  /** Callback quand l'état de chargement de l'enrichissement change */
+  onEnrichmentLoadingChange?: (loading: boolean) => void
   /** Paramètres de financement pour calculer la mensualité */
   tauxInteret?: number
   dureeAns?: number
@@ -210,6 +212,7 @@ export function TableauComparaison({
   budgetMax,
   onRemove,
   onScoresReady,
+  onEnrichmentLoadingChange,
   tauxInteret,
   dureeAns,
   apport
@@ -231,6 +234,11 @@ export function TableauComparaison({
   }, [annonces, budgetMax, getAnalyseEnrichie])
   
   const getScorePro = (id: string) => scoresPro.find(s => s.annonceId === id)
+
+  // Notifier le parent quand le chargement de l'enrichissement change
+  useEffect(() => {
+    onEnrichmentLoadingChange?.(isLoadingEnrichie)
+  }, [isLoadingEnrichie, onEnrichmentLoadingChange])
 
   // Refs to break the render loop: onScoresReady and getAnalyseEnrichie change identity each render
   const onScoresReadyRef = useRef(onScoresReady)

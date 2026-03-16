@@ -125,6 +125,10 @@ export default function ComparateurPage() {
   const handleScoresReady = useCallback((scores: AnnonceScoreData[]) => {
     setScoresForEmail(scores)
   }, [])
+  const [isEnrichmentLoading, setIsEnrichmentLoading] = useState(true)
+  const handleEnrichmentLoadingChange = useCallback((loading: boolean) => {
+    setIsEnrichmentLoading(loading)
+  }, [])
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfEmailValue, setPdfEmailValue] = useState('')
   const [pdfEmailSent, setPdfEmailSent] = useState(false)
@@ -1017,8 +1021,8 @@ export default function ComparateurPage() {
                             }}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
                           >
-                            <FileDown className="w-3.5 h-3.5" />
-                            Mon rapport PDF
+                            {isEnrichmentLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                            {isEnrichmentLoading ? 'Analyse…' : 'Mon rapport PDF'}
                           </button>
                         </>
                       )}
@@ -1030,21 +1034,27 @@ export default function ComparateurPage() {
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-gray-lighter">
                       <FileDown className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
                       <p className="text-[11px] text-aquiz-gray flex-1">
-                        <span className="font-semibold text-aquiz-black">Rapport PDF disponible</span> — Analyse complète de vos {annoncesSelectionnees.length} biens en quelques secondes
+                        {isEnrichmentLoading ? (
+                          <><span className="font-semibold text-aquiz-black">Analyse en cours…</span> — Enrichissement des données marché et quartier</>
+                        ) : (
+                          <><span className="font-semibold text-aquiz-black">Rapport PDF disponible</span> — Analyse complète de vos {annoncesSelectionnees.length} biens en quelques secondes</>
+                        )}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const el = document.getElementById('pdf-gate')
-                          if (!el) return
-                          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                          el.classList.add('animate-pulse-highlight')
-                          setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                        }}
-                        className="text-[11px] font-bold text-aquiz-green hover:underline whitespace-nowrap shrink-0"
-                      >
-                        Voir ↓
-                      </button>
+                      {!isEnrichmentLoading && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById('pdf-gate')
+                            if (!el) return
+                            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            el.classList.add('animate-pulse-highlight')
+                            setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
+                          }}
+                          className="text-[11px] font-bold text-aquiz-green hover:underline whitespace-nowrap shrink-0"
+                        >
+                          Voir ↓
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -1056,6 +1066,7 @@ export default function ComparateurPage() {
                       budgetMax={comparateur.budgetMax}
                       onRemove={(id) => comparateur.toggleSelection(id)}
                       onScoresReady={handleScoresReady}
+                      onEnrichmentLoadingChange={handleEnrichmentLoadingChange}
                       tauxInteret={parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret}
                       dureeAns={parametresModeA?.dureeAns ?? parametresModeB?.dureeAns}
                       apport={parametresModeA?.apport ?? parametresModeB?.apport}
@@ -1083,21 +1094,23 @@ export default function ComparateurPage() {
                             <div className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
                               <div className="flex items-center gap-3 mb-4">
                                 <div className="w-9 h-9 rounded-lg bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                                  <FileDown className="w-4 h-4 text-aquiz-green" />
+                                  {isEnrichmentLoading ? <Loader2 className="w-4 h-4 text-aquiz-green animate-spin" /> : <FileDown className="w-4 h-4 text-aquiz-green" />}
                                 </div>
                                 <div>
                                   <h3 className="font-semibold text-sm text-aquiz-black">
-                                    {pdfEmailSent ? 'Comparatif téléchargé !' : 'Recevez votre comparatif'}
+                                    {isEnrichmentLoading ? 'Enrichissement en cours…' : pdfEmailSent ? 'Comparatif téléchargé !' : 'Recevez votre comparatif'}
                                   </h3>
-                                  {pdfEmailSent && (
+                                  {isEnrichmentLoading ? (
+                                    <p className="text-[10px] sm:text-xs text-aquiz-gray">Analyse marché et quartier — quelques secondes</p>
+                                  ) : pdfEmailSent ? (
                                     <p className="text-[10px] sm:text-xs text-aquiz-gray">Re-téléchargez quand vous voulez.</p>
-                                  )}
+                                  ) : null}
                                 </div>
                               </div>
                               {pdfEmailSent ? (
                                 <button
                                   type="button"
-                                  disabled={pdfLoading}
+                                  disabled={pdfLoading || isEnrichmentLoading}
                                   onClick={async () => {
                                     setPdfLoading(true)
                                     try { await generateComparateurPDF() } finally { setPdfLoading(false) }
@@ -1105,7 +1118,7 @@ export default function ComparateurPage() {
                                   className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-colors"
                                 >
                                   {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                  {pdfLoading ? 'Génération…' : 'Télécharger à nouveau'}
+                                  {pdfLoading ? 'Génération…' : isEnrichmentLoading ? 'Enrichissement…' : 'Télécharger à nouveau'}
                                 </button>
                               ) : (
                                 <div className="space-y-2.5">
@@ -1122,12 +1135,12 @@ export default function ComparateurPage() {
                                   </div>
                                   <button
                                     type="button"
-                                    disabled={pdfEmailLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
+                                    disabled={pdfEmailLoading || isEnrichmentLoading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pdfEmailValue)}
                                     onClick={handleSendPdfEmail}
                                     className="w-full h-11 bg-aquiz-green hover:bg-aquiz-green/90 disabled:opacity-60 text-white text-sm font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                                   >
                                     {pdfEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                                    {pdfEmailLoading ? 'Analyse…' : 'Recevoir mon étude'}
+                                    {pdfEmailLoading ? 'Analyse…' : isEnrichmentLoading ? 'Enrichissement…' : 'Recevoir mon étude'}
                                   </button>
                                 </div>
                               )}

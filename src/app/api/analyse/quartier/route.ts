@@ -25,8 +25,8 @@ const CATEGORIES = {
   commerce: {
     label: 'Commerces',
     poids: 20,
-    // Restaurants/cafés = commerces de proximité (logique métier immobilier FR)
-    amenities: ['supermarket', 'bakery', 'bank', 'post_office', 'convenience', 'marketplace', 'restaurant', 'cafe']
+    // Commerces de proximité + courses quotidiennes
+    amenities: ['supermarket', 'bakery', 'bank', 'post_office', 'convenience', 'marketplace', 'restaurant', 'cafe', 'butcher', 'tobacco', 'newsagent']
   },
   education: {
     label: 'Éducation',
@@ -43,8 +43,8 @@ const CATEGORIES = {
   loisirs: {
     label: 'Loisirs & Culture',
     poids: 10,
-    // Restaurants/cafés déplacés vers commerce — ici uniquement culture/sport
-    amenities: ['cinema', 'theatre', 'bar', 'sports_centre', 'fitness_centre']
+    // Culture, sport, monuments (restaurant/café/bar ici pour l'affichage Bien'ici)
+    amenities: ['cinema', 'theatre', 'bar', 'sports_centre', 'fitness_centre', 'monument', 'memorial', 'museum']
   },
   vert: {
     label: 'Espaces verts',
@@ -114,8 +114,11 @@ function determinerCategorie(amenity: string): string {
   if (['doctor', 'doctors', 'dentist', 'clinic', 'hospital'].includes(amenity)) return 'sante'
   if (['childcare'].includes(amenity)) return 'education'
   if (['fitness_centre', 'sports_centre'].includes(amenity)) return 'loisirs'
+  if (['monument', 'memorial', 'museum'].includes(amenity)) return 'loisirs'
+  if (['butcher', 'tobacco', 'newsagent'].includes(amenity)) return 'commerce'
   if (amenity === 'fuel') return 'commerce'
-  return 'loisirs'
+  // Amenities non reconnues : ignorer (évite d'inclure ferry_terminal, etc.)
+  return ''
 }
 
 export async function GET(request: NextRequest) {
@@ -132,7 +135,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const lat = parseFloat(searchParams.get('lat') || '0')
   const lon = parseFloat(searchParams.get('lon') || '0')
-  const rayon = parseInt(searchParams.get('rayon') || '800')
+  const rayon = parseInt(searchParams.get('rayon') || '500')
   
   // ── Validation lat/lon ────────────────────────────────
   if (!lat || !lon || isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
@@ -144,7 +147,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Vérifier le cache serveur (v2 : inclut rayon transport lourd dans la clé)
-    const cacheKey = `v30_${lat}_${lon}_${rayon}`
+    const cacheKey = `v36_${lat}_${lon}_${rayon}`
     const cached = quartierCache.get(cacheKey)
     if (cached) {
       return NextResponse.json(cached)
@@ -173,8 +176,12 @@ export async function GET(request: NextRequest) {
         node["leisure"~"^(park|garden|playground|fitness_centre|sports_centre)$"](around:${rayon},${lat},${lon});
         way["leisure"~"^(park|garden|playground|fitness_centre|sports_centre)$"](around:${rayon},${lat},${lon});
         node["highway"="bus_stop"](around:${rayon},${lat},${lon});
-        node["shop"~"^(supermarket|bakery|convenience)$"](around:${rayon},${lat},${lon});
+        node["shop"~"^(supermarket|bakery|convenience|butcher|tobacco|newsagent)$"](around:${rayon},${lat},${lon});
         node["amenity"="marketplace"](around:${rayon},${lat},${lon});
+        node["historic"~"^(monument|memorial)$"](around:${rayon},${lat},${lon});
+        way["historic"~"^(monument|memorial)$"](around:${rayon},${lat},${lon});
+        node["tourism"="museum"](around:${rayon},${lat},${lon});
+        way["tourism"="museum"](around:${rayon},${lat},${lon});
         node["amenity"="childcare"](around:${rayon},${lat},${lon});
         node["social_facility"="day_care"](around:${rayon},${lat},${lon});
         node["amenity"="bicycle_rental"](around:${rayon},${lat},${lon});
@@ -344,6 +351,7 @@ export async function GET(request: NextRequest) {
         if (!poiLat || !poiLon) continue
         
         const amenity = tags.amenity || tags.healthcare || tags.leisure || tags.railway || tags.highway || tags.shop || tags.public_transport
+          || tags.historic || tags.tourism
           || (tags.social_facility === 'day_care' ? 'childcare' : undefined)
         if (!amenity) continue
         
@@ -352,6 +360,7 @@ export async function GET(request: NextRequest) {
         
         const distance = calculerDistance(lat, lon, poiLat, poiLon)
         const categorie = determinerCategorie(amenity)
+        if (!categorie) continue // Amenity non reconnue → ignorer
         const nom = tags.name || undefined
 
         // Déterminer le sous-type de station (metro, RER) via tags additionnels
@@ -472,6 +481,29 @@ export async function GET(request: NextRequest) {
       pois.length = 0
       pois.push(...filteredPois)
     }
+
+    // ── Post-traitement : dédupliquer node/way pour un même POI ──
+    // OSM modélise souvent un lieu comme node (point) ET way (bâtiment) → 2 entrées
+    // pour le même commerce. On fusionne par :
+    // - (type + nom identique) si distance < 30m (même lieu nommé)
+    // - (type identique) si distance < 15m quand les deux sont sans nom (node vs way center)
+    const nonTransportPois = pois.filter(p => p.categorie !== 'transport')
+    const dedupTransportPois = pois.filter(p => p.categorie === 'transport')
+    const dedupedNonTransport: POI[] = []
+    for (const poi of nonTransportPois) {
+      const isDup = dedupedNonTransport.some(existing => {
+        if (existing.type !== poi.type) return false
+        const dist = calculerDistance(existing.lat, existing.lon, poi.lat, poi.lon!)
+        // Même nom + même type + < 30m
+        if (existing.nom && poi.nom && existing.nom === poi.nom && dist < 30) return true
+        // Même type + très proches (< 15m) = node vs way du même lieu
+        if (dist < 15) return true
+        return false
+      })
+      if (!isDup) dedupedNonTransport.push(poi)
+    }
+    pois.length = 0
+    pois.push(...dedupedNonTransport, ...dedupTransportPois)
 
     // ── Post-traitement : dédupliquer les arrêts de bus proches (< 50m) ──
     // Un même arrêt physique génère 2+ nœuds OSM (un par direction)
@@ -597,11 +629,11 @@ export async function GET(request: NextRequest) {
           // Catégories non-transport : scoring logarithmique pour mieux différencier
           // Les petits nombres comptent beaucoup, les grands saturent progressivement
           const COUNT_THRESHOLDS: Record<string, number> = {
-            commerce: 80,    // 80 commerces = score max (centre-ville dense IDF)
-            education: 25,   // 25 écoles = score max
-            sante: 25,       // 25 établissements = score max
-            loisirs: 15,     // 15 lieux = score max
-            vert: 20,        // 20 espaces verts = score max
+            commerce: 40,    // 40 commerces = score max (centre-ville dense IDF)
+            education: 12,   // 12 écoles = score max
+            sante: 12,       // 12 établissements = score max
+            loisirs: 8,      // 8 lieux = score max
+            vert: 10,        // 10 espaces verts = score max
           }
           const threshold = COUNT_THRESHOLDS[catKey] ?? 15
           // Courbe logarithmique : progression rapide au début, lente ensuite
@@ -903,13 +935,15 @@ export async function GET(request: NextRequest) {
 
     // Comptages détaillés par type d'amenity (style Bien'ici "Dans le quartier")
     const AMENITY_LABELS: Record<string, string> = {
-      // Loisirs & Sorties
+      // Loisirs & Sorties (affiché sous "Si on sortait ?")
       bar: 'Bar', restaurant: 'Restaurant', cafe: 'Café', cinema: 'Cinéma', theatre: 'Théâtre',
-      park: 'Parc', garden: 'Jardin', playground: 'Aire de jeux',
-      fitness_centre: 'Salle de sport', sports_centre: 'Salle de sport',
-      // Commerces
-      supermarket: 'Supermarché', bakery: 'Boulangerie', convenience: 'Supérette',
-      bank: 'Banque', post_office: 'Bureau de poste', marketplace: 'Marché',
+      monument: 'Monument historique', memorial: 'Monument historique', museum: 'Musée',
+      park: 'Parc, Jardin et Square', garden: 'Parc, Jardin et Square', playground: 'Parc, Jardin et Square',
+      fitness_centre: 'Terrain et Salle de sport', sports_centre: 'Terrain et Salle de sport',
+      // Commerces (affiché sous "N'oubliez pas de faire les courses")
+      supermarket: 'Supermarché et Hypermarché', bakery: 'Boulangerie', convenience: 'Supérette',
+      bank: 'Banque', post_office: 'Bureau de poste', marketplace: 'Marché de quartier',
+      butcher: 'Boucherie', tobacco: 'Presse et Tabac', newsagent: 'Presse et Tabac',
       fuel: 'Station service',
       // Éducation
       school: 'École primaire', kindergarten: 'École maternelle', college: 'Collège',
@@ -942,12 +976,27 @@ export async function GET(request: NextRequest) {
       return 'École'
     }
 
+    // ── Rayon d'affichage réduit pour les comptages "Dans la commune" ──
+    // Rayon d'affichage = rayon de requête (800m ≈ 10 min à pied).
+    // Cohérent en zone dense (Paris) et parlant en zone péri-urbaine/rurale.
+    const DISPLAY_RADIUS = 800
+
+    // ── Catégories d'affichage (style Bien'ici) ──
+    // Différentes des catégories de scoring : restaurant/café/park/sport regroupés en "loisirs"
+    const DISPLAY_GROUPS: Record<string, Set<string>> = {
+      loisirs: new Set(['bar', 'restaurant', 'cafe', 'cinema', 'theatre', 'monument', 'memorial', 'museum', 'park', 'garden', 'playground', 'sports_centre', 'fitness_centre']),
+      commerce: new Set(['supermarket', 'bakery', 'bank', 'post_office', 'convenience', 'marketplace', 'butcher', 'tobacco', 'newsagent', 'fuel']),
+      education: new Set(['school', 'kindergarten', 'college', 'university', 'library', 'childcare']),
+      sante: new Set(['hospital', 'clinic', 'doctors', 'doctor', 'dentist', 'pharmacy']),
+    }
+
     const detailedCounts: Record<string, Array<{ type: string; label: string; count: number }>> = {}
-    for (const [catKey] of Object.entries(CATEGORIES)) {
-      const poisCat = pois.filter(p => p.categorie === catKey)
-      // Grouper par label (pas par type brut) pour fusionner doctor/doctors → Médecin
+    for (const [displayKey, typeSet] of Object.entries(DISPLAY_GROUPS)) {
+      const maxDist = DISPLAY_RADIUS
+      const poisDisplay = pois.filter(p => typeSet.has(p.type) && p.distance <= maxDist)
+      // Grouper par label (pas par type brut) pour fusionner types consolidés
       const labelCounts = new Map<string, number>()
-      for (const p of poisCat) {
+      for (const p of poisDisplay) {
         let label: string
         if (p.type === 'school') {
           // Sous-catégoriser école par nom (lycée, collège, primaire, etc.)
@@ -957,7 +1006,7 @@ export async function GET(request: NextRequest) {
         }
         labelCounts.set(label, (labelCounts.get(label) || 0) + 1)
       }
-      detailedCounts[catKey] = [...labelCounts.entries()]
+      detailedCounts[displayKey] = [...labelCounts.entries()]
         .map(([label, count]) => ({ type: label, label, count }))
         .sort((a, b) => b.count - a.count)
     }
@@ -974,7 +1023,7 @@ export async function GET(request: NextRequest) {
         synthese,
         transportsProches,
         transportSummary,
-        /** Comptages bruts de POIs par catégorie (rayon 800m) */
+        /** Comptages bruts de POIs par catégorie (rayon complet 500m — scoring) */
         counts: {
           transport: getCount('transport'),
           commerce: getCount('commerce'),
@@ -983,7 +1032,7 @@ export async function GET(request: NextRequest) {
           loisirs: getCount('loisirs'),
           vert: getCount('vert'),
         },
-        /** Comptages détaillés par type d'amenity dans chaque catégorie */
+        /** Comptages détaillés par type d'amenity — rayon réduit 250m (affichage) */
         detailedCounts,
       },
       source: 'OpenStreetMap'

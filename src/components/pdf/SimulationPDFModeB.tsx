@@ -1068,156 +1068,200 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
             </View>
           )}
 
-          {/* ═══ 3. Chiffres clés du quartier ═══ */}
-          {quartier && (
-            <View style={{ marginTop: 14 }}>
-              <SectionTitle title={`CHIFFRES CLÉS DU QUARTIER — ${nomCommune || codePostal}`} />
+          {/* ═══ 3. Dans la commune (style comparateur) ═══ */}
+          {quartier && (() => {
+            const dc = quartier.detailedCounts
 
-              {/* ── Grille catégories — cards info ── */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 }}>
-                {[
-                  { label: 'Transports', count: quartier.counts?.transport, color: C.blue, desc: 'Métro, RER, tram, train' },
-                  { label: 'Commerces', count: quartier.counts?.commerce, color: C.orange, desc: 'Supermarchés, boulangeries' },
-                  { label: 'Écoles', count: quartier.counts?.education, color: C.green, desc: 'Écoles, crèches, lycées' },
-                  { label: 'Santé', count: quartier.counts?.sante, color: C.red, desc: 'Médecins, pharmacies' },
-                  { label: 'Espaces verts', count: quartier.counts?.vert, color: C.green, desc: 'Parcs, jardins' },
-                  { label: 'Loisirs', count: quartier.counts?.loisirs, color: C.greenDark, desc: 'Sports, culture' },
-                ].map((cat, idx) => {
-                  const isTransportCat = cat.label === 'Transports'
-                  return (
-                  <View key={idx} style={{
-                    width: '48.5%' as unknown as number,
-                    borderWidth: 1,
-                    borderColor: C.grayBorder,
-                    borderRadius: 5,
-                    overflow: 'hidden',
-                    backgroundColor: C.white,
-                  }}>
-                    {/* Color bar top */}
-                    <View style={{ height: 3, backgroundColor: cat.color }} />
-                    <View style={{ padding: 6 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{cat.label}</Text>
-                        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: cat.color }}>
-                          {cat.count != null ? cat.count : '—'}
+            const QUARTIER_CATEGORIES: Array<{
+              key: string
+              title: string
+              color: string
+              bgLight: string
+            }> = [
+              { key: 'loisirs', title: 'Si on sortait ?', color: C.green, bgLight: C.greenLight },
+              { key: 'commerce', title: 'N\'oubliez pas de faire les courses', color: C.greenDark, bgLight: C.greenLight },
+              { key: 'education', title: 'Éducation', color: C.gray, bgLight: C.grayBg },
+              { key: 'sante', title: 'Santé', color: C.gray, bgLight: C.grayBg },
+            ]
+
+            const catsWithData = dc ? QUARTIER_CATEGORIES.filter(cat => {
+              const items = dc[cat.key]
+              return items && items.length > 0
+            }) : []
+
+            // Build transport groups from transportSummary or transportsProches
+            const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus']
+            const typeLabels: Record<string, string> = {
+              metro: 'Métro', rer: 'RER', train: 'Train', tram: 'Tramway', bus: 'Bus',
+            }
+            let transportGroups: Array<{ type: string; label: string; lignes: string[]; stations: number }> = []
+            if (quartier.transportSummary) {
+              transportGroups = quartier.transportSummary
+                .filter(s => typeOrder.includes(s.type))
+                .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type))
+                .map(s => ({ type: s.type, label: typeLabels[s.type] ?? s.type, lignes: s.lignes, stations: s.count }))
+            } else if (quartier.transportsProches) {
+              // Fallback: aggregate from transportsProches
+              const tMap: Record<string, { lignes: Set<string>; count: number }> = {}
+              for (const tp of quartier.transportsProches) {
+                if (!typeOrder.includes(tp.typeTransport)) continue
+                if (!tMap[tp.typeTransport]) tMap[tp.typeTransport] = { lignes: new Set(), count: 0 }
+                tMap[tp.typeTransport].count++
+                const cleaned = cleanTransportLines(tp.typeTransport, tp.lignes)
+                for (const l of cleaned) tMap[tp.typeTransport].lignes.add(l)
+              }
+              transportGroups = typeOrder
+                .filter(t => tMap[t])
+                .map(t => ({ type: t, label: typeLabels[t] ?? t, lignes: Array.from(tMap[t].lignes), stations: tMap[t].count }))
+            }
+            const hasTransport = transportGroups.length > 0
+
+            if (catsWithData.length === 0 && !hasTransport) return null
+
+            return (
+              <View style={{ marginTop: 14 }}>
+                <SectionTitle title={`DANS LA COMMUNE — ${nomCommune || codePostal}`} />
+
+                {/* Category blocks — 2 columns */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 4 }}>
+                  {catsWithData.map(cat => {
+                    const items = dc![cat.key] || []
+                    const topItems = items.slice(0, 5)
+                    const total = topItems.reduce((s, i) => s + i.count, 0)
+                    return (
+                      <View key={cat.key} style={{
+                        width: '48%' as unknown as number,
+                        backgroundColor: cat.bgLight,
+                        borderRadius: 5,
+                        padding: 6,
+                        marginBottom: 1,
+                      }}>
+                        {/* Category header */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                          <View style={{
+                            width: 14, height: 14, borderRadius: 3,
+                            backgroundColor: cat.color,
+                            alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
+                              {total}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: cat.color }}>
+                            {cat.title}
+                          </Text>
+                        </View>
+                        {/* Items list */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
+                          {topItems.map(item => (
+                            <View key={item.type} style={{
+                              flexDirection: 'row', alignItems: 'center',
+                              backgroundColor: '#ffffff', borderRadius: 3,
+                              paddingHorizontal: 4, paddingVertical: 2,
+                            }}>
+                              <Text style={{ fontSize: 5.5, color: C.black }}>
+                                {item.label}
+                              </Text>
+                              <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: cat.color, marginLeft: 2 }}>
+                                {item.count}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )
+                  })}
+                </View>
+
+                {/* ── Revenu médian ── */}
+                {quartier.revenuMedian != null && (
+                  <View style={{ marginTop: 6 }}>
+                    <View style={{
+                      backgroundColor: C.grayBg,
+                      borderRadius: 5,
+                      padding: 6,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Revenu médian</Text>
+                        <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.gray }}>
+                          {fmt(Math.round(quartier.revenuMedian / 12))} EUR
                         </Text>
                       </View>
-                      <Text style={{ fontSize: 5.5, color: C.gray }}>
-                        {cat.count != null && cat.count > 0 ? `${cat.count} trouvé${cat.count > 1 ? 's' : ''} · ${cat.desc}` : cat.desc}
-                      </Text>
-                      {/* Transport lines inline */}
-                      {isTransportCat && (() => {
-                        const transportLinesMap: Record<string, string[]> = {}
-                        if (quartier.transportsProches) {
-                          for (const tp of quartier.transportsProches) {
-                            if (!tp.lignes || tp.lignes.length === 0) continue
-                            if (tp.typeTransport === 'bus' || tp.typeTransport === 'velo') continue
-                            const cleaned = cleanTransportLines(tp.typeTransport, tp.lignes)
-                            if (cleaned.length > 0) {
-                              if (!transportLinesMap[tp.typeTransport]) transportLinesMap[tp.typeTransport] = []
-                              for (const l of cleaned) {
-                                if (!transportLinesMap[tp.typeTransport].includes(l)) transportLinesMap[tp.typeTransport].push(l)
-                              }
-                            }
-                          }
-                        }
-                        if (Object.keys(transportLinesMap).length === 0) return null
-                        return (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
-                            {transportLinesMap['metro'] && transportLinesMap['metro'].length > 0 && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                                <View style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#FFF', marginTop: -0.5 }}>M</Text>
-                                </View>
-                                {transportLinesMap['metro'].map(l => {
-                                  const bg = METRO_LINE_COLORS[l] || '#888'
-                                  const tc = DARK_TEXT_LINES.has(l) ? '#000' : '#FFF'
-                                  return <View key={`m-${l}`} style={{ width: l.length > 2 ? 14 : 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: l.length > 2 ? 4 : 5.5, fontFamily: 'Helvetica-Bold', color: tc }}>{l}</Text></View>
-                                })}
-                              </View>
-                            )}
-                            {transportLinesMap['rer'] && transportLinesMap['rer'].length > 0 && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                                <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#003CA6', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFF' }}>
-                                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF', letterSpacing: 0.3 }}>RER</Text>
-                                </View>
-                                {transportLinesMap['rer'].map(l => {
-                                  const bg = RER_LINE_COLORS[l] || '#888'
-                                  return <View key={`r-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>
-                                })}
-                              </View>
-                            )}
-                            {transportLinesMap['train'] && transportLinesMap['train'].length > 0 && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                                <View style={{ width: 16, height: 11, borderRadius: 2, backgroundColor: '#1D4A8C', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Train</Text>
-                                </View>
-                                {transportLinesMap['train'].map(l => {
-                                  const bg = TRANSILIEN_COLORS[l] || '#888'
-                                  const tc = DARK_TEXT_LINES.has(l) ? '#000' : '#FFF'
-                                  return <View key={`t-${l}`} style={{ width: 11, height: 11, borderRadius: 5.5, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: tc }}>{l}</Text></View>
-                                })}
-                              </View>
-                            )}
-                            {transportLinesMap['tram'] && transportLinesMap['tram'].length > 0 && (
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5 }}>
-                                <View style={{ paddingHorizontal: 3, height: 11, borderRadius: 2, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>Tram</Text>
-                                </View>
-                                {transportLinesMap['tram'].map(l => <View key={`tr-${l}`} style={{ paddingHorizontal: 2, height: 11, borderRadius: 5.5, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#FFF' }}>{l}</Text></View>)}
-                              </View>
-                            )}
-                          </View>
-                        )
-                      })()}
+                      <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 1 }}>Par mois · Source INSEE</Text>
                     </View>
                   </View>
-                  )
-                })}
+                )}
+
+                {/* ── Transport block — style Bien'ici épuré ── */}
+                {hasTransport && (
+                  <View style={{ marginTop: 8 }}>
+                    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
+                      Et au niveau des transports ?
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                      {transportGroups.map(tg => {
+                        const SZ = 13
+                        const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
+                        const isBus = tg.type === 'bus'
+
+                        if (isRail && tg.lignes.length > 0) {
+                          return (
+                            <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: 4 }}>
+                              <Text style={{ fontSize: 7, color: C.gray }}>{tg.label}</Text>
+                              <Text style={{ fontSize: 7, color: C.grayLight }}>(</Text>
+                              {tg.lignes.map(l => {
+                                const bg = tg.type === 'metro' ? (METRO_LINE_COLORS[l] || '#888')
+                                  : tg.type === 'rer' ? (RER_LINE_COLORS[l.toUpperCase()] || '#888')
+                                  : tg.type === 'train' ? (TRANSILIEN_COLORS[l.toUpperCase()] || '#888')
+                                  : '#000'
+                                const tc = DARK_TEXT_LINES.has(l) ? '#000' : '#FFF'
+                                return (
+                                  <View key={`${tg.type}-${l}`} style={{ width: l.length > 2 ? 17 : SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Text style={{ fontSize: l.length > 2 ? 5 : 6.5, fontFamily: 'Helvetica-Bold', color: tc }}>{l}</Text>
+                                  </View>
+                                )
+                              })}
+                              <Text style={{ fontSize: 7, color: C.grayLight }}>)</Text>
+                            </View>
+                          )
+                        }
+
+                        if (isBus && tg.lignes.length > 0) {
+                          return (
+                            <View key="bus" style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: 4 }}>
+                              <Text style={{ fontSize: 7, color: C.gray }}>Bus</Text>
+                              <Text style={{ fontSize: 7, color: C.grayLight }}>(</Text>
+                              {tg.lignes.slice(0, 6).map(l => (
+                                <View key={`bus-${l}`} style={{ backgroundColor: '#e5e7eb', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
+                                  <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{l}</Text>
+                                </View>
+                              ))}
+                              {tg.lignes.length > 6 && (
+                                <Text style={{ fontSize: 5.5, color: C.grayLight }}>+{tg.lignes.length - 6}</Text>
+                              )}
+                              <Text style={{ fontSize: 7, color: C.grayLight }}>)</Text>
+                            </View>
+                          )
+                        }
+
+                        // Other types (vélib', vélo, parking, etc.) — plain text + count
+                        return (
+                          <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 4 }}>
+                            <Text style={{ fontSize: 7, color: C.gray }}>{tg.label}</Text>
+                            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}> ({tg.stations})</Text>
+                          </View>
+                        )
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {/* ── Separator ── */}
+                <View style={{ borderBottomWidth: 1, borderBottomColor: C.green, marginTop: 10, opacity: 0.3 }} />
+
               </View>
-
-              {/* ── Enrichissements optionnels (niveau de vie, qualité air) ── */}
-              {(quartier.niveauVie != null || quartier.qualiteAir != null || quartier.revenuMedian != null) && (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
-                  {quartier.revenuMedian != null && (
-                    <View style={{
-                      width: '48.5%' as unknown as number,
-                      borderWidth: 1, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
-                    }}>
-                      <View style={{ height: 3, backgroundColor: C.orange }} />
-                      <View style={{ padding: 6 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Revenu médian</Text>
-                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.orange }}>
-                            {fmt(Math.round(quartier.revenuMedian / 12))} EUR
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 5.5, color: C.gray }}>Par mois · Source INSEE</Text>
-                      </View>
-                    </View>
-                  )}
-                  {quartier.qualiteAir != null && (
-                    <View style={{
-                      width: '48.5%' as unknown as number,
-                      borderWidth: 1, borderColor: C.grayBorder, borderRadius: 5, overflow: 'hidden', backgroundColor: C.white,
-                    }}>
-                      <View style={{ height: 3, backgroundColor: quartier.qualiteAir >= 7 ? C.green : quartier.qualiteAir >= 4 ? C.orange : C.red }} />
-                      <View style={{ padding: 6 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Qualité de l'air</Text>
-                          <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: quartier.qualiteAir >= 7 ? C.greenDark : quartier.qualiteAir >= 4 ? C.orange : C.red }}>
-                            {quartier.qualiteAirLabel || (quartier.qualiteAir >= 7 ? 'Bon' : quartier.qualiteAir >= 4 ? 'Moyen' : 'Mauvais')}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 5.5, color: C.gray }}>Indice ATMO</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
-            </View>
-          )}
+            )
+          })()}
 
           {/* ═══ 5. Accompagnement AQUIZ ═══ */}
           <View style={{
