@@ -1064,12 +1064,6 @@ export function SimulationPDFModeB(props: SimulationPDFModeBProps) {
                     <Text style={[s.localValue, { color: C.greenDark }]}>~{infoLocalisation.surfaceEstimee} m²</Text>
                   </View>
                 )}
-                {infoLocalisation.nbVentes && (
-                  <View style={s.localRow}>
-                    <Text style={s.localLabel}>Transactions recensées (DVF)</Text>
-                    <Text style={s.localValue}>{infoLocalisation.nbVentes} ventes</Text>
-                  </View>
-                )}
               </View>
             </View>
           )}

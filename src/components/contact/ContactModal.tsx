@@ -13,16 +13,16 @@ import { trackEvent } from '@/lib/analytics'
 import { logger } from '@/lib/logger'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
-  ArrowRight,
-  Calendar,
-  Check,
-  Clock,
-  Moon,
-  Phone,
-  Sun,
-  Sunrise,
-  Video,
-  X
+    ArrowRight,
+    Calendar,
+    Check,
+    Clock,
+    Moon,
+    Phone,
+    Sun,
+    Sunrise,
+    Video,
+    X
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 

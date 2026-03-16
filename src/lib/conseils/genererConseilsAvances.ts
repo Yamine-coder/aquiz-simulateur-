@@ -166,13 +166,24 @@ function genererDiagnosticBancaire(data: DonneesConseil): DiagnosticBancaire {
 
 function genererResume(data: DonneesConseil, diagnostic: DiagnosticBancaire): string {
   const pourcentageApport = data.prixAchat > 0 ? (data.apport / data.prixAchat) * 100 : 0
+  const statut = data.statutProfessionnel === 'cdi' ? 'en CDI'
+    : data.statutProfessionnel === 'fonctionnaire' ? 'fonctionnaire'
+    : data.statutProfessionnel === 'independant' ? 'indépendant'
+    : data.statutProfessionnel === 'cdd' ? 'en CDD'
+    : data.statutProfessionnel === 'retraite' ? 'retraité(e)'
+    : data.statutProfessionnel === 'interim' ? 'intérimaire'
+    : data.statutProfessionnel
+  const foyer = data.situationFoyer === 'couple'
+    ? `en couple${data.nombreEnfants > 0 ? ` avec ${data.nombreEnfants} enfant${data.nombreEnfants > 1 ? 's' : ''}` : ''}`
+    : `célibataire${data.nombreEnfants > 0 ? ` avec ${data.nombreEnfants} enfant${data.nombreEnfants > 1 ? 's' : ''} à charge` : ''}`
+  const endettement = `${data.tauxEndettement.toFixed(1)}%`
 
   if (data.scoreFaisabilite >= 80) {
-    return `Excellent profil (${data.scoreFaisabilite}/100). Budget de ${formatMontant(data.prixAchat)} € avec ${Math.round(pourcentageApport)}% d'apport. Probabilité d'acceptation ${diagnostic.probabiliteAcceptation}. Délai estimé : ${diagnostic.delaiEstime}.`
+    return `Profil ${foyer}, ${statut}, ${data.age} ans. Le projet paraît cohérent : un budget de ${formatMontant(data.prixAchat)} € est accessible avec ${Math.round(pourcentageApport)}% d'apport et un endettement à ${endettement}. Les fondamentaux sont solides. ${diagnostic.pointsForts.length > 0 ? `Le principal atout ici : ${diagnostic.pointsForts[0].toLowerCase()}.` : ''}`
   } else if (data.scoreFaisabilite >= 60) {
-    return `Bon profil (${data.scoreFaisabilite}/100). Projet finançable avec quelques optimisations possibles. Budget : ${formatMontant(data.prixAchat)} €. Délai estimé : ${diagnostic.delaiEstime}.`
+    return `Profil ${foyer}, ${statut}, ${data.age} ans. Le projet est finançable avec quelques points à consolider. Budget visé : ${formatMontant(data.prixAchat)} € — endettement à ${endettement}${pourcentageApport < 10 ? ', apport à renforcer' : ''}. ${diagnostic.pointsVigilance.length > 0 ? `Le sujet principal n'est pas seulement le financement, mais ${diagnostic.pointsVigilance[0].toLowerCase()}.` : 'Quelques optimisations permettraient de sécuriser le dossier.'}`
   } else {
-    return `Profil à renforcer (${data.scoreFaisabilite}/100). Le projet nécessite des ajustements pour maximiser les chances d'acceptation. Consultez nos recommandations.`
+    return `Profil ${foyer}, ${statut}, ${data.age} ans. En l'état, le projet nécessite des ajustements avant de démarcher les banques. Endettement à ${endettement}${pourcentageApport < 10 ? `, apport limité à ${Math.round(pourcentageApport)}%` : ''}. ${diagnostic.pointsVigilance.length > 0 ? `Point clé à traiter : ${diagnostic.pointsVigilance[0].toLowerCase()}.` : 'Voir les recommandations ci-dessous pour identifier les leviers.'}`
   }
 }
 

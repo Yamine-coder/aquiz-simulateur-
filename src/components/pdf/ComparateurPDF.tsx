@@ -31,6 +31,7 @@ interface PointData {
   texte: string
   detail?: string
   type: 'avantage' | 'attention' | 'conseil'
+  axe?: string
 }
 
 interface EstimationsData {
@@ -161,6 +162,7 @@ const C = {
   grayLight: '#969696',
   grayBg: '#f5f7fa',
   grayBorder: '#e5e7eb',
+  sectionBg: '#2d3748',
   green: '#22c55e',
   greenLight: '#dcfce7',
   greenDark: '#16a34a',
@@ -235,6 +237,103 @@ function getPdfLineColor(typeTransport: string, ligne: string): { bg: string; fg
 
 function fmt(n: number): string {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+}
+
+/** Axes à exclure de l'affichage Points forts / Vigilance */
+const AXES_EXCLUS = ['risques', 'etatBien', 'plusValue']
+
+/** Nettoie les espaces insécables qui s'affichent en `/` dans react-pdf */
+function sanitizeDetail(text: string): string {
+  return text.replace(/[\u00A0\u202F\u2009]/g, ' ')
+}
+
+/**
+ * Génère des points forts et à vérifier style expert AQUIZ
+ * Raisonnement immobilier > financier. Toujours lié au projet.
+ */
+function genererPointsExpert(a: AnnoncePDF): { forts: string[]; verifier: string[] } {
+  const forts: string[] = []
+  const verifier: string[] = []
+  const ecart = a.enrichissement?.marche?.ecartPrixM2
+  const mediane = a.enrichissement?.marche?.prixM2MedianMarche
+
+  // ── Prix vs marché ──
+  if (ecart !== undefined && ecart <= -15) {
+    forts.push(`À ${fmt(a.prixM2)} EUR/m², le bien se positionne ${Math.abs(ecart).toFixed(0)}% sous la médiane locale${mediane ? ` (${fmt(Math.round(mediane))} EUR/m²)` : ''} — marge confortable en cas de revente`)
+  } else if (ecart !== undefined && ecart <= -5) {
+    forts.push(`Prix au m² ${Math.abs(ecart).toFixed(0)}% sous le marché local — positionnement favorable pour l'acheteur`)
+  } else if (ecart !== undefined && ecart >= 15) {
+    verifier.push(`Prix ${ecart.toFixed(0)}% au-dessus de la médiane du secteur — justifier l'écart ou négocier avant offre`)
+  } else if (ecart !== undefined && ecart >= 5) {
+    verifier.push(`Prix légèrement au-dessus du marché (+${ecart.toFixed(0)}%) — marge de négociation à explorer`)
+  }
+
+  // ── Énergie / DPE ──
+  const coutEnergie = a.estimations?.coutEnergieAnnuel
+  if (['A', 'B'].includes(a.dpe)) {
+    forts.push(`DPE ${a.dpe}${coutEnergie ? `, environ ${fmt(coutEnergie)} EUR/an d'énergie` : ''} — aucun travaux d'isolation à prévoir`)
+  } else if (a.dpe === 'C') {
+    forts.push(`DPE C${coutEnergie ? `, environ ${fmt(coutEnergie)} EUR/an` : ''} — conforme aux standards actuels, pas de surcoût énergie`)
+  } else if (a.dpe === 'D') {
+    verifier.push(`DPE D${coutEnergie ? ` (${fmt(coutEnergie)} EUR/an)` : ''} — amélioration énergétique envisageable, chiffrer l'isolation`)
+  } else if (a.dpe === 'E') {
+    verifier.push(`DPE E${coutEnergie ? ` (${fmt(coutEnergie)} EUR/an)` : ''} — travaux d'isolation recommandés, intégrer au budget`)
+  } else if (['F', 'G'].includes(a.dpe)) {
+    verifier.push(`Passoire thermique (DPE ${a.dpe}) — rénovation obligatoire, location interdite en l'état`)
+  }
+
+  // ── Transports / Emplacement ──
+  const scoreTransports = a.enrichissement?.quartier?.transports
+  const scoreCommerces = a.enrichissement?.quartier?.commerces
+  if (scoreTransports !== undefined && scoreTransports >= 70) {
+    forts.push('Excellente desserte transports — atout majeur pour la valorisation et le quotidien')
+  } else if (scoreTransports !== undefined && scoreTransports < 35) {
+    verifier.push('Desserte transports limitée — véhicule nécessaire, impact potentiel sur la revente')
+  }
+  if (scoreCommerces !== undefined && scoreCommerces >= 70 && forts.length < 2) {
+    forts.push('Quartier bien équipé en commerces et services — confort de vie au quotidien')
+  }
+
+  // ── Rendement locatif ──
+  const rendement = a.estimations?.rendementBrut
+  const loyer = a.estimations?.loyerMensuelEstime
+  if (rendement !== undefined && rendement >= 6) {
+    forts.push(`Rendement brut estimé à ${rendement.toFixed(1)}%${loyer ? ` (loyer ~${fmt(loyer)} EUR/mois)` : ''} — attractif en investissement`)
+  } else if (rendement !== undefined && rendement < 4 && rendement > 0) {
+    verifier.push(`Rendement estimé ${rendement.toFixed(1)}% — cohérent en résidence principale, à approfondir si objectif investissement`)
+  }
+
+  // ── Charges ──
+  const charges = a.chargesMensuelles
+  const taxe = a.taxeFonciere
+  if (charges === undefined && taxe === undefined) {
+    verifier.push('Charges de copro et taxe foncière non renseignées — à demander au vendeur avant offre')
+  } else if (charges !== undefined && charges > 0) {
+    const chargesAn = charges * 12 + (taxe ?? 0)
+    const ratio = a.prix > 0 ? (chargesAn / a.prix) * 100 : 0
+    if (ratio > 2.5) {
+      verifier.push(`Charges élevées (${fmt(chargesAn)} EUR/an, ${ratio.toFixed(1)}% du prix) — impacte le coût réel de détention`)
+    } else if (ratio <= 1 && forts.length < 2) {
+      forts.push(`Charges maîtrisées (${fmt(chargesAn)} EUR/an) — coût de détention raisonnable`)
+    }
+  }
+
+  // ── Surface / agencement ──
+  if (a.pieces > 0) {
+    const m2Piece = a.surface / a.pieces
+    if (m2Piece >= 22 && forts.length < 2) {
+      forts.push(`Pièces spacieuses (${Math.round(m2Piece)} m²/pièce) — confort au-dessus de la norme`)
+    } else if (m2Piece < 14) {
+      verifier.push(`Surface par pièce faible (${Math.round(m2Piece)} m²) — vérifier l'agencement lors de la visite`)
+    }
+  }
+
+  // ── Fallback prudent ──
+  if (verifier.length === 0) {
+    verifier.push('Aucun frein identifié — vérifier l\'état des parties communes et les PV d\'AG lors de la visite')
+  }
+
+  return { forts: forts.slice(0, 2), verifier: verifier.slice(0, 2) }
 }
 
 function getScoreColor(score: number): string {
@@ -466,7 +565,7 @@ const s = StyleSheet.create({
   content: { paddingHorizontal: 28 },
   // Section title
   sectionTitle: {
-    backgroundColor: C.black,
+    backgroundColor: C.sectionBg,
     borderRadius: 3,
     paddingVertical: 3.5,
     paddingHorizontal: 8,
@@ -977,50 +1076,47 @@ export function ComparateurPDF({
               marginTop: 8,
               backgroundColor: C.white,
               borderRadius: 6,
-              borderWidth: 1,
+              borderWidth: 0.5,
               borderColor: C.grayBorder,
+              borderLeftWidth: 3,
+              borderLeftColor: C.green,
               overflow: 'hidden',
             }}>
-              {/* Barre supérieure colorée */}
-              <View style={{ height: 3, backgroundColor: getScoreColor(best.scoreGlobal) }} />
-
               {/* En-tête gris avec label */}
               <View style={{
                 backgroundColor: C.grayBg,
-                paddingVertical: 5,
+                paddingVertical: 4,
                 paddingHorizontal: 12,
-                borderBottomWidth: 1,
+                borderBottomWidth: 0.5,
                 borderBottomColor: C.grayBorder,
               }}>
-                <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray, letterSpacing: 0.3 }}>
+                <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.greenDark, letterSpacing: 0.3 }}>
                   MEILLEURE OPPORTUNITÉ DÉTECTÉE
                 </Text>
               </View>
 
-              {/* Contenu principal : cercle score + infos */}
+              {/* Contenu principal : score discret + infos */}
               <View style={{
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 14,
                 paddingHorizontal: 14,
-                paddingVertical: 12,
+                paddingVertical: 10,
               }}>
-                {/* Score circle */}
+                {/* Score — sobre, fond gris */}
                 <View style={{ alignItems: 'center', flexShrink: 0 }}>
                   <View style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: 26,
-                    borderWidth: 2.5,
-                    borderColor: getScoreColor(best.scoreGlobal),
-                    backgroundColor: getScoreBg(best.scoreGlobal),
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    backgroundColor: C.grayBg,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                    <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: getScoreColor(best.scoreGlobal) }}>
+                    <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.black }}>
                       {best.scoreGlobal}
                     </Text>
-                    <Text style={{ fontSize: 5.5, color: getScoreColor(best.scoreGlobal), marginTop: -2 }}>/100</Text>
+                    <Text style={{ fontSize: 5, color: C.grayLight, marginTop: -1 }}>/100</Text>
                   </View>
                 </View>
 
@@ -1034,7 +1130,7 @@ export function ComparateurPDF({
                   </Text>
 
                   {/* Ligne prix + indice */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
                     <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.black }}>
                       {fmt(best.prix)} EUR
                     </Text>
@@ -1052,12 +1148,12 @@ export function ComparateurPDF({
                 </View>
               </View>
 
-              {/* Ligne de séparation + description */}
+              {/* Description */}
               <View style={{
-                borderTopWidth: 1,
+                borderTopWidth: 0.5,
                 borderTopColor: C.grayBorder,
                 paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingVertical: 6,
                 backgroundColor: C.grayBg,
               }}>
                 <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.6 }}>
@@ -1318,47 +1414,42 @@ export function ComparateurPDF({
               </View>
             )}
 
-            {/* ── Conclusion ── */}
+            {/* ── Conclusion rapide ── */}
             <View style={{
               marginTop: 12,
-              paddingVertical: 10,
-              paddingHorizontal: 12,
+              paddingVertical: 8,
+              paddingHorizontal: 10,
               backgroundColor: C.grayBg,
               borderRadius: 4,
               borderLeftWidth: 3,
               borderLeftColor: C.green,
             }}>
-              <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 6 }}>
-                Conclusion
+              <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 5 }}>
+                Conclusion rapide
               </Text>
-              <View style={{ flexDirection: 'row', gap: 4, marginBottom: 3 }}>
-                <Text style={{ fontSize: 7, color: C.green }}>▸</Text>
-                <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
-                  Meilleur rapport qualité-prix : {cleanTitleShort(best)} (Score {best.scoreGlobal}/100)
-                </Text>
-              </View>
-              {(() => {
-                const maxSurface = sorted.reduce((max, a) => a.surface > max.surface ? a : max, sorted[0])
-                return maxSurface.id !== best.id ? (
-                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 3 }}>
-                    <Text style={{ fontSize: 7, color: C.green }}>▸</Text>
-                    <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
-                      Plus grande surface : {maxSurface.ville} ({maxSurface.surface} m²)
+              {sorted.map((a, i) => {
+                const topAvantage = a.points.find(p => p.type === 'avantage')
+                const topAttention = a.points.find(p => p.type === 'attention')
+                const ecart = a.enrichissement?.marche?.ecartPrixM2
+                // Build a short context line per bien
+                const parts: string[] = []
+                if (ecart !== undefined && ecart <= -5) parts.push(`${Math.abs(ecart).toFixed(0)}% sous le marché`)
+                else if (ecart !== undefined && ecart >= 10) parts.push(`${ecart.toFixed(0)}% au-dessus du marché`)
+                if (['A', 'B', 'C'].includes(a.dpe)) parts.push(`DPE ${a.dpe}`)
+                else if (['F', 'G'].includes(a.dpe)) parts.push(`Passoire thermique (${a.dpe})`)
+                if (topAvantage && parts.length < 2) parts.push(topAvantage.texte.toLowerCase())
+                if (topAttention && parts.length < 3) parts.push(topAttention.texte.toLowerCase())
+                const context = parts.length > 0 ? parts.join(', ') : a.verdict
+                return (
+                  <View key={a.id} style={{ flexDirection: 'row', gap: 4, marginBottom: 2.5 }}>
+                    <Text style={{ fontSize: 7, color: i === 0 ? C.green : C.gray }}>▸</Text>
+                    <Text style={{ fontSize: 6.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
+                      <Text style={{ fontFamily: 'Helvetica-Bold' }}>{cleanVille(a.ville)} ({a.scoreGlobal}/100)</Text>
+                      {' — '}{context}
                     </Text>
                   </View>
-                ) : null
-              })()}
-              {(() => {
-                const cheapest = sorted.reduce((min, a) => a.prixM2 < min.prixM2 ? a : min, sorted[0])
-                return cheapest.id !== best.id ? (
-                  <View style={{ flexDirection: 'row', gap: 4, marginBottom: 3 }}>
-                    <Text style={{ fontSize: 7, color: C.green }}>▸</Text>
-                    <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
-                      Prix/m² le plus bas : {cheapest.ville} ({fmt(cheapest.prixM2)} €/m²)
-                    </Text>
-                  </View>
-                ) : null
-              })()}
+                )
+              })}
             </View>
           </View>
 
@@ -1378,8 +1469,7 @@ export function ComparateurPDF({
           </View>
 
           {sorted.map((annonce, idx) => {
-            const avantages = annonce.points.filter(p => p.type === 'avantage').slice(0, 3)
-            const attentions = annonce.points.filter(p => p.type === 'attention').slice(0, 3)
+            const { forts: pointsForts, verifier: pointsVerifier } = genererPointsExpert(annonce)
 
             // Build transport groups from transportSummary (aggregated from ALL stations in radius)
             const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo', 'fuel']
@@ -1402,33 +1492,33 @@ export function ComparateurPDF({
 
             return (
               <View key={annonce.id} style={{
-                marginTop: idx > 0 ? 8 : 4,
+                marginTop: idx > 0 ? 4 : 2,
                 backgroundColor: C.white,
-                borderRadius: 5,
-                borderWidth: 1,
+                borderRadius: 4,
+                borderWidth: 0.5,
                 borderColor: C.grayBorder,
                 overflow: 'hidden',
               }} wrap={false}>
                 {/* Color bar top */}
-                <View style={{ height: 2.5, backgroundColor: getScoreColor(annonce.scoreGlobal) }} />
+                <View style={{ height: 2, backgroundColor: getScoreColor(annonce.scoreGlobal) }} />
 
                 {/* ── Header compact: rang + titre + prix ── */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 7, paddingBottom: 5 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, paddingVertical: 4 }}>
                   {/* Rang badge */}
                   <View style={{
-                    width: 18, height: 18, borderRadius: 9,
+                    width: 16, height: 16, borderRadius: 8,
                     backgroundColor: getScoreColor(annonce.scoreGlobal),
                     alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>{annonce.rang}</Text>
+                    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{annonce.rang}</Text>
                   </View>
                   {/* Title + ville */}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>
                       {cleanTitle(annonce)} — {cleanVille(annonce.ville)} ({annonce.codePostal})
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                      <Text style={{ fontSize: 6, color: C.gray }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
+                      <Text style={{ fontSize: 5.5, color: C.gray }}>
                         {annonce.surface} m² · {annonce.pieces} p · {fmt(annonce.prixM2)} EUR/m²
                       </Text>
                       <View style={{
@@ -1443,34 +1533,33 @@ export function ComparateurPDF({
                   </View>
                   {/* Score + Price */}
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
-                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal), marginTop: 1 }}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
+                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal), marginTop: 1 }}>
                       Score : {annonce.scoreGlobal}/100
                     </Text>
                   </View>
                 </View>
 
-                {/* ── Points forts + vigilance (2 columns, compact) ── */}
+                {/* ── Points forts + à vérifier (2 columns, compact) ── */}
                 <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
-                  <View style={{ flex: 1, padding: 6, borderRightWidth: 0.5, borderRightColor: C.grayBorder }}>
-                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 3 }}>Points forts</Text>
-                    {avantages.map((p, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 2 }}>
-                        <Text style={{ fontSize: 6, color: C.green }}>+</Text>
-                        <Text style={{ fontSize: 5.5, color: C.black, flex: 1, lineHeight: 1.4 }}>{p.texte}</Text>
+                  <View style={{ flex: 1, padding: 4, borderRightWidth: 0.5, borderRightColor: C.grayBorder }}>
+                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 2 }}>Points forts</Text>
+                    {pointsForts.map((txt, i) => (
+                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 1 }}>
+                        <Text style={{ fontSize: 5.5, color: C.green }}>+</Text>
+                        <Text style={{ fontSize: 5, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
                       </View>
                     ))}
-                    {avantages.length === 0 && <Text style={{ fontSize: 5.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun</Text>}
+                    {pointsForts.length === 0 && <Text style={{ fontSize: 5, color: C.grayLight, fontStyle: 'italic' }}>Aucun point fort identifié</Text>}
                   </View>
-                  <View style={{ flex: 1, padding: 6 }}>
-                    <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: '#92400e', marginBottom: 3 }}>Vigilance</Text>
-                    {attentions.map((p, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 2 }}>
-                        <Text style={{ fontSize: 6, color: C.orange }}>!</Text>
-                        <Text style={{ fontSize: 5.5, color: C.black, flex: 1, lineHeight: 1.4 }}>{p.texte}</Text>
+                  <View style={{ flex: 1, padding: 4 }}>
+                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: 2 }}>À vérifier</Text>
+                    {pointsVerifier.map((txt, i) => (
+                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 1 }}>
+                        <Text style={{ fontSize: 5.5, color: C.grayLight }}>!</Text>
+                        <Text style={{ fontSize: 5, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
                       </View>
                     ))}
-                    {attentions.length === 0 && <Text style={{ fontSize: 5.5, color: C.grayLight, fontStyle: 'italic' }}>Aucun</Text>}
                   </View>
                 </View>
 
@@ -1485,11 +1574,11 @@ export function ComparateurPDF({
                     color: string
                     bgLight: string
                   }> = [
-                    { key: 'loisirs', title: 'Si on sortait ?', color: '#E91E63', bgLight: '#FCE4EC' },
-                    { key: 'commerce', title: 'Au quotidien', color: '#FF9800', bgLight: '#FFF3E0' },
-                    { key: 'education', title: 'Éducation', color: '#4CAF50', bgLight: '#E8F5E9' },
-                    { key: 'sante', title: 'Santé', color: '#2196F3', bgLight: '#E3F2FD' },
-                    { key: 'vert', title: 'Nature', color: '#8BC34A', bgLight: '#F1F8E9' },
+                    { key: 'loisirs', title: 'Si on sortait ?', color: C.green, bgLight: C.greenLight },
+                    { key: 'commerce', title: 'Au quotidien', color: C.greenDark, bgLight: C.greenLight },
+                    { key: 'education', title: 'Éducation', color: C.gray, bgLight: C.grayBg },
+                    { key: 'sante', title: 'Santé', color: C.gray, bgLight: C.grayBg },
+                    { key: 'vert', title: 'Nature', color: C.green, bgLight: C.greenLight },
                   ]
 
                   const catsWithData = QUARTIER_CATEGORIES.filter(cat => {
@@ -1500,14 +1589,14 @@ export function ComparateurPDF({
                   if (catsWithData.length === 0) return null
 
                   return (
-                    <View style={{ paddingHorizontal: 7, paddingTop: 5, paddingBottom: 4, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                    <View style={{ paddingHorizontal: 6, paddingTop: 3, paddingBottom: 3, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
                       {/* Section header */}
-                      <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>
+                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 3 }}>
                         Dans le quartier
                       </Text>
 
                       {/* Category blocks — 2 columns */}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
                         {catsWithData.map(cat => {
                           const items = dc[cat.key] || []
                           const total = items.reduce((s, i) => s + i.count, 0)
@@ -1515,28 +1604,28 @@ export function ComparateurPDF({
                             <View key={cat.key} style={{
                               width: '48%',
                               backgroundColor: cat.bgLight,
-                              borderRadius: 4,
-                              padding: 5,
+                              borderRadius: 3,
+                              padding: 3,
                               marginBottom: 1,
                             }}>
                               {/* Category header */}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
                                 <View style={{
-                                  width: 10, height: 10, borderRadius: 2,
+                                  width: 9, height: 9, borderRadius: 2,
                                   backgroundColor: cat.color,
                                   alignItems: 'center', justifyContent: 'center',
                                 }}>
-                                  <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
+                                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
                                     {total}
                                   </Text>
                                 </View>
-                                <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: cat.color }}>
+                                <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: cat.color }}>
                                   {cat.title}
                                 </Text>
                               </View>
                               {/* Items */}
                               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
-                                {items.slice(0, 5).map(item => (
+                                {items.slice(0, 3).map(item => (
                                   <View key={item.type} style={{
                                     flexDirection: 'row', alignItems: 'center',
                                     backgroundColor: '#ffffff', borderRadius: 2,
@@ -1558,22 +1647,22 @@ export function ComparateurPDF({
                         {hasTransport && (
                           <View style={{
                             width: '48%',
-                            backgroundColor: '#ECFDF5',
-                            borderRadius: 4,
-                            padding: 5,
+                            backgroundColor: C.greenLight,
+                            borderRadius: 3,
+                            padding: 3,
                             marginBottom: 1,
                           }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
                               <View style={{
-                                width: 10, height: 10, borderRadius: 2,
-                                backgroundColor: '#10b981',
+                                width: 9, height: 9, borderRadius: 2,
+                                backgroundColor: C.green,
                                 alignItems: 'center', justifyContent: 'center',
                               }}>
                                 <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
                                   {transportGroups.reduce((s, t) => s + t.stations, 0)}
                                 </Text>
                               </View>
-                              <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: '#10b981' }}>
+                              <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.green }}>
                                 Transports
                               </Text>
                             </View>
@@ -1645,7 +1734,7 @@ export function ComparateurPDF({
                                   badges.push(
                                     <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 2, paddingHorizontal: 3, paddingVertical: 1 }}>
                                       <Text style={{ fontSize: 4.5, color: C.black }}>{tg.label}</Text>
-                                      <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: '#10b981', marginLeft: 2 }}>{tg.stations}</Text>
+                                      <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: C.green, marginLeft: 2 }}>{tg.stations}</Text>
                                     </View>
                                   )
                                 }
@@ -2022,95 +2111,74 @@ export function ComparateurPDF({
             )
           })}
 
-          {/* Disclaimer */}
-          <View style={{ flex: 1 }} />
+          {/* Disclaimer négociation */}
           <Text style={{ fontSize: 6, color: C.grayLight, marginTop: 12, lineHeight: 1.4 }}>
             Estimations basées sur les données DVF et les caractéristiques du bien. Ces leviers servent de base de discussion avec le vendeur ou l&apos;agent immobilier.
           </Text>
-        </View>
-        <Footer logoUrl={logoUrl} />
-      </Page>
 
-      {/* ══════════════════════════════════════════
-          PAGE FINALE — ACCOMPAGNEMENT AQUIZ
-          ══════════════════════════════════════════ */}
-      <Page size="A4" style={s.pageWithFixedHeader}>
-        <FixedHeader logoUrl={logoUrl} nbBiens={n} />
-        <View style={[s.content, { marginTop: 52 }]}>
-
-          {/* ═══ ACCOMPAGNEMENT AQUIZ ═══ */}
+          {/* ═══ ACCOMPAGNEMENT AQUIZ (compact, same page) ═══ */}
           <View style={{
             backgroundColor: C.white,
             borderRadius: 6,
             borderWidth: 1.5,
             borderColor: C.green,
-            padding: 14,
-            marginTop: 14,
+            padding: 10,
+            marginTop: 10,
           }} wrap={false}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <View style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
+                width: 22,
+                height: 22,
+                borderRadius: 11,
                 backgroundColor: C.green,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
               </View>
-              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
                 ACCOMPAGNEMENT AQUIZ
               </Text>
             </View>
 
-            <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.6, marginBottom: 10 }}>
-              Un expert AQUIZ peut vous accompagner pour :
-            </Text>
-
             {[
-              'Analyser les diagnostics immobiliers (DPE, amiante, plomb, termites)',
-              'Vérifier les éléments juridiques du bien (servitudes, copropriété, urbanisme)',
               'Définir une stratégie de négociation adaptée au marché local',
-              'Estimer le budget travaux et les aides disponibles (PTZ, MaPrimeRénov\')',
+              'Analyser les diagnostics et éléments juridiques du bien',
               'Sécuriser votre financement et optimiser votre plan de financement',
             ].map((item, idx) => (
               <View key={idx} style={{
                 flexDirection: 'row',
                 alignItems: 'flex-start',
-                gap: 6,
-                marginBottom: 5,
-                paddingLeft: 4,
+                gap: 5,
+                marginBottom: 3,
+                paddingLeft: 2,
               }}>
                 <View style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 2.5,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
                   backgroundColor: C.green,
-                  marginTop: 3,
+                  marginTop: 2.5,
                   flexShrink: 0,
                 }} />
-                <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.5, flex: 1 }}>
+                <Text style={{ fontSize: 6.5, color: C.black, lineHeight: 1.4, flex: 1 }}>
                   {item}
                 </Text>
               </View>
             ))}
 
-            <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
-              Prenez rendez-vous avec un expert AQUIZ pour sécuriser votre projet d&apos;acquisition.
-            </Text>
-
-            {/* ── Bouton Prendre RDV ── */}
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
               <View style={{
                 backgroundColor: C.green,
-                borderRadius: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 20,
+                borderRadius: 5,
+                paddingVertical: 7,
+                paddingHorizontal: 16,
                 alignSelf: 'center',
                 alignItems: 'center',
+                marginTop: 6,
               }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>
                   Prendre rendez-vous
                 </Text>
               </View>
@@ -2118,7 +2186,7 @@ export function ComparateurPDF({
           </View>
 
           {/* ── Disclaimer ── */}
-          <View style={{ marginTop: 10, paddingHorizontal: 4 }}>
+          <View style={{ marginTop: 8, paddingHorizontal: 4 }}>
             <Text style={{ fontSize: 5, color: C.grayLight, lineHeight: 1.4 }}>
               Ce rapport est généré à partir de données publiques (DVF, Géorisques, OpenStreetMap) et d&apos;algorithmes AQUIZ.
               Les estimations sont indicatives et ne constituent pas un avis professionnel. © {new Date().getFullYear()} AQUIZ — {dateGeneration}

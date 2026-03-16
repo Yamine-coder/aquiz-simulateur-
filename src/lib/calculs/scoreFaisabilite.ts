@@ -331,16 +331,15 @@ function getCommentaireCharges(ratio: number): string {
 // ============================================================================
 
 function getLabel(score: number): ScoreFaisabiliteResult['label'] {
-  if (score >= 80) return 'Excellent'
-  if (score >= 65) return 'Bon'
+  if (score >= 85) return 'Excellent'
+  if (score >= 70) return 'Bon'
   if (score >= 50) return 'Moyen'
   if (score >= 35) return 'Fragile'
   return 'Critique'
 }
 
 function getCouleur(score: number): ScoreFaisabiliteResult['couleur'] {
-  if (score >= 80) return 'green'
-  if (score >= 65) return 'amber'
-  if (score >= 50) return 'orange'
+  if (score >= 70) return 'green'
+  if (score >= 50) return 'amber'
   return 'red'
 }

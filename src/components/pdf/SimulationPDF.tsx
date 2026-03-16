@@ -730,9 +730,16 @@ function fmt(n: number): string {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return C.green
-  if (score >= 60) return C.orange
-  return C.red
+  if (score >= 70) return C.green
+  if (score >= 50) return C.gray
+  return C.black
+}
+
+function getScoreLabel(score: number): string {
+  if (score >= 85) return 'EXCELLENT'
+  if (score >= 70) return 'BON'
+  if (score >= 50) return 'MOYEN'
+  return 'FRAGILE'
 }
 
 function getTauxColor(taux: number): string {
@@ -828,15 +835,13 @@ export function SimulationPDF(props: SimulationPDFProps) {
             <Text style={s.headerTitleText}>RAPPORT DE SIMULATION</Text>
             <Text style={s.headerSubText}>Étude de capacité d&apos;achat immobilier • {dateStr}</Text>
           </View>
-          {/* Score badge */}
+          {/* CTA Prendre RDV */}
           <View style={s.headerRight}>
-            <View style={s.scoreBadge}>
-              <Text style={[s.scoreValue, { color: getScoreColor(scoreFaisabilite) }]}>{scoreFaisabilite}</Text>
-              <View style={s.scoreInfo}>
-                <Text style={s.scoreMax}>/100</Text>
-                <Text style={s.scoreCaption}>FAISABILITÉ</Text>
+            <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
+              <View style={[s.ctaBtn, { paddingHorizontal: 10, paddingVertical: 6 }]}>
+                <Text style={[s.ctaBtnText, { fontSize: 7 }]}>Prendre rendez-vous</Text>
               </View>
-            </View>
+            </Link>
           </View>
         </View>
         <View style={s.headerAccent} />
@@ -848,9 +853,19 @@ export function SimulationPDF(props: SimulationPDFProps) {
               <Text style={s.capaciteLabel}>VOTRE CAPACITÉ D&apos;ACHAT MAXIMALE</Text>
               <Text style={s.capaciteValue}>{fmt(prixAchatMax)} EUR</Text>
             </View>
-            <View style={s.probaBadge}>
-              <Text style={s.probaLabel}>PROBABILITÉ</Text>
-              <Text style={s.probaValue}>{diag.probabiliteAcceptation.toUpperCase()}</Text>
+            <View style={{
+              alignItems: 'center',
+              backgroundColor: C.grayBg,
+              borderRadius: 5,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                <Text style={{ fontSize: 18, fontFamily: 'Helvetica-Bold', color: C.black, lineHeight: 1 }}>{scoreFaisabilite}</Text>
+                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.grayLight }}>/100</Text>
+              </View>
+              <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: getScoreColor(scoreFaisabilite), letterSpacing: 0.3, marginTop: 3 }}>{getScoreLabel(scoreFaisabilite)}</Text>
+              <Text style={{ fontSize: 4.5, color: C.grayLight, letterSpacing: 0.3, marginTop: 1 }}>FAISABILITÉ</Text>
             </View>
           </View>
 
@@ -911,7 +926,7 @@ export function SimulationPDF(props: SimulationPDFProps) {
             <View style={{ marginTop: 6 }}>
               {scoreDetails.map((d) => {
                 const pct = d.max > 0 ? (d.score / d.max) * 100 : 0
-                const barColor = pct >= 75 ? C.green : pct >= 50 ? '#f59e0b' : pct >= 25 ? C.orange : C.red
+                const barColor = pct >= 75 ? C.green : pct >= 50 ? C.greenDark : C.grayLight
                 return (
                   <View key={d.critere} style={{ marginBottom: 6 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -932,8 +947,8 @@ export function SimulationPDF(props: SimulationPDFProps) {
           <View style={{ marginTop: 14 }}>
             <SectionTitle title="RÉPARTITION DU BUDGET" />
             <View style={[s.barContainer, { marginTop: 8 }]}>
-              <BudgetBar label="Apport personnel" value={pieData.apport} pct={pieData.pourcentageApport} color={C.blue} />
-              <BudgetBar label="Prêt bancaire" value={pieData.pret} pct={pieData.pourcentagePret} color={C.black} />
+              <BudgetBar label="Apport personnel" value={pieData.apport} pct={pieData.pourcentageApport} color={C.green} />
+              <BudgetBar label="Prêt bancaire" value={pieData.pret} pct={pieData.pourcentagePret} color={C.sectionBg} />
               <BudgetBar label="Frais de notaire" value={pieData.frais} pct={pieData.pourcentageFrais} color={C.grayLight} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.sectionBg, borderRadius: 4, paddingVertical: 8, paddingHorizontal: 10, marginTop: 8 }}>
                 <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>BUDGET TOTAL</Text>
@@ -953,30 +968,8 @@ export function SimulationPDF(props: SimulationPDFProps) {
         <View style={s.content}>
           {/* Titre de section */}
           <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
-            <Text style={s.pageTitle}>DIAGNOSTIC BANCAIRE</Text>
-            <Text style={s.pageSub}>Analyse de votre dossier</Text>
-          </View>
-
-          {/* Carte score */}
-          <View style={s.diagnosticCard} wrap={false}>
-            <View style={s.diagScoreContainer}>
-              <Text style={s.diagScore}>{diag.scoreGlobal}</Text>
-              <Text style={s.diagScoreMax}>/100</Text>
-              <Text style={s.diagScoreLabel}>Score global</Text>
-            </View>
-            <View style={s.diagInfo}>
-              <Text style={s.diagProba}>
-                Probabilité : {diag.probabiliteAcceptation}
-              </Text>
-              <Text style={s.diagDelai}>
-                Délai estimé : {diag.delaiEstime}
-              </Text>
-              {diag.banquesRecommandees.length > 0 && (
-                <Text style={s.diagBanques}>
-                  Banques ciblées : {diag.banquesRecommandees.join(', ')}
-                </Text>
-              )}
-            </View>
+            <Text style={s.pageTitle}>ANALYSE DU DOSSIER</Text>
+            <Text style={s.pageSub}>Points clés de votre profil</Text>
           </View>
 
           {/* Points forts / Points d'attention */}
@@ -992,8 +985,8 @@ export function SimulationPDF(props: SimulationPDFProps) {
               </View>
             </View>
             <View style={s.pointsCol}>
-              <View style={[s.pointsHeader, { backgroundColor: C.orangeLight }]}>
-                <Text style={[s.pointsHeaderText, { color: C.orange }]}>POINTS D&apos;ATTENTION</Text>
+              <View style={[s.pointsHeader, { backgroundColor: C.grayBg }]}>
+                <Text style={[s.pointsHeaderText, { color: C.gray }]}>POINTS D&apos;ATTENTION</Text>
               </View>
               <View style={s.pointsList}>
                 {diag.pointsVigilance.map((pv, i) => (
@@ -1113,98 +1106,209 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           )}
 
-          {/* Recommandations — TOUTES */}
+          {/* Recommandations groupées par priorité */}
           <Text style={s.recoTitle} minPresenceAhead={60}>RECOMMANDATIONS PERSONNALISÉES</Text>
-          {conseils.conseils.map((conseil, idx) => (
-            <View key={conseil.id} style={s.recoCard} wrap={false}>
-              <View style={s.recoBadge}>
-                <Text style={s.recoBadgeText}>{idx + 1}</Text>
-              </View>
-              <View style={s.recoContent}>
-                <Text style={s.recoCardTitle}>{conseil.titre}</Text>
-                <Text style={s.recoCardText}>{conseil.conseil}</Text>
-                {conseil.impact && (
-                  <View style={s.recoImpact}>
-                    <Text style={s.recoImpactText}>+ {conseil.impact}</Text>
+          {(() => {
+            const alertes = conseils.conseils.filter(c => c.type === 'alerte')
+            const ameliorations = conseils.conseils.filter(c => c.type === 'amelioration' || c.type === 'optimisation')
+            const succes = conseils.conseils.filter(c => c.type === 'succes')
+            const infos = conseils.conseils.filter(c => c.type === 'info')
+
+            const groups: Array<{
+              title: string
+              items: typeof conseils.conseils
+              accentColor: string
+              badgeColor: string
+              badgeBg: string
+            }> = []
+
+            if (alertes.length > 0) groups.push({
+              title: 'ACTIONS PRIORITAIRES',
+              items: alertes,
+              accentColor: C.sectionBg,
+              badgeColor: C.sectionBg,
+              badgeBg: C.grayBg,
+            })
+            if (ameliorations.length > 0) groups.push({
+              title: 'PISTES D\'AMÉLIORATION',
+              items: ameliorations,
+              accentColor: C.gray,
+              badgeColor: C.gray,
+              badgeBg: C.grayBg,
+            })
+            if (succes.length > 0) groups.push({
+              title: 'ATOUTS DU DOSSIER',
+              items: succes,
+              accentColor: C.green,
+              badgeColor: C.greenDark,
+              badgeBg: C.greenLight,
+            })
+            if (infos.length > 0) groups.push({
+              title: 'CONTEXTE & REPÈRES',
+              items: infos,
+              accentColor: C.grayLight,
+              badgeColor: C.grayLight,
+              badgeBg: C.grayBg,
+            })
+
+            return groups.map((group) => (
+              <View key={group.title} style={{ marginTop: 10 }}>
+                {/* En-tête de groupe */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  marginBottom: 6,
+                }} wrap={false}>
+                  <View style={{
+                    width: 3,
+                    height: 10,
+                    backgroundColor: group.accentColor,
+                    borderRadius: 1,
+                    marginRight: 6,
+                  }} />
+                  <Text style={{
+                    fontSize: 8,
+                    fontFamily: 'Helvetica-Bold',
+                    color: C.black,
+                    letterSpacing: 0.3,
+                  }}>{group.title}</Text>
+                  <View style={{
+                    backgroundColor: group.badgeBg,
+                    borderRadius: 3,
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    marginLeft: 6,
+                  }}>
+                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: group.badgeColor }}>{group.items.length}</Text>
                   </View>
-                )}
-                {conseil.action && (
-                  <View style={s.recoAction}>
-                    <Text style={s.recoActionLabel}>{'>'} {conseil.action.label}</Text>
-                    {conseil.action.timeline && (
-                      <Text style={s.recoActionMeta}>{conseil.action.timeline}</Text>
-                    )}
-                    {conseil.action.gain && (
-                      <Text style={s.recoActionGain}>{conseil.action.gain}</Text>
+                </View>
+
+                {/* Cartes du groupe */}
+                {group.items.map((conseil) => (
+                  <View key={conseil.id} style={{
+                    backgroundColor: C.white,
+                    borderRadius: 4,
+                    borderWidth: 0.5,
+                    borderColor: C.grayBorder,
+                    borderLeftWidth: 2.5,
+                    borderLeftColor: group.accentColor,
+                    paddingVertical: 8,
+                    paddingHorizontal: 10,
+                    marginBottom: 5,
+                  }} wrap={false}>
+                    <Text style={{
+                      fontSize: 7.5,
+                      fontFamily: 'Helvetica-Bold',
+                      color: C.black,
+                      marginBottom: 3,
+                    }}>{conseil.titre}</Text>
+                    <Text style={{
+                      fontSize: 6.5,
+                      color: C.gray,
+                      lineHeight: 1.5,
+                    }}>{conseil.conseil}</Text>
+
+                    {/* Impact + Action sur une ligne */}
+                    {(conseil.impact || conseil.action) && (
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 5,
+                        marginTop: 5,
+                        paddingTop: 5,
+                        borderTopWidth: 0.5,
+                        borderTopColor: C.grayBorder,
+                      }}>
+                        {conseil.impact && (
+                          <View style={{
+                            backgroundColor: group.badgeBg,
+                            borderRadius: 3,
+                            paddingVertical: 2,
+                            paddingHorizontal: 6,
+                          }}>
+                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: group.badgeColor }}>{conseil.impact}</Text>
+                          </View>
+                        )}
+                        {conseil.action && (
+                          <Text style={{ fontSize: 5.5, color: C.grayLight }}>
+                            {conseil.action.label}{conseil.action.timeline ? ` — ${conseil.action.timeline}` : ''}{conseil.action.gain ? ` → ${conseil.action.gain}` : ''}
+                          </Text>
+                        )}
+                      </View>
                     )}
                   </View>
-                )}
+                ))}
               </View>
-            </View>
-          ))}
+            ))
+          })()}
 
           {/* Scénarios — TOUS avec détails complets */}
           {conseils.scenarios.length > 0 && (
             <>
-              <Text style={s.recoTitle} minPresenceAhead={60}>SCÉNARIOS ALTERNATIFS</Text>
+              <View break>
+                <Text style={s.recoTitle}>SCÉNARIOS ALTERNATIFS</Text>
+              </View>
               {conseils.scenarios.map((scenario) => {
                 const isPositif = scenario.resultats.economieOuCout > 0
                 return (
-                  <View key={scenario.id} style={[s.scenarioCard, { backgroundColor: scenario.recommande ? C.greenLight : C.grayBg, flexDirection: 'column' }]} wrap={false}>
-                    {/* Header du scénario */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <View style={s.scenarioLeft}>
-                        {scenario.recommande && (
-                          <View style={s.scenarioBadge}>
-                            <Text style={s.scenarioBadgeText}>RECOMMANDÉ</Text>
-                          </View>
-                        )}
-                        <Text style={s.scenarioTitle}>{scenario.titre}</Text>
-                        <Text style={s.scenarioDesc}>{scenario.description}</Text>
+                  <View key={scenario.id} style={[s.scenarioCard, { backgroundColor: scenario.recommande ? C.greenLight : C.grayBg, flexDirection: 'column', padding: 6, marginBottom: 4 }]} wrap={false}>
+                    {/* Header + KPIs compact */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, paddingRight: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          {scenario.recommande && (
+                            <View style={s.scenarioBadge}>
+                              <Text style={s.scenarioBadgeText}>RECOMMANDÉ</Text>
+                            </View>
+                          )}
+                          <Text style={[s.scenarioTitle, { marginBottom: 0 }]}>{scenario.titre}</Text>
+                        </View>
+                        <Text style={[s.scenarioDesc, { marginTop: 2 }]}>{scenario.description}</Text>
                       </View>
-                      <View style={s.scenarioRight}>
-                        <Text style={[s.scenarioImpact, { color: isPositif ? C.green : C.black }]}>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[s.scenarioImpact, { color: isPositif ? C.green : C.black, fontSize: 9 }]}>
                           {isPositif ? '+' : '-'}{fmt(Math.abs(scenario.resultats.economieOuCout))} EUR
                         </Text>
-                        <Text style={s.scenarioImpactLabel}>sur le budget</Text>
+                        <Text style={[s.scenarioImpactLabel, { fontSize: 5 }]}>sur le budget</Text>
                       </View>
                     </View>
 
-                    {/* Avantages / Inconvénients */}
+                    {/* Avantages / Inconvénients — compact inline */}
                     {(scenario.avantages.length > 0 || scenario.inconvenients.length > 0) && (
-                      <View style={s.scenarioDetailsRow}>
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 3 }}>
                         {scenario.avantages.length > 0 && (
-                          <View style={s.scenarioDetailsCol}>
-                            <Text style={s.scenarioDetailsTitle}>Avantages</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 1 }}>Avantages</Text>
                             {scenario.avantages.map((a, i) => (
-                              <Text key={i} style={s.scenarioDetailItem}>+ {a}</Text>
+                              <Text key={i} style={{ fontSize: 5.5, color: C.gray, lineHeight: 1.3 }}>+ {a}</Text>
                             ))}
                           </View>
                         )}
                         {scenario.inconvenients.length > 0 && (
-                          <View style={s.scenarioDetailsCol}>
-                            <Text style={s.scenarioDetailsTitle}>Inconvénients</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: 1 }}>Inconvénients</Text>
                             {scenario.inconvenients.map((inc, i) => (
-                              <Text key={i} style={s.scenarioDetailItem}>• {inc}</Text>
+                              <Text key={i} style={{ fontSize: 5.5, color: C.gray, lineHeight: 1.3 }}>• {inc}</Text>
                             ))}
                           </View>
                         )}
                       </View>
                     )}
 
-                    {/* KPIs chiffrés */}
-                    <View style={s.scenarioKPIs}>
-                      <View style={s.scenarioKPI}>
-                        <Text style={s.scenarioKPIValue}>{fmt(scenario.resultats.nouveauBudget)} €</Text>
-                        <Text style={s.scenarioKPILabel}>Nouveau budget</Text>
+                    {/* KPIs inline */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 3, paddingTop: 3, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(scenario.resultats.nouveauBudget)} €</Text>
+                        <Text style={{ fontSize: 4.5, color: C.grayLight }}>Nouveau budget</Text>
                       </View>
-                      <View style={s.scenarioKPI}>
-                        <Text style={s.scenarioKPIValue}>{scenario.resultats.nouveauTaux.toFixed(2)}%</Text>
-                        <Text style={s.scenarioKPILabel}>Taux estimé</Text>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{scenario.resultats.nouveauTaux.toFixed(2)}%</Text>
+                        <Text style={{ fontSize: 4.5, color: C.grayLight }}>Taux estimé</Text>
                       </View>
-                      <View style={s.scenarioKPI}>
-                        <Text style={s.scenarioKPIValue}>{fmt(scenario.resultats.nouvellesMensualites)} €</Text>
-                        <Text style={s.scenarioKPILabel}>Mensualité</Text>
+                      <View style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(scenario.resultats.nouvellesMensualites)} €</Text>
+                        <Text style={{ fontSize: 4.5, color: C.grayLight }}>Mensualité</Text>
                       </View>
                     </View>
                   </View>
@@ -1285,78 +1389,69 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           </View>
 
-          {/* ═══ ACCOMPAGNEMENT AQUIZ (style Mode B) ═══ */}
+          {/* ═══ ACCOMPAGNEMENT AQUIZ (compact) ═══ */}
           <View style={{
             backgroundColor: C.white,
             borderRadius: 6,
             borderWidth: 1.5,
             borderColor: C.green,
-            padding: 14,
-            marginTop: 14,
+            padding: 10,
+            marginTop: 10,
           }} wrap={false}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
               <View style={{
-                width: 28,
-                height: 28,
-                borderRadius: 14,
+                width: 22,
+                height: 22,
+                borderRadius: 11,
                 backgroundColor: C.green,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Text style={{ fontSize: 12, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
               </View>
-              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.black }}>
+              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
                 ACCOMPAGNEMENT AQUIZ
               </Text>
             </View>
 
-            <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.6, marginBottom: 10 }}>
-              Pour concrétiser votre projet immobilier, un expert AQUIZ peut :
-            </Text>
-
             {[
-              'Identifier les biens correspondant à votre budget et vos critères de recherche',
-              'Analyser les diagnostics obligatoires (DPE, amiante, plomb) et les éventuels travaux à prévoir',
               'Structurer le meilleur plan de financement (taux, durée, assurance, garanties)',
-              'Rechercher les dispositifs d\'aide applicables à votre situation (PTZ, PAS, Action Logement)',
-              'Accompagner la visite, le compromis et chaque étape jusqu\'à la remise des clés',
+              'Rechercher les aides applicables à votre situation (PTZ, PAS, Action Logement)',
+              'Accompagner chaque étape : visites, compromis, jusqu\'à la remise des clés',
             ].map((item, idx) => (
               <View key={idx} style={{
                 flexDirection: 'row',
                 alignItems: 'flex-start',
-                gap: 6,
-                marginBottom: 5,
-                paddingLeft: 4,
+                gap: 5,
+                marginBottom: 3,
+                paddingLeft: 2,
               }}>
                 <View style={{
-                  width: 5,
-                  height: 5,
-                  borderRadius: 2.5,
+                  width: 4,
+                  height: 4,
+                  borderRadius: 2,
                   backgroundColor: C.green,
-                  marginTop: 3,
+                  marginTop: 2.5,
                   flexShrink: 0,
                 }} />
-                <Text style={{ fontSize: 7.5, color: C.black, lineHeight: 1.5, flex: 1 }}>
+                <Text style={{ fontSize: 6.5, color: C.black, lineHeight: 1.4, flex: 1 }}>
                   {item}
                 </Text>
               </View>
             ))}
 
-            <Text style={{ fontSize: 7, color: C.gray, lineHeight: 1.5, marginTop: 6, marginBottom: 10 }}>
-              Sécurisez votre achat : un expert AQUIZ vous aide à transformer cette étude en projet concret.
-            </Text>
-
             <Link src="https://calendly.com/contact-aquiz/30min" style={{ textDecoration: 'none' }}>
               <View style={{
                 backgroundColor: C.green,
-                borderRadius: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 20,
+                borderRadius: 5,
+                paddingVertical: 7,
+                paddingHorizontal: 16,
                 alignSelf: 'center',
                 alignItems: 'center',
+                marginTop: 6,
               }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>
                   Prendre rendez-vous
                 </Text>
               </View>

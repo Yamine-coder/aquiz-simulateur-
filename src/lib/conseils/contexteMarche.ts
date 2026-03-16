@@ -59,8 +59,15 @@ export const CONTEXTE_MARCHE = {
 // ============================================================================
 
 /** Formate un nombre en montant lisible (1234567 → "1 234 567") */
-export const formatMontant = (n: number): string =>
-  new Intl.NumberFormat('fr-FR').format(Math.round(n))
+export const formatMontant = (n: number): string => {
+  const str = Math.round(n).toString()
+  let result = ''
+  for (let i = 0; i < str.length; i++) {
+    if (i > 0 && (str.length - i) % 3 === 0) result += ' '
+    result += str[i]
+  }
+  return result
+}
 
 /** Calcule la mensualité d'un prêt */
 export const calculerMensualite = (capital: number, tauxAnnuel: number, dureeAns: number): number => {

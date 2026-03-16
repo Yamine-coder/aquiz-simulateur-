@@ -6,11 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from '@/components/ui/select'
 import { Slider } from '@/components/ui/slider'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -29,23 +29,23 @@ import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  CheckCircle,
-  ChevronDown,
-  Clock,
-  CreditCard,
-  FileDown,
-  Info,
-  Loader2,
-  Mail,
-  MapPin,
-  Percent,
-  Phone,
-  PiggyBank,
-  Shield
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    CheckCircle,
+    ChevronDown,
+    Clock,
+    CreditCard,
+    FileDown,
+    Info,
+    Loader2,
+    Mail,
+    MapPin,
+    Percent,
+    Phone,
+    PiggyBank,
+    Shield
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -1812,25 +1812,27 @@ function ModeAPageContent() {
                             strokeDasharray={213.6}
                             strokeDashoffset={213.6 - (213.6 * scoreFaisabilite) / 100}
                             strokeLinecap="round"
-                            className={scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'}
+                            className={scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className={`text-xl font-bold ${scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'}`}>{scoreFaisabilite}</span>
+                          <span className={`text-xl font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}`}>{scoreFaisabilite}</span>
                           <span className="text-[9px] text-aquiz-gray -mt-0.5">/100</span>
                         </div>
                       </div>
                       {/* Verdict */}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-lg font-bold ${scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {scoreFaisabilite >= 80 ? 'Excellent' : scoreFaisabilite >= 60 ? 'Bon' : scoreFaisabilite >= 40 ? 'Moyen' : 'À améliorer'}
+                        <p className={`text-lg font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}`}>
+                          {scoreFaisabilite >= 85 ? 'Excellent' : scoreFaisabilite >= 70 ? 'Bon' : scoreFaisabilite >= 50 ? 'Moyen' : 'Fragile'}
                         </p>
                         <p className="text-sm text-aquiz-gray leading-snug mt-0.5">
-                          {scoreFaisabilite >= 80 
+                          {scoreFaisabilite >= 85 
                             ? 'Profil solide, excellentes chances d\'obtenir votre financement.'
-                            : scoreFaisabilite >= 60
+                            : scoreFaisabilite >= 70
                               ? 'Projet réalisable, quelques optimisations possibles.'
-                              : 'Des ajustements sont nécessaires.'
+                              : scoreFaisabilite >= 50
+                                ? 'Des ajustements sont nécessaires.'
+                                : 'Votre dossier nécessite un renforcement.'
                           }
                         </p>
                       </div>
@@ -1878,7 +1880,7 @@ function ModeAPageContent() {
                           <h2 className="text-sm font-semibold text-aquiz-black">Scoring détaillé</h2>
                           <p className="text-[10px] text-aquiz-gray mt-0.5">
                             7 critères bancaires — <span className={`font-semibold ${
-                              scoreFaisabilite >= 80 ? 'text-aquiz-green' : scoreFaisabilite >= 60 ? 'text-amber-500' : 'text-red-500'
+                              scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'
                             }`}>{scoreDetails.filter(d => (d.max > 0 ? (d.score / d.max) * 100 : 0) >= 75).length}/7 validés</span>
                           </p>
                         </div>
