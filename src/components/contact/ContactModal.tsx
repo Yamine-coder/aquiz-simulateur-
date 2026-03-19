@@ -210,7 +210,7 @@ export function ContactModal({ isOpen, onClose, onSuccess, commune, budgetOverri
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2">
               {/* Bouton retour visible uniquement dans les étapes rdv/rappel quand contextData */}
-              {contextData && (step === 'rdv' || step === 'rappel') && !isSubmitted && (
+              {contextData && step === 'rappel' && !isSubmitted && (
                 <button
                   onClick={() => setStep('choice')}
                   aria-label="Retour au choix"
