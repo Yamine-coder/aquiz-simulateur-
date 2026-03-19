@@ -36,6 +36,7 @@ import { completerDonnees } from '@/lib/scraping/completerDonnees'
 import {
     detecterSource,
     extractFromHTML,
+    isLocationUrl,
     parseNextData,
 } from '@/lib/scraping/extracteur'
 import { recordExtraction } from '@/lib/scraping/healthMonitor'
@@ -370,6 +371,18 @@ async function handleExtraction(request: NextRequest): Promise<NextResponse> {
           success: false,
           error: 'Cette URL est une page de recherche, pas une annonce individuelle.',
           hint: 'Ouvrez une annonce spécifique et copiez son URL (ex: seloger.com/annonces/.../12345.htm)',
+        },
+        { status: 400 }
+      )
+    }
+
+    // ── Protection : bloquer les annonces de location ──
+    if (isLocationUrl(url)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Cette annonce est une location. Le comparateur AQUIZ est réservé aux biens à l\'achat.',
+          isLocation: true,
         },
         { status: 400 }
       )

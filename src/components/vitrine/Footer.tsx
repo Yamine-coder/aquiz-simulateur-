@@ -245,7 +245,7 @@ export function Footer() {
       <div className="border-t border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-white/20">
           <p>© {new Date().getFullYear()} AQUIZ — Tous droits réservés</p>
-          <p className="text-center">Conception : Yamine Moussaoui · Données data.gouv.fr</p>
+          <p className="text-center">Données data.gouv.fr</p>
         </div>
       </div>
     </footer>

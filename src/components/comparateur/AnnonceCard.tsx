@@ -211,7 +211,7 @@ export const AnnonceCard = memo(function AnnonceCard({
         images={allImages}
         alt={annonce.titre || 'Bien immobilier'}
         typeBien={annonce.type}
-        className="relative h-24 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100"
+        className="relative h-36 sm:h-40 shrink-0 bg-linear-to-br from-slate-50 to-slate-100"
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
       >
         {/* Hover overlay — manage mode (red) or compare hint (green) — desktop only */}
@@ -313,12 +313,12 @@ export const AnnonceCard = memo(function AnnonceCard({
         {/* Prix */}
         <div className="flex items-baseline justify-between mb-1.5 sm:mb-2">
           <div className="flex items-baseline gap-0.5 sm:gap-1">
-            <span className="text-sm sm:text-xl font-extrabold text-aquiz-black tracking-tight">
+            <span className="text-base sm:text-xl font-extrabold text-aquiz-black tracking-tight">
               {annonce.prix.toLocaleString('fr-FR')}
             </span>
-            <span className="text-[10px] sm:text-sm font-medium text-aquiz-gray">€</span>
+            <span className="text-xs sm:text-sm font-medium text-aquiz-gray">€</span>
           </div>
-          <span className="hidden sm:inline text-[11px] font-semibold text-aquiz-gray bg-aquiz-gray-lightest px-2 py-0.5 rounded-md">
+          <span className="text-[10px] sm:text-[11px] font-semibold text-aquiz-gray bg-aquiz-gray-lightest px-2 py-0.5 rounded-md">
             {annonce.prixM2.toLocaleString('fr-FR')} €/m²
           </span>
         </div>
@@ -341,8 +341,8 @@ export const AnnonceCard = memo(function AnnonceCard({
           )}
         </div>
 
-        {/* Localisation — hidden on mobile */}
-        <div className="hidden sm:flex items-center gap-1.5 mb-3">
+        {/* Localisation */}
+        <div className="flex items-center gap-1.5 mb-1.5 sm:mb-3">
           <MapPin className="h-3 w-3 text-aquiz-gray-light shrink-0" />
           <span className="text-[11px] sm:text-xs text-aquiz-gray truncate">
             {annonce.adresse || annonce.ville}
@@ -350,15 +350,10 @@ export const AnnonceCard = memo(function AnnonceCard({
           <span className="text-[10px] text-aquiz-gray-light shrink-0">({annonce.codePostal})</span>
         </div>
 
-        {/* Ville on mobile only (compact) */}
-        <p className="sm:hidden text-[10px] text-aquiz-gray truncate mb-1.5">
-          {annonce.ville}
-        </p>
-
-        {/* Tags/Features — hidden on mobile */}
-        <div className="hidden sm:flex flex-wrap gap-1.5 mb-3">
+        {/* Tags/Features */}
+        <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2 sm:mb-3">
           {/* DPE */}
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+          <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md ${
             annonce.dpe === 'A' || annonce.dpe === 'B' ? 'bg-emerald-50 text-emerald-600' :
             annonce.dpe === 'C' || annonce.dpe === 'D' ? 'bg-amber-50 text-amber-600' :
             annonce.dpe === 'NC' ? 'bg-slate-100 text-slate-500' :
@@ -368,27 +363,27 @@ export const AnnonceCard = memo(function AnnonceCard({
           </span>
 
           {annonce.etage !== undefined && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+            <span className="hidden sm:inline text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
               {annonce.etage === 0 ? 'RDC' : `${annonce.etage}e ét.`}
             </span>
           )}
           {annonce.parking && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Parking</span>
+            <span className="hidden sm:inline text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Parking</span>
           )}
           {annonce.balconTerrasse && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Extérieur</span>
+            <span className="hidden sm:inline text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Extérieur</span>
           )}
           {annonce.ascenseur && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Ascenseur</span>
+            <span className="hidden sm:inline text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Ascenseur</span>
           )}
           {annonce.cave && (
-            <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Cave</span>
+            <span className="hidden sm:inline text-[10px] font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Cave</span>
           )}
         </div>
 
-        {/* Faisabilité message — hidden on mobile */}
+        {/* Faisabilité message */}
         {faisabilite && (
-          <div className={`hidden sm:block text-[11px] px-3 py-2 rounded-lg mb-3 font-medium ${
+          <div className={`text-[10px] sm:text-[11px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg mb-2 sm:mb-3 font-medium ${
             faisabilite.niveau === 'confortable' ? 'bg-emerald-50 text-emerald-700' :
             faisabilite.niveau === 'limite' ? 'bg-amber-50 text-amber-700' :
             'bg-rose-50 text-rose-700'
@@ -397,7 +392,7 @@ export const AnnonceCard = memo(function AnnonceCard({
           </div>
         )}
 
-        {/* Charges — hidden on mobile */}
+        {/* Charges */}
         {annonce.chargesMensuelles && (
           <p className="hidden sm:block text-[10px] text-aquiz-gray mb-3">
             Charges : {annonce.chargesMensuelles} €/mois
@@ -405,13 +400,13 @@ export const AnnonceCard = memo(function AnnonceCard({
         )}
 
         {/* ── Actions footer ── */}
-        <div className="mt-auto pt-1.5 sm:pt-3 border-t border-aquiz-gray-lighter/70 flex items-center gap-1 sm:gap-1.5">
+        <div className="mt-auto pt-2 sm:pt-3 border-t border-aquiz-gray-lighter/70 flex items-center gap-1.5 sm:gap-1.5">
           <Button
             variant={isSelected ? 'default' : 'outline'}
             size="sm"
             onClick={(e) => { e.stopPropagation(); if (!isDisabled) onSelect?.() }}
             disabled={isDisabled}
-            className={`text-[9px] sm:text-[11px] h-6 sm:h-8 rounded-lg flex-1 font-semibold transition-all ${
+            className={`text-[10px] sm:text-[11px] h-8 sm:h-8 rounded-lg flex-1 font-semibold transition-all ${
               isSelected
                 ? 'bg-aquiz-green hover:bg-aquiz-green/90 text-white border-0'
                 : 'border-aquiz-green/30 text-aquiz-green hover:bg-aquiz-green hover:text-white hover:border-aquiz-green'

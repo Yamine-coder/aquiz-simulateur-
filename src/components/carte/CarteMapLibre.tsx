@@ -33,6 +33,8 @@ interface CarteMapLibreProps {
   showHeatmap?: boolean
   /** Coordonnées vers lesquelles voler (recherche, etc.) */
   flyToCoords?: { lat: number; lng: number; zoom?: number } | null
+  /** Codes des départements à mettre en évidence et centrer (ex: ['77', '93']) */
+  highlightDepts?: string[]
 }
 
 // ─── Helpers ────────────────────────────────────────────────
@@ -93,6 +95,30 @@ function makeStyle(): maplibregl.StyleSpecification {
   }
 }
 
+/** Calcule le bounding-box [[minLng, minLat], [maxLng, maxLat]] d'une géométrie GeoJSON */
+function computeBbox(
+  geometry: GeoJSON.Geometry,
+): [[number, number], [number, number]] | null {
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+  function processRing(coords: number[][] | GeoJSON.Position[]) {
+    for (const [lng, lat] of coords as number[][]) {
+      if (lng < minLng) minLng = lng
+      if (lat < minLat) minLat = lat
+      if (lng > maxLng) maxLng = lng
+      if (lat > maxLat) maxLat = lat
+    }
+  }
+  if (geometry.type === 'Polygon') {
+    geometry.coordinates.forEach((ring) => processRing(ring))
+  } else if (geometry.type === 'MultiPolygon') {
+    geometry.coordinates.forEach((poly) => poly.forEach((ring) => processRing(ring)))
+  } else {
+    return null
+  }
+  if (!isFinite(minLng)) return null
+  return [[minLng, minLat], [maxLng, maxLat]]
+}
+
 /** queryRenderedFeatures sûr (ne throw pas si le layer n'existe pas encore) */
 function safeQuery(
   map: maplibregl.Map,
@@ -117,6 +143,7 @@ export default function CarteMapLibre({
   zoomInitial = 10,
   showHeatmap = true,
   flyToCoords,
+  highlightDepts = [],
 }: CarteMapLibreProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
@@ -129,6 +156,8 @@ export default function CarteMapLibre({
   const showHeatmapRef = useRef(showHeatmap)
   const onSelectZoneRef = useRef(onSelectZone)
   const zonesLookupRef = useRef(new Map<string, ZoneCalculee>())
+  // Suivi pour détecter le passage highlight → null (déclenchement zoom arrière)
+  const hadHighlightRef = useRef(false)
 
   // ─── Sync refs ───────────────────────────────────────────
   useEffect(() => {
@@ -470,6 +499,104 @@ export default function CarteMapLibre({
       essential: true,
     })
   }, [flyToCoords])
+
+  // ─── Mise en évidence + centrage département(s) ────────────
+  // Clé stable pour ne ré-exécuter qu'au vrai changement de sélection
+  const highlightKey = highlightDepts.join(',')
+  useEffect(() => {
+    const map = mapRef.current
+    const cleanup = () => {
+      if (!map) return
+      try {
+        if (map.getLayer('dept-highlight-fill')) map.removeLayer('dept-highlight-fill')
+        if (map.getLayer('dept-highlight-line')) map.removeLayer('dept-highlight-line')
+        if (map.getSource('dept-highlight')) map.removeSource('dept-highlight')
+      } catch { /* ignore */ }
+    }
+
+    if (!map || !isReady || highlightDepts.length === 0) {
+      cleanup()
+      // Dézoom vers la vue IDF si un highlight était actif
+      if (map && isReady && hadHighlightRef.current) {
+        hadHighlightRef.current = false
+        map.flyTo({
+          center: [centreInitial.lng, centreInitial.lat],
+          zoom: zoomInitial,
+          duration: 1000,
+          essential: true,
+        })
+      }
+      return
+    }
+
+    hadHighlightRef.current = true
+
+    fetch('/geojson/idf-departements.geojson')
+      .then((r) => r.json())
+      .then((geoData: GeoJSON.FeatureCollection) => {
+        const m = mapRef.current
+        if (!m) return
+
+        const features = geoData.features.filter(
+          (f) => highlightDepts.includes(f.properties?.code),
+        )
+        if (features.length === 0) return
+
+        // Centrer sur l'union des départements sélectionnés
+        let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity
+        features.forEach((f) => {
+          const b = computeBbox(f.geometry)
+          if (!b) return
+          if (b[0][0] < minLng) minLng = b[0][0]
+          if (b[0][1] < minLat) minLat = b[0][1]
+          if (b[1][0] > maxLng) maxLng = b[1][0]
+          if (b[1][1] > maxLat) maxLat = b[1][1]
+        })
+        if (isFinite(minLng)) {
+          m.fitBounds([[minLng, minLat], [maxLng, maxLat]], {
+            padding: 60,
+            duration: 1200,
+            essential: true,
+          })
+        }
+
+        // Dessiner la délimitation de tous les départements sélectionnés
+        cleanup()
+        m.addSource('dept-highlight', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features },
+        })
+
+        const beforeId = m.getLayer('unclustered-point') ? 'unclustered-point' : undefined
+
+        m.addLayer(
+          {
+            id: 'dept-highlight-fill',
+            type: 'fill',
+            source: 'dept-highlight',
+            paint: { 'fill-color': '#10B981', 'fill-opacity': 0.07 },
+          },
+          beforeId,
+        )
+        m.addLayer(
+          {
+            id: 'dept-highlight-line',
+            type: 'line',
+            source: 'dept-highlight',
+            paint: {
+              'line-color': '#10B981',
+              'line-width': 2.5,
+              'line-dasharray': [5, 3],
+            },
+          },
+          beforeId,
+        )
+      })
+      .catch((e) => console.warn('[MapLibre] highlightDepts GeoJSON fetch failed:', e))
+
+    return cleanup
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightKey, isReady])
 
   // ─── Contrôles ───────────────────────────────────────────
   const handleZoomIn = () => mapRef.current?.zoomIn({ duration: 300 })

@@ -134,7 +134,7 @@ function genererDiagnosticBancaire(data: DonneesConseil): DiagnosticBancaire {
 
   // ===== PROBABILITÉ =====
   let probabilite: DiagnosticBancaire['probabiliteAcceptation']
-  if (data.scoreFaisabilite >= 85) probabilite = 'très élevée'
+  if (data.scoreFaisabilite >= 80) probabilite = 'très élevée'
   else if (data.scoreFaisabilite >= 70) probabilite = 'élevée'
   else if (data.scoreFaisabilite >= 55) probabilite = 'moyenne'
   else if (data.scoreFaisabilite >= 40) probabilite = 'faible'

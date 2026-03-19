@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { isLocationUrl } from '@/lib/scraping/extracteur'
 import { compterChampsExtraits, extraireImagesFromHTML, parseTexteAnnonce } from '@/lib/scraping/parseTexteAnnonce'
 import type { ClasseDPE, NouvelleAnnonce, TypeBienAnnonce } from '@/types/annonces'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -161,7 +162,7 @@ export function FormulaireAnnonce({
       v !== null && v !== undefined ? String(v) : undefined
 
     if (data.prix) setValue('prix', toNumber(data.prix) as number)
-    if (data.surface) setValue('surface', toNumber(data.surface) as number)
+    if (data.surface) setValue('surface', Math.round((toNumber(data.surface) as number) * 100) / 100)
     if (data.type) setValue('type', data.type as TypeBienAnnonce)
     if (data.pieces) setValue('pieces', toNumber(data.pieces) as number)
     if (data.chambres !== undefined) setValue('chambres', toNumber(data.chambres) as number)
@@ -205,6 +206,16 @@ export function FormulaireAnnonce({
       return
     }
     
+    // ── Protection : bloquer les URLs de location avant d'appeler l'API ──
+    try {
+      if (isLocationUrl(urlInput.trim())) {
+        setExtractError('Cette annonce est une location. Le comparateur AQUIZ est réservé aux biens à l\'achat.')
+        return
+      }
+    } catch {
+      // URL malformée — on laisse le serveur gérer
+    }
+
     extractingRef.current = true
     setIsExtracting(true)
     setExtractError(null)
@@ -266,6 +277,17 @@ export function FormulaireAnnonce({
     
     try {
     const data = parseTexteAnnonce(pastedText)
+
+    // ── Protection : détecter une annonce de location via l'URL extraite ──
+    const detectedUrl = assistantUrl || data.url
+    if (detectedUrl) {
+      try {
+        if (isLocationUrl(detectedUrl)) {
+          setExtractError('Cette annonce est une location. Le comparateur AQUIZ est réservé aux biens à l\'achat.')
+          return
+        }
+      } catch { /* URL malformée — on continue */ }
+    }
     
     // Enrichir avec les images extraites du HTML clipboard (og:image, <img>)
     // Ce sont souvent des thumbnails basse-résolution — on les garde en fallback

@@ -127,25 +127,41 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
       return next
     })
     
-    // Lancer les analyses en parallèle
+    // Lancer les analyses SÉQUENTIELLEMENT pour éviter les 429 Overpass
     const analyserTout = async () => {
       try {
-        const resultats = await Promise.all(
-          annoncesSansAnalyse.map(async (annonce) => {
-            try {
-              const bien = annonceToBienAnalyse(annonce)
-              // BUG-16 : Valider le code postal avant l'appel API
-              if (!bien.codePostal || bien.codePostal.length !== 5) {
-                logger.warn(`Analyse ${annonce.id} : code postal manquant ou invalide ("${bien.codePostal}"). Enrichissement partiel.`)
-              }
-              const analyse = await analyserBien(bien)
-              return { id: annonce.id, analyse }
-            } catch (err) {
-              logger.error(`Erreur analyse ${annonce.id}:`, err)
-              return { id: annonce.id, analyse: null }
+        const resultats: Array<{ id: string; analyse: AnalyseComplete | null }> = []
+        for (const annonce of annoncesSansAnalyse) {
+          try {
+            const bien = annonceToBienAnalyse(annonce)
+            // BUG-16 : Valider le code postal avant l'appel API
+            if (!bien.codePostal || bien.codePostal.length !== 5) {
+              logger.warn(`Analyse ${annonce.id} : code postal manquant ou invalide ("${bien.codePostal}"). Enrichissement partiel.`)
             }
-          })
-        )
+            const analyse = await analyserBien(bien)
+            resultats.push({ id: annonce.id, analyse })
+          } catch (err) {
+            logger.error(`Erreur analyse ${annonce.id}:`, err)
+            resultats.push({ id: annonce.id, analyse: null })
+          }
+        }
+        
+        // Propager les données quartier entre biens du même code postal
+        // (si un bien a réussi, les autres du même CP en profitent)
+        const quartierByCP = new Map<string, AnalyseComplete['quartier']>()
+        for (const { analyse } of resultats) {
+          if (analyse?.quartier?.success && analyse.bien.codePostal) {
+            if (!quartierByCP.has(analyse.bien.codePostal)) {
+              quartierByCP.set(analyse.bien.codePostal, analyse.quartier)
+            }
+          }
+        }
+        for (const r of resultats) {
+          if (r.analyse && !r.analyse.quartier?.success && r.analyse.bien.codePostal) {
+            const shared = quartierByCP.get(r.analyse.bien.codePostal)
+            if (shared) r.analyse = { ...r.analyse, quartier: shared }
+          }
+        }
         
         // Mettre à jour les analyses + tracker les échecs
         setAnalyses(prev => {

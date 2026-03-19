@@ -164,25 +164,27 @@ export function calculerScoreFaisabilite(input: ScoreFaisabiliteInput): ScoreFai
 // SOUS-SCORES PAR CRITÈRE
 // ============================================================================
 
-/** Endettement — /30 (progressif) */
+/** Endettement — /30 (progressif, lissé autour de 30-35%) */
 function calculerScoreEndettement(taux: number): number {
   if (taux <= 25) return 30           // Excellent : grosse marge
   if (taux <= 28) return 27           // Très confortable
   if (taux <= 30) return 24           // Confortable
+  if (taux <= 32) return 21           // Correct — sous la norme courante
   if (taux <= 33) return 18           // Acceptable (norme courante)
+  if (taux <= 34) return 14           // Approche limite HCSF
   if (taux <= 35) return 10           // Limite HCSF
   if (taux <= 37) return 4            // Hors norme (dérogation possible)
   return 0                             // Refus quasi certain
 }
 
-/** Reste à vivre — /20 (ratio vs minimum réglementaire) */
+/** Reste à vivre — /20 (ratio vs minimum réglementaire, palier 1.0-1.2 lissé) */
 function calculerScoreResteAVivre(rav: number, ravMin: number): number {
   if (ravMin <= 0) return 10 // Pas de données suffisantes
   const ratio = rav / ravMin
   if (ratio >= 2.0) return 20          // RAV = 2× le minimum : très confortable
   if (ratio >= 1.5) return 16          // Bonne marge
   if (ratio >= 1.2) return 12          // Marge correcte
-  if (ratio >= 1.0) return 7           // Juste au minimum
+  if (ratio >= 1.0) return 9           // Juste au minimum — acceptable
   if (ratio >= 0.8) return 3           // En dessous du minimum
   return 0                              // RAV critique
 }
@@ -331,7 +333,7 @@ function getCommentaireCharges(ratio: number): string {
 // ============================================================================
 
 function getLabel(score: number): ScoreFaisabiliteResult['label'] {
-  if (score >= 85) return 'Excellent'
+  if (score >= 80) return 'Excellent'
   if (score >= 70) return 'Bon'
   if (score >= 50) return 'Moyen'
   if (score >= 35) return 'Fragile'
@@ -341,5 +343,6 @@ function getLabel(score: number): ScoreFaisabiliteResult['label'] {
 function getCouleur(score: number): ScoreFaisabiliteResult['couleur'] {
   if (score >= 70) return 'green'
   if (score >= 50) return 'amber'
+  if (score >= 35) return 'orange'
   return 'red'
 }

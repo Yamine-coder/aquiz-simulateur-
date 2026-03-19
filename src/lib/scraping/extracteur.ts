@@ -70,6 +70,30 @@ export function detecterSource(url: string): string | null {
 }
 
 // ============================================
+// DÉTECTION LOCATION (annonce de loyer, pas d'achat)
+// ============================================
+
+/**
+ * Détecte si une URL correspond à une annonce de location (et non de vente).
+ * Les patterns couvrent les principaux portails immobiliers français.
+ */
+export function isLocationUrl(url: string): boolean {
+  const pathLower = new URL(url).pathname.toLowerCase()
+  const patterns = [
+    '/location/',           // SeLoger, Bien'ici, Foncia, etc.
+    '/locations/',
+    '/locations_immobilieres', // LeBonCoin
+    '/louer/',              // Laforêt, Century21, Orpi
+    '/annonce-location',
+    '/detail-location',     // Logic-Immo
+    '/a-louer/',
+    '/rent/',
+    '/colocation/',
+  ]
+  return patterns.some(p => pathLower.includes(p))
+}
+
+// ============================================
 // HELPERS PARSING
 // ============================================
 

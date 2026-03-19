@@ -10,7 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 // Route dynamique (appelée côté client)
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
-const OVERPASS_FALLBACK_URL = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+const OVERPASS_FALLBACK_URL = 'https://overpass.kumi.systems/api/interpreter'
+const OVERPASS_FALLBACK_2 = 'https://overpass.private.coffee/api/interpreter'
 
 // Cache serveur borné — POIs changent rarement (TTL 24h, max 200 entrées)
 const quartierCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 200 })
@@ -219,7 +220,7 @@ export async function GET(request: NextRequest) {
     `
 
     // ── Pool de serveurs Overpass avec gestion 429 ──────────────────────
-    const SERVERS = [OVERPASS_URL, OVERPASS_FALLBACK_URL]
+    const SERVERS = [OVERPASS_URL, OVERPASS_FALLBACK_URL, OVERPASS_FALLBACK_2]
     // Tracker les serveurs 429-bloqués pour cette requête
     const blocked429 = new Set<string>()
 
@@ -265,11 +266,11 @@ export async function GET(request: NextRequest) {
           await new Promise(r => setTimeout(r, 1000))
         }
       }
-      // Si tous les serveurs ont échoué, réessayer une dernière fois le fallback
-      // même s'il a eu un 429 (il a peut-être récupéré)
+      // Si tous les serveurs ont échoué, réessayer le serveur principal après un délai
+      // (le rate-limit a peut-être expiré)
       try {
-        await new Promise(r => setTimeout(r, 2000))
-        return await fetchOverpass(query, timeoutMs, OVERPASS_FALLBACK_URL)
+        await new Promise(r => setTimeout(r, 3000))
+        return await fetchOverpass(query, timeoutMs, OVERPASS_URL)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         errors.push(`last-resort: ${msg}`)
@@ -278,26 +279,12 @@ export async function GET(request: NextRequest) {
       return { elements: [] }
     }
 
-    // ── Lancer les 3 requêtes : base (obligatoire), transport nodes + relations (best effort) ──
-    // Base : obligatoire, lance en premier
-    const basePromise = fetchWithRotation(queryBase, 18000, 'Base')
-    
-    // Transport nodes : décalé de 500ms pour éviter de saturer
-    const transportNodesPromise = new Promise<{ elements: unknown[] }>(resolve => {
-      setTimeout(() => {
-        fetchWithRotation(queryTransportNodes, 18000, 'TransportNodes').then(resolve)
-      }, 500)
-    })
-    
-    // Relations : décalé de 1.5s, sur le serveur fallback de préférence (plus permissif)
-    const relationsPromise = new Promise<{ elements: unknown[] }>(resolve => {
-      setTimeout(() => {
-        fetchWithRotation(queryRelations, 22000, 'Relations').then(resolve)
-      }, 1500)
-    })
-
+    // ── Lancer les 3 requêtes en PARALLÈLE (3 requêtes pour 1 seul lieu = OK) ──
+    // La sérialisation entre ANNONCES se fait côté client (useAnalyseEnrichie)
     const [baseResult, transportNodesResult, relationsResult] = await Promise.all([
-      basePromise, transportNodesPromise, relationsPromise
+      fetchWithRotation(queryBase, 18000, 'Base'),
+      fetchWithRotation(queryTransportNodes, 18000, 'TransportNodes'),
+      fetchWithRotation(queryRelations, 22000, 'Relations'),
     ])
 
     // ── Assembler les résultats ──

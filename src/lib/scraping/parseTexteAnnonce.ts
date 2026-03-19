@@ -291,7 +291,7 @@ function extraireSurface(texte: string): number | undefined {
     const m = texte.match(p)
     if (m) {
       const s = parseFloat(m[1].replace(',', '.'))
-      if (s >= 9 && s <= 1000) return s
+      if (s >= 9 && s <= 1000) return Math.round(s * 100) / 100
     }
   }
   return undefined

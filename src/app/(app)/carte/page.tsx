@@ -5,6 +5,7 @@
  * Moteur WebGL MapLibre GL · Heatmap · Clusters · Recherche · Dark/Light
  */
 
+import { ContactModal } from '@/components/contact/ContactModal'
 import { Button } from '@/components/ui/button'
 import { CENTRES_REGIONS, ZONES_ILE_DE_FRANCE } from '@/data/prix-m2-idf'
 import { useDVFData } from '@/hooks/useDVFData'
@@ -27,6 +28,7 @@ import {
     Info,
     Lightbulb,
     Loader2,
+    Phone,
     Ruler,
     Search,
     TrendingDown,
@@ -69,6 +71,7 @@ function CartePageContent() {
 
   // ─── Navigation context ──────────────────────────────────
   const fromParam = searchParams.get('from')
+  const deptParam = searchParams.get('dept')
   const [fromSimulation, setFromSimulation] = useState(false)
   useEffect(() => {
     if (fromParam === 'simulation') {
@@ -82,11 +85,17 @@ function CartePageContent() {
   // ─── States ──────────────────────────────────────────────
   const [typeBien, setTypeBien] = useState<TypeBienCarte>('appartement')
   const [filtreStatuts, setFiltreStatuts] = useState<StatutZone[]>([])
-  const [filtreDepartements, setFiltreDepartements] = useState<string[]>([])
+  const [filtreDepartements, setFiltreDepartements] = useState<string[]>(() => deptParam ? [deptParam] : [])
+  // Zoom + polygones sur tous les dépts filtrés
+  const highlightDepts = useMemo(() => filtreDepartements, [filtreDepartements])
   const [zoneSelectionnee, setZoneSelectionnee] = useState<ZoneCalculee | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [customBudget, setCustomBudget] = useState<number>(300000)
   const [showBudgetHint, setShowBudgetHint] = useState(false)
+
+  // ─── Contact modal ─────────────────────────────────────────
+  const [showContactModal, setShowContactModal] = useState(false)
+  const [contactCommune, setContactCommune] = useState<string | undefined>(undefined)
 
   // ─── Pro features ────────────────────────────────────────
   const [showHeatmap, setShowHeatmap] = useState(true)
@@ -122,7 +131,12 @@ function CartePageContent() {
       return () => { clearTimeout(show); clearTimeout(hide) }
     }
   }, [fromSimulation, isHydrated])
-
+  useEffect(() => {
+    if (!showFilters) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowFilters(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showFilters])
   // ─── DVF Data ────────────────────────────────────────────
   const departementsIDF = ['75', '77', '78', '91', '92', '93', '94', '95']
   const { zones: zonesReelles, isLoading: dvfLoading } = useDVFData(departementsIDF)
@@ -352,7 +366,9 @@ function CartePageContent() {
               className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
                 showFilters
                   ? 'bg-slate-900 text-white shadow-md'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
+                  : (filtreStatuts.length > 0 || filtreDepartements.length > 0)
+                    ? 'bg-aquiz-green text-white shadow-sm hover:bg-aquiz-green/90'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-800'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -400,6 +416,7 @@ function CartePageContent() {
             zoomInitial={centreRegion.zoom}
             showHeatmap={showHeatmap}
             flyToCoords={flyToCoords}
+            highlightDepts={highlightDepts}
           />
         </div>
 
@@ -449,17 +466,54 @@ function CartePageContent() {
           </div>
         </div>
 
-        {/* Zone count badge */}
-        <div className={`absolute top-3 left-3 z-20 ${showFilters ? 'hidden' : ''}`}>
+        {/* Zone count badge + filtres actifs */}
+        <div className={`absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 ${showFilters ? 'hidden' : ''}`}>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg border bg-white/95 backdrop-blur border-white/50 text-slate-600">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span className="font-bold text-slate-800">{stats.total}</span> zones · {typeBien === 'appartement' ? 'Appart.' : 'Maisons'} · WebGL
           </div>
+          {(filtreDepartements.length > 0 || filtreStatuts.length > 0) && (
+            <div className="flex flex-wrap gap-1">
+              {filtreDepartements.map(code => (
+                <button
+                  key={code}
+                  onClick={() => setFiltreDepartements(filtreDepartements.filter(d => d !== code))}
+                  title={`Retirer le filtre ${getDeptLabel(code)}`}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold shadow-md bg-aquiz-green text-white hover:bg-aquiz-green/80 transition-colors"
+                >
+                  <Filter className="w-2.5 h-2.5" />
+                  {getDeptLabel(code)}
+                  <X className="w-2.5 h-2.5 ml-0.5" />
+                </button>
+              ))}
+              {filtreStatuts.map(statut => {
+                const labels = { vert: 'Confort', orange: 'Accessible', rouge: 'Limité' }
+                return (
+                  <button
+                    key={statut}
+                    onClick={() => setFiltreStatuts(filtreStatuts.filter(s => s !== statut))}
+                    title={`Retirer le filtre ${labels[statut]}`}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold shadow-md bg-slate-700 text-white hover:bg-slate-600 transition-colors"
+                  >
+                    <Filter className="w-2.5 h-2.5" />
+                    {labels[statut]}
+                    <X className="w-2.5 h-2.5 ml-0.5" />
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* ─── Panel Filtres ─── */}
         {showFilters && (
-          <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-auto sm:right-14 z-40 sm:w-72">
+          <>
+            {/* Backdrop — clic en dehors pour fermer */}
+            <div
+              className="absolute inset-0 z-30"
+              onClick={() => setShowFilters(false)}
+            />
+            <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-auto sm:right-14 z-40 sm:w-72">
             <div className="rounded-xl shadow-xl border overflow-hidden bg-white border-slate-200">
               <div className="px-4 py-3 border-b flex items-center justify-between border-slate-200">
                 <span className="font-semibold text-slate-900">Filtres</span>
@@ -535,6 +589,7 @@ function CartePageContent() {
               </div>
             </div>
           </div>
+          </>
         )}
 
         {/* ─── Panneau de détail ─── */}
@@ -667,9 +722,24 @@ function CartePageContent() {
               </div>
 
               {/* Actions */}
-              <div className="px-4 pb-3 pt-0.5 flex gap-2">
+              <div className="px-4 pb-4 pt-1 space-y-2">
+                <button
+                  onClick={() => { setContactCommune(zoneSelectionnee.nom); setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'carte-panel', page: 'carte', commune: zoneSelectionnee.nom, statut: zoneSelectionnee.statut }) }}
+                  className="w-full flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl bg-aquiz-green hover:bg-aquiz-green/90 transition-colors text-white"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <Phone className="w-3.5 h-3.5" />
+                    Parler à un conseiller
+                  </span>
+                  <span className="text-[10px] text-white/75">
+                    {zoneSelectionnee.statut === 'vert' && `${zoneSelectionnee.nom} est dans votre budget — passez à l'étape suivante`}
+                    {zoneSelectionnee.statut === 'orange' && `Votre dossier peut faire la différence à ${zoneSelectionnee.nom}`}
+                    {zoneSelectionnee.statut === 'rouge' && `Des solutions existent — votre dossier mérite d'être étudié`}
+                  </span>
+                </button>
                 <Button
-                  className="flex-1 h-9 text-sm bg-aquiz-green hover:bg-aquiz-green/90 text-aquiz-black font-semibold"
+                  variant="outline"
+                  className="w-full h-10 text-sm border-slate-200 text-slate-700 hover:bg-slate-50 font-medium rounded-xl"
                   onClick={() => {
                     saveZoneToStore({
                       codeInsee: zoneSelectionnee.codeInsee,
@@ -684,21 +754,22 @@ function CartePageContent() {
                     router.push('/aides?from=carte')
                   }}
                 >
-                  Simuler mes aides
+                  Simuler mes aides à {zoneSelectionnee.nom}
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-9 px-4 text-sm border-slate-200 hover:bg-slate-50"
+                <button
+                  className="w-full text-[10px] text-slate-400 hover:text-slate-600 transition-colors py-0.5"
                   onClick={() => setZoneSelectionnee(null)}
                 >
                   Fermer
-                </Button>
+                </button>
               </div>
             </div>
           </div>
           )
         })()}
       </main>
+
+      <ContactModal isOpen={showContactModal} onClose={() => { setShowContactModal(false); setContactCommune(undefined) }} commune={contactCommune} budgetOverride={budget} />
     </div>
   )
 }

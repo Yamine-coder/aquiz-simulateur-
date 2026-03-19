@@ -732,14 +732,16 @@ function fmt(n: number): string {
 function getScoreColor(score: number): string {
   if (score >= 70) return C.green
   if (score >= 50) return C.gray
-  return C.black
+  if (score >= 35) return C.orange
+  return C.red
 }
 
 function getScoreLabel(score: number): string {
-  if (score >= 85) return 'EXCELLENT'
+  if (score >= 80) return 'EXCELLENT'
   if (score >= 70) return 'BON'
   if (score >= 50) return 'MOYEN'
-  return 'FRAGILE'
+  if (score >= 35) return 'FRAGILE'
+  return 'CRITIQUE'
 }
 
 function getTauxColor(taux: number): string {
@@ -943,17 +945,54 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           </View>
 
-          {/* Répartition budget */}
+          {/* Répartition budget — même trame que Analyse Détaillée */}
           <View style={{ marginTop: 14 }}>
             <SectionTitle title="RÉPARTITION DU BUDGET" />
-            <View style={[s.barContainer, { marginTop: 8 }]}>
-              <BudgetBar label="Apport personnel" value={pieData.apport} pct={pieData.pourcentageApport} color={C.green} />
-              <BudgetBar label="Prêt bancaire" value={pieData.pret} pct={pieData.pourcentagePret} color={C.sectionBg} />
-              <BudgetBar label="Frais de notaire" value={pieData.frais} pct={pieData.pourcentageFrais} color={C.grayLight} />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.sectionBg, borderRadius: 4, paddingVertical: 8, paddingHorizontal: 10, marginTop: 8 }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>BUDGET TOTAL</Text>
-                <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.green }}>{fmt(pieData.total)} EUR</Text>
+            <View style={{ marginTop: 6 }}>
+              {/* Apport */}
+              <View style={{ marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.green }} />
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Apport personnel</Text>
+                  </View>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.green }}>{fmt(pieData.apport)} EUR ({pieData.pourcentageApport}%)</Text>
+                </View>
+                <View style={{ height: 5, backgroundColor: '#e6e6e6', borderRadius: 2 }}>
+                  <View style={{ height: 5, backgroundColor: C.green, borderRadius: 2, width: `${Math.max(2, pieData.pourcentageApport)}%` }} />
+                </View>
               </View>
+              {/* Prêt */}
+              <View style={{ marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.sectionBg }} />
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Prêt bancaire</Text>
+                  </View>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray }}>{fmt(pieData.pret)} EUR ({pieData.pourcentagePret}%)</Text>
+                </View>
+                <View style={{ height: 5, backgroundColor: '#e6e6e6', borderRadius: 2 }}>
+                  <View style={{ height: 5, backgroundColor: C.sectionBg, borderRadius: 2, width: `${Math.max(2, pieData.pourcentagePret)}%` }} />
+                </View>
+              </View>
+              {/* Frais notaire */}
+              <View style={{ marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.grayLight }} />
+                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>Frais de notaire</Text>
+                  </View>
+                  <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray }}>{fmt(pieData.frais)} EUR ({pieData.pourcentageFrais}%)</Text>
+                </View>
+                <View style={{ height: 5, backgroundColor: '#e6e6e6', borderRadius: 2 }}>
+                  <View style={{ height: 5, backgroundColor: C.grayLight, borderRadius: 2, width: `${Math.max(2, pieData.pourcentageFrais)}%` }} />
+                </View>
+              </View>
+            </View>
+            {/* Total */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.sectionBg, borderRadius: 4, paddingVertical: 8, paddingHorizontal: 10, marginTop: 4 }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>BUDGET TOTAL</Text>
+              <Text style={{ fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.green }}>{fmt(pieData.total)} EUR</Text>
             </View>
           </View>
         </View>
@@ -966,35 +1005,6 @@ export function SimulationPDF(props: SimulationPDFProps) {
         <Footer logoUrl={logoUrl} />
 
         <View style={s.content}>
-          {/* Titre de section */}
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 }} wrap={false}>
-            <Text style={s.pageTitle}>ANALYSE DU DOSSIER</Text>
-            <Text style={s.pageSub}>Points clés de votre profil</Text>
-          </View>
-
-          {/* Points forts / Points d'attention */}
-          <View style={s.pointsRow} wrap={false}>
-            <View style={s.pointsCol}>
-              <View style={[s.pointsHeader, { backgroundColor: C.greenLight }]}>
-                <Text style={[s.pointsHeaderText, { color: C.greenDark }]}>POINTS FORTS</Text>
-              </View>
-              <View style={s.pointsList}>
-                {diag.pointsForts.map((pf, i) => (
-                  <Text key={i} style={s.pointItem}>• {pf}</Text>
-                ))}
-              </View>
-            </View>
-            <View style={s.pointsCol}>
-              <View style={[s.pointsHeader, { backgroundColor: C.grayBg }]}>
-                <Text style={[s.pointsHeaderText, { color: C.gray }]}>POINTS D&apos;ATTENTION</Text>
-              </View>
-              <View style={s.pointsList}>
-                {diag.pointsVigilance.map((pv, i) => (
-                  <Text key={i} style={s.pointItem}>• {pv}</Text>
-                ))}
-              </View>
-            </View>
-          </View>
 
           {/* ═══ ÉTUDE DE MARCHÉ LOCALE (premium) ═══ */}
           {marche && (
@@ -1106,9 +1116,8 @@ export function SimulationPDF(props: SimulationPDFProps) {
             </View>
           )}
 
-          {/* Recommandations groupées par priorité */}
-          <Text style={s.recoTitle} minPresenceAhead={60}>RECOMMANDATIONS PERSONNALISÉES</Text>
-          {(() => {
+          {/* Recommandations groupées par priorité — masquées Mode A */}
+          {false && (() => {
             const alertes = conseils.conseils.filter(c => c.type === 'alerte')
             const ameliorations = conseils.conseils.filter(c => c.type === 'amelioration' || c.type === 'optimisation')
             const succes = conseils.conseils.filter(c => c.type === 'succes')
@@ -1243,8 +1252,8 @@ export function SimulationPDF(props: SimulationPDFProps) {
             ))
           })()}
 
-          {/* Scénarios — TOUS avec détails complets */}
-          {conseils.scenarios.length > 0 && (
+          {/* Scénarios — masqués Mode A */}
+          {false && conseils.scenarios.length > 0 && (
             <>
               <View break>
                 <Text style={s.recoTitle}>SCÉNARIOS ALTERNATIFS</Text>
@@ -1355,7 +1364,7 @@ export function SimulationPDF(props: SimulationPDFProps) {
                   <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 }}>Charges mensuelles oubliées</Text>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                     <Text style={{ fontSize: 6.5, color: C.gray }}>Taxe foncière (estimée)</Text>
-                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(Math.round(prixAchatMax * 0.007 / 12))} EUR/mois</Text>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(Math.round(prixAchatMax * 0.007))} à {fmt(Math.round(prixAchatMax * 0.012))} EUR/an</Text>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                     <Text style={{ fontSize: 6.5, color: C.gray }}>Charges de copropriété (si appart.)</Text>

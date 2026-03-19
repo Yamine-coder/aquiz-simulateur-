@@ -155,7 +155,28 @@ export interface AnalyseComplete {
 // GÉOCODAGE
 // ============================================
 
+// ── In-flight deduplication maps (avoids duplicate concurrent API calls for same params) ──
+const inflightGeocode = new Map<string, Promise<{ lat: number; lon: number } | null>>()
+const inflightQuartier = new Map<string, Promise<AnalyseQuartier>>()
+const inflightRisques = new Map<string, Promise<AnalyseRisques>>()
+// ── Code postal cache: quartier data is similar within same postal area ──
+// Avoids Overpass rate-limiting when analyzing multiple annonces in the same area
+const quartierCacheByCP = new Map<string, AnalyseQuartier>()
 async function geocoderAdresse(
+  adresse: string,
+  codePostal: string
+): Promise<{ lat: number; lon: number } | null> {
+  const dedupeKey = `${adresse}|${codePostal}`
+  const inflight = inflightGeocode.get(dedupeKey)
+  if (inflight) return inflight
+
+  const promise = geocoderAdresseImpl(adresse, codePostal)
+  inflightGeocode.set(dedupeKey, promise)
+  promise.finally(() => inflightGeocode.delete(dedupeKey))
+  return promise
+}
+
+async function geocoderAdresseImpl(
   adresse: string,
   codePostal: string
 ): Promise<{ lat: number; lon: number } | null> {
@@ -201,18 +222,37 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
     }
   }
   
-  // 2. Lancer les 3 analyses en parallèle
+  // 2. Lancer les analyses en parallèle
+  // Quartier : réutiliser le cache par code postal pour éviter les 429 Overpass
+  const cachedQuartier = bien.codePostal ? quartierCacheByCP.get(bien.codePostal) : undefined
+
   const [marcheResult, risquesResult, quartierResult, communeResult] = await Promise.all([
     analyserMarche(bien),
     latitude && longitude ? analyserRisques(latitude, longitude) : Promise.resolve(null),
-    latitude && longitude ? analyserQuartier(latitude, longitude) : Promise.resolve(null),
+    cachedQuartier
+      ? Promise.resolve(cachedQuartier)
+      : latitude && longitude
+        ? analyserQuartier(latitude, longitude)
+        : Promise.resolve(null),
     bien.codePostal ? fetchCommuneInfos(bien.codePostal) : Promise.resolve(null),
   ])
+
+  // Cacher le résultat quartier par code postal (si succès)
+  if (quartierResult && quartierResult.success && bien.codePostal && !quartierCacheByCP.has(bien.codePostal)) {
+    quartierCacheByCP.set(bien.codePostal, quartierResult)
+  }
+  
+  // Fallback : si quartier échoué, re-vérifier le cache (un autre bien du même CP a pu le peupler)
+  let finalQuartierResult = quartierResult
+  if ((!finalQuartierResult || !finalQuartierResult.success) && bien.codePostal) {
+    const cachedFallback = quartierCacheByCP.get(bien.codePostal)
+    if (cachedFallback?.success) finalQuartierResult = cachedFallback
+  }
   
   // 3. Construire les résultats
   const marche = marcheResult || { success: false }
   const risques = risquesResult || { success: false }
-  const quartier = quartierResult || { success: false }
+  const quartier = finalQuartierResult || { success: false }
   const communeInfos = communeResult || { success: false }
   
   // 4. Calculer le score global et les recommandations
@@ -343,6 +383,20 @@ async function analyserRisques(
   latitude: number,
   longitude: number
 ): Promise<AnalyseRisques> {
+  const dedupeKey = `${latitude}_${longitude}`
+  const inflight = inflightRisques.get(dedupeKey)
+  if (inflight) return inflight
+
+  const promise = analyserRisquesImpl(latitude, longitude)
+  inflightRisques.set(dedupeKey, promise)
+  promise.finally(() => inflightRisques.delete(dedupeKey))
+  return promise
+}
+
+async function analyserRisquesImpl(
+  latitude: number,
+  longitude: number
+): Promise<AnalyseRisques> {
   try {
     const params = new URLSearchParams({
       lat: latitude.toString(),
@@ -402,6 +456,20 @@ async function analyserRisques(
 // ============================================
 
 async function analyserQuartier(
+  latitude: number,
+  longitude: number
+): Promise<AnalyseQuartier> {
+  const dedupeKey = `${latitude}_${longitude}`
+  const inflight = inflightQuartier.get(dedupeKey)
+  if (inflight) return inflight
+
+  const promise = analyserQuartierImpl(latitude, longitude)
+  inflightQuartier.set(dedupeKey, promise)
+  promise.finally(() => inflightQuartier.delete(dedupeKey))
+  return promise
+}
+
+async function analyserQuartierImpl(
   latitude: number,
   longitude: number
 ): Promise<AnalyseQuartier> {

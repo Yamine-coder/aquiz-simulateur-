@@ -32,19 +32,19 @@ import {
     AlertCircle,
     ArrowLeft,
     ArrowRight,
+    Banknote,
     Check,
     CheckCircle,
     ChevronDown,
     Clock,
     CreditCard,
-    FileDown,
+    Gift,
     Info,
-    Loader2,
-    Mail,
     MapPin,
     Percent,
     Phone,
     PiggyBank,
+    Share2,
     Shield
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
@@ -95,6 +95,7 @@ function ModeAPageContent() {
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showContactModal, setShowContactModal] = useState(false)
   const [showScoreDetail, setShowScoreDetail] = useState(false)
+  const [tauxEndettementChoisi, setTauxEndettementChoisi] = useState(35)
   const [pdfEmailSent, setPdfEmailSent] = useState(false)
   const [pdfEmailValue, setPdfEmailValue] = useState('')
   const [pdfEmailLoading, setPdfEmailLoading] = useState(false)
@@ -379,9 +380,10 @@ function ModeAPageContent() {
   }, [etape])
 
   // Mensualité max recommandée - calcul EXACT incluant l'assurance
-  // Résolution de : (charges + M + assurance(M)) / revenus = 35%
+  // Résolution de : (charges + M + assurance(M)) / revenus = tauxChoisi%
   // Avec assurance(M) = (M / facteur) * tauxAssurance / 12
-  // => M * (1 + tauxAssurance / (12 * facteur)) = revenus * 0.35 - charges
+  // => M * (1 + tauxAssurance / (12 * facteur)) = revenus * tauxChoisi - charges
+  const tauxEndettementDecimal = tauxEndettementChoisi / 100
   const mensualiteRecommandee = useMemo(() => {
     const revenus = salaire1 + salaire2 + autresRevenus
     const charges = creditsEnCours + autresCharges
@@ -395,11 +397,11 @@ function ModeAPageContent() {
     // Coefficient multiplicateur : chaque € de mensualité génère aussi de l'assurance
     const coeffAssurance = facteur > 0 ? 1 + tauxAssurance / (12 * facteur) : 1
     
-    const maxBrut = (revenus * 0.35 - charges) / coeffAssurance
+    const maxBrut = (revenus * tauxEndettementDecimal - charges) / coeffAssurance
     
-    // Arrondir à 1€ en dessous pour garantir <= 35% tout en reflétant l'impact du taux
+    // Arrondir à 1€ en dessous pour garantir <= taux choisi tout en reflétant l'impact du taux
     return Math.max(0, Math.floor(maxBrut))
-  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, tauxInteret, dureeAns])
+  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, tauxInteret, dureeAns, tauxEndettementDecimal])
 
   // Synchroniser la mensualité max avec la recommandation HCSF
   useEffect(() => {
@@ -412,7 +414,7 @@ function ModeAPageContent() {
     const revenusMensuelsTotal = salaire1 + salaire2 + autresRevenus
     const chargesMensuellesTotal = creditsEnCours + autresCharges
     const tauxEndettementActuel = revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0
-    const endettementActuelEleve = tauxEndettementActuel > 35
+    const endettementActuelEleve = tauxEndettementActuel > tauxEndettementChoisi
     const tauxMensuel = tauxInteret / 100 / 12
     const nombreMois = dureeAns * 12
     const facteur = tauxMensuel > 0 ? tauxMensuel / (1 - Math.pow(1 + tauxMensuel, -nombreMois)) : 0
@@ -424,14 +426,14 @@ function ModeAPageContent() {
     const tauxEndettementProjet = revenusMensuelsTotal > 0 
       ? Math.round((mensualitesTotalesProjet / revenusMensuelsTotal) * 1000) / 10 
       : 0
-    // > 35% signifie que 35.0% est OK, 35.1% ne l'est pas
-    const depasseEndettement = tauxEndettementProjet > 35
+    // > tauxChoisi% signifie que tauxChoisi% est OK, +0.1% ne l'est pas
+    const depasseEndettement = tauxEndettementProjet > tauxEndettementChoisi
     
-    // Mensualité max recommandée = 35% des revenus - charges existantes
+    // Mensualité max recommandée = tauxChoisi% des revenus - charges existantes
     // Cette valeur doit être INDÉPENDANTE de la mensualité saisie par l'utilisateur
     // On ne soustrait pas l'assurance car elle sera calculée après
     const mensualiteMaxRecommandee = revenusMensuelsTotal > 0 
-      ? Math.max(0, Math.round(revenusMensuelsTotal * 0.35 - chargesMensuellesTotal))
+      ? Math.max(0, Math.round(revenusMensuelsTotal * tauxEndettementDecimal - chargesMensuellesTotal))
       : 0
     
     const resteAVivre = revenusMensuelsTotal - mensualitesTotalesProjet
@@ -517,7 +519,7 @@ function ModeAPageContent() {
       surfaceProvince >= 20 ? { zone: 'Province', surface: surfaceProvince, prixM2: 2800 } : null,
     ].filter(Boolean) as { zone: string; surface: number; prixM2: number }[]
     return { revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel, endettementActuelEleve, tauxEndettementProjet, depasseEndettement, mensualiteMaxRecommandee, resteAVivre, resteAVivreMinTotal, niveauResteAVivre, capitalEmpruntable, mensualiteAssurance, prixAchatMax, fraisNotaire, budgetTotal, coutTotalCredit, surfaceParis, surfacePetiteCouronne, surfaceGrandeCouronne, surfaceProvince, zonesCompatibles, apercuSurfaces }
-  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, mensualiteMax, dureeAns, apport, typeBien, tauxInteret, situationFoyer, nombreEnfants, zonesReelles])
+  }, [salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, mensualiteMax, dureeAns, apport, typeBien, tauxInteret, situationFoyer, nombreEnfants, zonesReelles, tauxEndettementChoisi, tauxEndettementDecimal])
 
   // Score de faisabilité multicritère (0-100) — 7 critères pondérés
   const scoreResult = useMemo(() => {
@@ -630,7 +632,7 @@ function ModeAPageContent() {
     const chargesMensuellesTotal = (data.creditsEnCours || 0) + (data.autresCharges || 0)
     setProfil({ age, statutProfessionnel: (statutProfessionnel || 'cdi') as 'cdi' | 'cdd' | 'fonctionnaire' | 'independant' | 'retraite' | 'autre', situationFoyer: data.situationFoyer, nombreEnfants: data.nombreEnfants, salaire1: data.salaire1, salaire2: data.salaire2 || 0, autresRevenus: data.autresRevenus || 0, creditsEnCours: data.creditsEnCours || 0, autresCharges: data.autresCharges || 0, revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel: revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0 })
     setParametresModeA({ mensualiteMax: data.mensualiteMax, dureeAns: data.dureeAns, apport: data.apport, typeBien: data.typeBien, tauxInteret: data.tauxInteret || 3.5 })
-    setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(data.mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(data.mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
+    setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(data.mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(data.mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > tauxEndettementChoisi * 0.9 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > ${tauxEndettementChoisi}%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
     setEtape('resultats')
   }
 
@@ -644,7 +646,7 @@ function ModeAPageContent() {
       const chargesMensuellesTotal = creditsEnCours + autresCharges
       setProfil({ age, statutProfessionnel: (statutProfessionnel || 'cdi') as 'cdi' | 'cdd' | 'fonctionnaire' | 'independant' | 'retraite' | 'autre', situationFoyer, nombreEnfants, salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel: revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0 })
       setParametresModeA({ mensualiteMax, dureeAns, apport, typeBien, tauxInteret })
-      setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > 31.5 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
+      setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > tauxEndettementChoisi * 0.9 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > ${tauxEndettementChoisi}%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
       // Sauvegarder l'étape 3 dans le store pour pouvoir y revenir
       setEtapeStore(3)
     }
@@ -654,11 +656,32 @@ function ModeAPageContent() {
     router.push('/carte?from=simulation')
   }
 
+  const saveAndGoToAides = () => {
+    autoSave.triggerSave()
+    sessionStorage.setItem('aquiz-navigating-away', '1')
+    router.push('/aides?from=simulation')
+  }
+
+  const saveAndGoToCarteWithDept = (codeDept: string) => {
+    autoSave.triggerSave()
+    if (calculs.prixAchatMax > 0) {
+      setMode('A')
+      const revenusMensuelsTotal = salaire1 + salaire2 + autresRevenus
+      const chargesMensuellesTotal = creditsEnCours + autresCharges
+      setProfil({ age, statutProfessionnel: (statutProfessionnel || 'cdi') as 'cdi' | 'cdd' | 'fonctionnaire' | 'independant' | 'retraite' | 'autre', situationFoyer, nombreEnfants, salaire1, salaire2, autresRevenus, creditsEnCours, autresCharges, revenusMensuelsTotal, chargesMensuellesTotal, tauxEndettementActuel: revenusMensuelsTotal > 0 ? (chargesMensuellesTotal / revenusMensuelsTotal) * 100 : 0 })
+      setParametresModeA({ mensualiteMax, dureeAns, apport, typeBien, tauxInteret })
+      setResultats({ mode: 'A', capaciteEmprunt: Math.round(calculs.capitalEmpruntable), mensualiteCredit: Math.round(mensualiteMax), mensualiteAssurance: Math.round(calculs.mensualiteAssurance), mensualiteTotal: Math.round(mensualiteMax + calculs.mensualiteAssurance), fraisNotaire: Math.round(calculs.fraisNotaire), tauxEndettementProjet: Math.round(calculs.tauxEndettementProjet), resteAVivre: Math.round(calculs.resteAVivre), resteAVivreMinimum: calculs.resteAVivreMinTotal, niveauProjet: calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque' ? 'impossible' : calculs.tauxEndettementProjet > tauxEndettementChoisi * 0.9 || calculs.niveauResteAVivre === 'limite' ? 'limite' : 'confortable', faisable: !calculs.depasseEndettement && calculs.niveauResteAVivre !== 'risque', alertes: [...(calculs.depasseEndettement ? [`Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > ${tauxEndettementChoisi}%)`] : []), ...(calculs.niveauResteAVivre === 'risque' ? [`Reste à vivre insuffisant`] : [])], prixAchatMax: Math.round(calculs.prixAchatMax), prixAchatPessimiste: Math.round(calculs.prixAchatMax * 0.92), prixAchatRealiste: Math.round(calculs.prixAchatMax), capaciteEmpruntPessimiste: Math.round(calculs.capitalEmpruntable * 0.92), capaciteEmpruntRealiste: Math.round(calculs.capitalEmpruntable) })
+      setEtapeStore(3)
+    }
+    sessionStorage.setItem('aquiz-navigating-away', '1')
+    router.push(`/carte?from=simulation&dept=${codeDept}`)
+  }
+
   const etapeActuelleIndex = ETAPES.findIndex(e => e.id === etape)
   const canGoToEtape = (targetEtape: EtapeId): boolean => {
     const targetIndex = ETAPES.findIndex(e => e.id === targetEtape)
     if (targetIndex <= etapeActuelleIndex) return true
-    if (targetEtape === 'simulation') return calculs.revenusMensuelsTotal > 0
+    if (targetEtape === 'simulation') return calculs.revenusMensuelsTotal > 0 && mensualiteRecommandee > 0
     if (targetEtape === 'resultats') return calculs.revenusMensuelsTotal > 0 && mensualiteMax > 0
     return false
   }
@@ -895,16 +918,16 @@ function ModeAPageContent() {
           <form onSubmit={handleSubmit(onSubmit)}>
             {etape === 'profil' && (
               <div className="animate-fade-in">
+                {/* Header pleine largeur */}
+                <div className="mb-6">
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-aquiz-black tracking-tight">Analysons votre profil</h2>
+                  <p className="text-aquiz-gray text-sm sm:text-base mt-1">Quelques informations pour estimer votre capacité d&apos;emprunt</p>
+                </div>
+
                 <div className="grid lg:grid-cols-[1fr,340px] gap-6 lg:gap-8">
                   
                   {/* === FORMULAIRE === */}
                   <div className="space-y-5">
-                    
-                    {/* Header simple */}
-                    <div className="mb-2">
-                      <h2 className="text-xl font-bold text-aquiz-black">Votre profil</h2>
-                      <p className="text-aquiz-gray text-sm mt-0.5">Renseignez votre situation pour calculer votre capacité d&apos;emprunt</p>
-                    </div>
                     
                     {/* Section 1: Situation personnelle */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
@@ -1110,13 +1133,112 @@ function ModeAPageContent() {
                       </div>
                     </div>
                     
-                    {/* Bouton Desktop */}
-                    <div className="hidden lg:block">
+                    {/* Section 4: Endettement visé — slider interactif */}
+                    {calculs.revenusMensuelsTotal > 0 && (
+                      <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
+                        <div className="px-5 py-3 border-b border-aquiz-gray-lighter/60 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
+                              <span className="text-[10px] font-bold text-aquiz-green">4</span>
+                            </div>
+                            <h2 className="font-semibold text-aquiz-black text-sm">Taux d&apos;endettement visé</h2>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-lg font-bold tabular-nums ${
+                              calculs.endettementActuelEleve ? 'text-red-500'
+                              : mensualiteRecommandee === 0 && calculs.revenusMensuelsTotal > 0 ? 'text-amber-500'
+                              : 'text-aquiz-green'
+                            }`}>{tauxEndettementChoisi}%</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" className="text-aquiz-gray-light hover:text-aquiz-gray transition-colors">
+                                  <Info className="w-3.5 h-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-72 text-xs leading-relaxed">
+                                <p className="font-semibold mb-1">Norme HCSF</p>
+                                <p>Le Haut Conseil de Stabilité Financière impose un taux d&apos;endettement max de <strong>35%</strong> des revenus nets (charges + crédit + assurance).</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                        <div className="px-5 py-4">
+                          <Slider
+                            value={[tauxEndettementChoisi]}
+                            onValueChange={(v) => setTauxEndettementChoisi(v[0])}
+                            min={10}
+                            max={35}
+                            step={1}
+                            className="w-full"
+                            aria-label="Taux d'endettement souhaité"
+                          />
+                          <div className="flex justify-between text-[10px] text-aquiz-gray mt-2">
+                            <span>10%</span>
+                            <span className={tauxEndettementChoisi < 35 ? 'font-medium text-aquiz-green' : ''}>Choisi : {tauxEndettementChoisi}%</span>
+                            <span>35% max (HCSF)</span>
+                          </div>
+                          {tauxEndettementChoisi < 35 && mensualiteRecommandee > 0 && (
+                            <p className="text-[11px] text-aquiz-green mt-2 font-medium">Vous visez un endettement plus prudent que le maximum légal</p>
+                          )}
+                          {/* Résumé revenus/charges */}
+                          <div className="flex gap-4 mt-3 pt-3 border-t border-aquiz-gray-lighter/60">
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-xs text-aquiz-gray">Revenus nets</span>
+                              <span className="text-xs font-semibold text-aquiz-black">{formatMontant(calculs.revenusMensuelsTotal)} €</span>
+                            </div>
+                            <div className="w-px bg-aquiz-gray-lighter" />
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-xs text-aquiz-gray">Charges</span>
+                              <span className="text-xs font-semibold text-aquiz-black">{formatMontant(calculs.chargesMensuellesTotal)} €</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Résultat mensualité + Bouton Desktop */}
+                    <div className="hidden lg:block space-y-4">
+                      {/* Mensualité maximale - résultat principal */}
+                      {mensualiteRecommandee > 0 ? (
+                        <div className="rounded-2xl border-2 border-aquiz-green/30 bg-linear-to-br from-aquiz-green/5 to-aquiz-green/10 p-5" aria-live="polite">
+                          <p className="text-xs text-aquiz-green uppercase tracking-wider font-bold mb-2">Mensualité maximale</p>
+                          <p className="text-3xl font-extrabold text-aquiz-black tracking-tight">
+                            {formatMontant(mensualiteRecommandee)} €
+                            <span className="text-base font-normal text-aquiz-gray ml-1">/mois</span>
+                          </p>
+                          <p className="text-xs text-aquiz-gray mt-1.5">Calculée à {tauxEndettementChoisi}% d&apos;endettement (assurance incluse)</p>
+                        </div>
+                      ) : calculs.revenusMensuelsTotal > 0 ? (
+                        <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-5" aria-live="polite">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs text-red-500 uppercase tracking-wider font-bold mb-1">Emprunt impossible</p>
+                              {calculs.endettementActuelEleve ? (
+                                <>
+                                  <p className="text-sm font-semibold text-red-700">Charges trop élevées</p>
+                                  <p className="text-xs text-red-600/80 mt-1 leading-relaxed">
+                                    Vos charges ({formatMontant(calculs.chargesMensuellesTotal)} €) dépassent {tauxEndettementChoisi}% de vos revenus ({formatMontant(Math.round(calculs.revenusMensuelsTotal * tauxEndettementDecimal))} €).
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-sm font-semibold text-red-700">Marge insuffisante</p>
+                                  <p className="text-xs text-red-600/80 mt-1 leading-relaxed">
+                                    Vos charges ({formatMontant(calculs.chargesMensuellesTotal)} €) sont trop proches du plafond de {tauxEndettementChoisi}% ({formatMontant(Math.round(calculs.revenusMensuelsTotal * tauxEndettementDecimal))} €).
+                                  </p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
                       <Button 
                         type="button" 
                         className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 text-sm font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all" 
                         onClick={goToNextEtape} 
-                        disabled={calculs.revenusMensuelsTotal === 0}
+                        disabled={calculs.revenusMensuelsTotal === 0 || mensualiteRecommandee === 0}
                       >
                         Continuer vers la simulation
                         <ArrowRight className="w-4 h-4 ml-2" />
@@ -1127,78 +1249,6 @@ function ModeAPageContent() {
                   {/* === SIDEBAR RÉCAPITULATIF === */}
                   <aside className="hidden lg:block">
                     <div className="sticky top-24 space-y-4">
-                      
-                      {/* Card Résultat principal */}
-                      <div className="rounded-xl border border-aquiz-green/20 bg-aquiz-green/5 overflow-hidden" aria-live="polite">
-                        <div className="px-4 py-2.5 border-b border-aquiz-green/15">
-                          <p className="text-[11px] text-aquiz-green uppercase tracking-wider font-semibold">Mensualité maximale</p>
-                        </div>
-                        <div className="px-4 py-4">
-                          <p className="text-2xl font-bold text-aquiz-black tracking-tight">
-                            {mensualiteRecommandee > 0 
-                              ? `${formatMontant(mensualiteRecommandee)} €`
-                              : '— €'
-                            }
-                            <span className="text-sm font-normal text-aquiz-gray">/mois</span>
-                          </p>
-                          {mensualiteRecommandee > 0 && (
-                            <p className="text-[10px] text-aquiz-gray mt-1">Assurance incluse dans le calcul réglementaire</p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Card Détails */}
-                      <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                        {/* Revenus */}
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-aquiz-gray-lighter">
-                          <span className="text-sm text-aquiz-gray">Revenus nets</span>
-                          <span className="text-sm font-semibold text-aquiz-black">
-                            {calculs.revenusMensuelsTotal > 0 ? `${formatMontant(calculs.revenusMensuelsTotal)} €` : '—'}
-                          </span>
-                        </div>
-                        
-                        {/* Charges */}
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-aquiz-gray-lighter">
-                          <span className="text-sm text-aquiz-gray">Charges</span>
-                          <span className="text-sm font-semibold text-aquiz-black">{formatMontant(calculs.chargesMensuellesTotal)} €</span>
-                        </div>
-                        
-                        {/* Taux endettement */}
-                        <div className="px-4 py-3 border-b border-aquiz-gray-lighter">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm text-aquiz-gray">Taux d&apos;endettement</span>
-                            <span className={`text-sm font-semibold ${
-                              calculs.revenusMensuelsTotal === 0 
-                                ? 'text-aquiz-gray-light' 
-                                : calculs.endettementActuelEleve 
-                                  ? 'text-aquiz-red' 
-                                  : 'text-aquiz-black'
-                            }`}>
-                              {calculs.revenusMensuelsTotal > 0 ? `${calculs.tauxEndettementActuel.toFixed(1)}%` : '—'}
-                            </span>
-                          </div>
-                          {calculs.revenusMensuelsTotal > 0 && (
-                            <div className="h-1.5 bg-aquiz-gray-lighter rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full rounded-full transition-all ${calculs.endettementActuelEleve ? 'bg-aquiz-red' : 'bg-aquiz-green'}`}
-                                style={{ width: `${Math.min((calculs.tauxEndettementActuel / 50) * 100, 100)}%` }}
-                              />
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Capacité */}
-                        <div className="px-4 py-4 bg-aquiz-gray-lightest">
-                          <p className="text-xs text-aquiz-gray uppercase tracking-wider font-medium mb-1">Capacité d&apos;achat estimée</p>
-                          <p className="text-lg font-bold text-aquiz-black">
-                            {mensualiteRecommandee > 0 
-                              ? `~${formatMontant(Math.round(calculs.prixAchatMax))} €`
-                              : '— €'
-                            }
-                          </p>
-                          <p className="text-[10px] text-aquiz-gray mt-0.5">Sur {dureeAns} ans à {tauxInteret}%</p>
-                        </div>
-                      </div>
                       
                       {/* Info HCSF */}
                       <div className="flex items-center justify-center gap-1 text-[10px] text-aquiz-gray">
@@ -1227,15 +1277,27 @@ function ModeAPageContent() {
                 
                 {/* Bouton Mobile */}
                 <div className="lg:hidden fixed bottom-0 left-0 right-0 px-3 pt-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-white/95 backdrop-blur-sm border-t border-aquiz-gray-lighter/60 z-20">
-                  <Button 
-                    type="button" 
-                    className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
-                    onClick={goToNextEtape} 
-                    disabled={calculs.revenusMensuelsTotal === 0}
-                  >
-                    Continuer
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
+                  {mensualiteRecommandee === 0 && calculs.revenusMensuelsTotal > 0 ? (
+                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-red-50 border border-red-200">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                      <p className="text-xs text-red-600 leading-snug">
+                        {calculs.endettementActuelEleve 
+                          ? 'Charges trop élevées pour emprunter. Réduisez-les ou augmentez vos revenus.'
+                          : 'Marge insuffisante pour un crédit (assurance incluse). Ajustez votre profil.'
+                        }
+                      </p>
+                    </div>
+                  ) : (
+                    <Button 
+                      type="button" 
+                      className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 font-semibold rounded-xl shadow-md shadow-aquiz-green/20" 
+                      onClick={goToNextEtape} 
+                      disabled={calculs.revenusMensuelsTotal === 0}
+                    >
+                      Continuer
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
                 </div>
                 <div className="lg:hidden h-16" />
               </div>
@@ -1243,16 +1305,16 @@ function ModeAPageContent() {
 
             {etape === 'simulation' && (
               <div className="animate-fade-in">
+                {/* Header pleine largeur */}
+                <div className="hidden sm:block mb-6">
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-aquiz-black tracking-tight">Affinons votre projet</h2>
+                  <p className="text-aquiz-gray text-sm sm:text-base mt-1">Précisons les détails pour calculer votre capacité d&apos;achat</p>
+                </div>
+
                 <div className="grid lg:grid-cols-[1fr,340px] gap-4 lg:gap-8">
                   
                   {/* === FORMULAIRE === */}
                   <div className="space-y-3 sm:space-y-5">
-                    
-                    {/* Header — masqué sur mobile (le stepper suffit) */}
-                    <div className="hidden sm:block mb-2">
-                      <h2 className="text-xl font-bold text-aquiz-black">Votre simulation</h2>
-                      <p className="text-aquiz-gray text-sm mt-0.5">Définissez votre budget et les paramètres de votre projet</p>
-                    </div>
                     
                     {/* Section 1: Budget mensuel */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
@@ -1263,7 +1325,7 @@ function ModeAPageContent() {
                         <h2 className="font-semibold text-aquiz-black text-sm">Budget mensuel</h2>
                       </div>
                       
-                      <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                      <div className="p-4 sm:p-6">
                         {/* Mensualité max — automatique basée sur le profil */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
@@ -1305,40 +1367,49 @@ function ModeAPageContent() {
                             <div className="absolute top-0 right-0 w-16 h-full bg-linear-to-l from-aquiz-green/5 to-transparent" />
                           </div>
                         </div>
-                        
-                        {/* Apport personnel — mis en avant */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label htmlFor="apportSimu" className="text-sm font-medium text-aquiz-gray-dark flex items-center gap-2">
-                              <PiggyBank className="w-4 h-4 text-aquiz-green" />
-                              Apport personnel
-                            </Label>
-                            {apport > 0 && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-aquiz-green/10 text-aquiz-green font-medium">
-                                {((apport / (apport + (mensualiteRecommandee > 0 ? mensualiteRecommandee * dureeAns * 12 : 1))) * 100).toFixed(0)}% du projet
-                              </span>
-                            )}
-                          </div>
-                          <div className="relative">
-                            <Input 
-                              id="apportSimu" 
-                              type="number" 
-                              placeholder="Ex: 30 000" 
-                              {...register('apport', { valueAsNumber: true })} 
-                              className="h-12 text-base bg-white border-aquiz-gray-lighter pr-10 rounded-xl font-medium placeholder:text-aquiz-gray-light focus:border-aquiz-green focus:ring-aquiz-green/20" 
-                            />
-                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-gray font-medium">€</span>
-                          </div>
-                          <p className="text-xs text-aquiz-gray">Épargne, donations, héritage... Plus votre apport est élevé, plus votre capacité d&apos;achat augmente.</p>
-                        </div>
                       </div>
                     </div>
                     
-                    {/* Section 2: Paramètres du prêt */}
+                    {/* Section 2: Apport personnel — section dédiée */}
+                    <div className="rounded-2xl border-2 border-aquiz-green/30 bg-linear-to-br from-aquiz-green/5 via-aquiz-green/3 to-white overflow-hidden shadow-sm shadow-aquiz-green/10">
+                      <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-aquiz-green/15 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5 sm:gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-aquiz-green/15 flex items-center justify-center">
+                            <PiggyBank className="w-5 h-5 text-aquiz-green" />
+                          </div>
+                          <div>
+                            <h2 className="font-bold text-aquiz-black text-sm">Apport personnel</h2>
+                            <p className="text-[10px] text-aquiz-gray mt-0.5">Boostez votre capacité d&apos;achat</p>
+                          </div>
+                        </div>
+                        {apport > 0 && (
+                          <span className="text-[11px] px-2.5 py-1 rounded-full bg-aquiz-green text-white font-semibold shadow-sm">
+                            {((apport / (apport + (mensualiteRecommandee > 0 ? mensualiteRecommandee * dureeAns * 12 : 1))) * 100).toFixed(0)}% du projet
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-4 sm:p-5 space-y-3">
+                        <div className="relative">
+                          <Input 
+                            id="apportSimu" 
+                            type="number" 
+                            placeholder="Ex: 30 000" 
+                            {...register('apport', { valueAsNumber: true })} 
+                            className="h-14 text-xl bg-white border-2 border-aquiz-green/25 pr-12 rounded-xl font-bold placeholder:font-normal placeholder:text-aquiz-gray-light focus:border-aquiz-green focus:ring-2 focus:ring-aquiz-green/20" 
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-aquiz-green text-lg font-bold">€</span>
+                        </div>
+                        <p className="text-xs text-aquiz-gray leading-relaxed">
+                          Épargne, donations, héritage… <span className="text-aquiz-green font-semibold">Plus votre apport est élevé, plus votre capacité d&apos;achat augmente.</span>
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Section 3: Paramètres du prêt */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                       <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-2.5 sm:gap-3">
                         <div className="w-5 h-5 rounded-full bg-aquiz-green/10 flex items-center justify-center">
-                          <span className="text-[10px] font-bold text-aquiz-green">2</span>
+                          <span className="text-[10px] font-bold text-aquiz-green">3</span>
                         </div>
                         <h2 className="font-semibold text-aquiz-black text-sm">Paramètres du prêt</h2>
                       </div>
@@ -1469,7 +1540,7 @@ function ModeAPageContent() {
                             <p className="font-semibold text-red-700 text-sm">Projet non finançable en l&apos;état</p>
                             <p className="text-xs text-red-600 mt-1">
                               {calculs.depasseEndettement 
-                                ? `Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > 35%). Réduisez la mensualité.`
+                                ? `Taux d'endettement trop élevé (${Math.round(calculs.tauxEndettementProjet)}% > ${tauxEndettementChoisi}%). Réduisez la mensualité.`
                                 : `Reste à vivre insuffisant (${formatMontant(calculs.resteAVivre)}€ < ${formatMontant(calculs.resteAVivreMinTotal)}€ requis).`
                               }
                             </p>
@@ -1478,18 +1549,7 @@ function ModeAPageContent() {
                       </div>
                     )}
                     
-                    {/* Bouton Desktop */}
-                    <div className="hidden lg:block">
-                      <Button 
-                        type="button" 
-                        className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 text-sm font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all" 
-                        onClick={goToNextEtape} 
-                        disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
-                      >
-                        Voir mon score
-                        <ArrowRight className="w-4 h-4 ml-2" />
-                      </Button>
-                    </div>
+
                   </div>
                   
                   {/* === SIDEBAR RÉSULTATS === */}
@@ -1497,130 +1557,85 @@ function ModeAPageContent() {
                     <div className="sticky top-24 space-y-4">
                       
                       {/* Card Résultat principal — hero */}
-                      <div className="rounded-2xl overflow-hidden border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 via-white to-aquiz-green/5" aria-live="polite">
-                        <div className="p-5">
-                          <p className="text-[10px] text-aquiz-green uppercase tracking-widest font-semibold mb-3 flex items-center gap-1.5">
+                      <div className="rounded-2xl overflow-hidden border border-aquiz-green/20 bg-white shadow-sm" aria-live="polite">
+
+                        {/* Hero : Prix d'achat maximum */}
+                        <div className="px-5 pt-6 pb-5 text-center bg-linear-to-b from-aquiz-green/8 via-aquiz-green/4 to-transparent">
+                          <p className="text-[10px] text-aquiz-green uppercase tracking-widest font-semibold mb-3 flex items-center justify-center gap-1.5">
                             <CheckCircle className="w-3 h-3" />
                             Prix d&apos;achat maximum
                           </p>
-                          <p className="text-3xl font-bold text-aquiz-black tracking-tight">
+                          <p className="text-4xl font-extrabold text-aquiz-black tracking-tight">
                             {mensualiteMax > 0 
                               ? `${formatMontant(calculs.prixAchatMax)} €`
                               : '— €'
                             }
                           </p>
                           {mensualiteMax > 0 && (
-                            <p className="text-xs text-aquiz-gray mt-1.5">
+                            <p className="text-xs text-aquiz-gray mt-2">
                               Dont {formatMontant(calculs.fraisNotaire)} € de frais de notaire ({typeBien === 'neuf' ? '~2.5%' : '~8%'})
                             </p>
                           )}
                         </div>
+
                         {mensualiteRecommandee > 0 && (
-                          <div className="mx-5 mb-4 px-3 py-2.5 rounded-xl bg-aquiz-green/5 border border-aquiz-green/10">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Mensualité</p>
-                                <p className="text-lg font-bold text-aquiz-black">{formatMontant(mensualiteRecommandee)} €<span className="text-xs font-normal text-aquiz-gray">/mois</span></p>
+                          <>
+                            {/* Grille 3 colonnes — Mensualité / Emprunt / Apport */}
+                            <div className="grid grid-cols-3 divide-x divide-aquiz-green/10 border-t border-aquiz-green/10">
+                              <div className="text-center px-2 py-4">
+                                <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Mensualité</p>
+                                <p className="text-sm font-bold text-aquiz-black mt-1.5">{formatMontant(mensualiteRecommandee)} €</p>
+                                <p className="text-[9px] text-aquiz-gray mt-0.5">/mois</p>
                               </div>
-                              <div className="text-right">
-                                <p className="text-[10px] text-aquiz-gray">sur <span className="font-semibold text-aquiz-black">{dureeAns} ans</span> à <span className="font-semibold text-aquiz-black">{tauxInteret.toFixed(1)}%</span></p>
-                                <p className="text-[10px] text-aquiz-gray mt-0.5">Assurance incluse dans le calcul réglementaire</p>
+                              <div className="text-center px-2 py-4">
+                                <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Emprunt</p>
+                                <p className="text-sm font-bold text-aquiz-black mt-1.5">{formatMontant(calculs.capitalEmpruntable)} €</p>
+                                <p className="text-[9px] text-aquiz-gray mt-0.5">{dureeAns} ans · {tauxInteret.toFixed(1)}%</p>
+                              </div>
+                              <div className="text-center px-2 py-4">
+                                <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Apport</p>
+                                <p className="text-sm font-bold text-aquiz-black mt-1.5">{formatMontant(apport)} €</p>
+                                <p className="text-[9px] text-aquiz-gray mt-0.5">{apport > 0 ? `${((apport / (apport + calculs.capitalEmpruntable)) * 100).toFixed(0)}% du total` : '—'}</p>
                               </div>
                             </div>
-                          </div>
+
+                            {/* Section santé financière — inline 2-col */}
+                            <div className="border-t border-aquiz-green/10 px-4 py-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Endettement</span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-bold tabular-nums ${calculs.depasseEndettement ? 'text-red-600' : 'text-aquiz-black'}`}>{Math.round(calculs.tauxEndettementProjet)}%</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${calculs.depasseEndettement ? 'bg-red-100 text-red-600' : 'bg-aquiz-green/10 text-aquiz-green'}`}>
+                                    {calculs.depasseEndettement ? `> ${tauxEndettementChoisi}% ✗` : `≤ ${tauxEndettementChoisi}% ✓`}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Reste à vivre</span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-bold tabular-nums ${calculs.niveauResteAVivre === 'risque' ? 'text-red-600' : calculs.niveauResteAVivre === 'limite' ? 'text-amber-600' : 'text-aquiz-black'}`}>{formatMontant(calculs.resteAVivre)} €</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-semibold ${calculs.niveauResteAVivre === 'risque' ? 'bg-red-100 text-red-600' : calculs.niveauResteAVivre === 'limite' ? 'bg-amber-100 text-amber-600' : 'bg-aquiz-green/10 text-aquiz-green'}`}>
+                                    {calculs.niveauResteAVivre === 'ok' ? 'Confortable ✓' : calculs.niveauResteAVivre === 'limite' ? 'Limite ⚠' : 'Insuffisant ✗'}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-[9px] text-aquiz-gray/50 text-center pt-0.5">Assurance emprunteur incluse dans le calcul réglementaire</p>
+                            </div>
+                          </>
                         )}
-                        {mensualiteRecommandee > 0 && (
-                          <div className="grid grid-cols-2 border-t border-aquiz-green/10">
-                            <div className="p-3 text-center border-r border-aquiz-green/10">
-                              <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Emprunt</p>
-                              <p className="text-sm font-bold text-aquiz-black mt-0.5">{formatMontant(calculs.capitalEmpruntable)} €</p>
-                            </div>
-                            <div className="p-3 text-center">
-                              <p className="text-[10px] text-aquiz-gray uppercase tracking-wide">Apport</p>
-                              <p className="text-sm font-bold text-aquiz-black mt-0.5">{formatMontant(apport)} €</p>
-                            </div>
-                          </div>
-                        )}
+
                       </div>
-                      
-                      {/* Card Indicateurs santé */}
-                      <div className="bg-white rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
-                        <div className="px-4 py-2.5 border-b border-aquiz-gray-lighter/60 bg-aquiz-gray-lightest/50">
-                          <p className="text-[10px] text-aquiz-gray uppercase tracking-wider font-medium">Indicateurs de faisabilité</p>
-                        </div>
-                        
-                        {/* Taux endettement */}
-                        <div className="p-4 border-b border-aquiz-gray-lighter">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <Percent className="w-3.5 h-3.5 text-aquiz-gray" />
-                              <span className="text-sm text-aquiz-gray">Endettement</span>
-                            </div>
-                            <span className={`text-sm font-bold px-2 py-0.5 rounded-md ${
-                              mensualiteMax === 0 
-                                ? 'text-aquiz-gray-light' 
-                                : calculs.depasseEndettement 
-                                  ? 'text-red-600 bg-red-50' 
-                                  : calculs.tauxEndettementProjet > 31.5 
-                                    ? 'text-amber-600 bg-amber-50'
-                                    : 'text-aquiz-green bg-aquiz-green/10'
-                            }`}>
-                              {mensualiteMax > 0 ? `${Math.round(calculs.tauxEndettementProjet)}%` : '—'}
-                            </span>
-                          </div>
-                          {mensualiteMax > 0 && (
-                            <>
-                              <div className="relative h-2 bg-aquiz-gray-lighter rounded-full overflow-hidden">
-                                <div 
-                                  className={`absolute inset-y-0 left-0 rounded-full transition-all ${
-                                    calculs.depasseEndettement 
-                                      ? 'bg-red-500' 
-                                      : calculs.tauxEndettementProjet > 31.5 
-                                        ? 'bg-amber-400' 
-                                        : 'bg-aquiz-green'
-                                  }`}
-                                  style={{ width: `${Math.min((calculs.tauxEndettementProjet / 35) * 100, 100)}%` }}
-                                />
-                              </div>
-                              <div className="flex justify-between mt-1">
-                                <span className="text-[9px] text-aquiz-gray">0%</span>
-                                <span className={`text-[9px] font-medium ${calculs.depasseEndettement ? 'text-red-500' : 'text-aquiz-gray'}`}>35% max réglementaire</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        
-                        {/* Reste à vivre */}
-                        <div className="p-4">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <Shield className="w-3.5 h-3.5 text-aquiz-gray" />
-                              <span className="text-sm text-aquiz-gray">Reste à vivre</span>
-                            </div>
-                            <span className={`text-sm font-bold px-2 py-0.5 rounded-md ${
-                              mensualiteMax === 0 
-                                ? 'text-aquiz-gray-light' 
-                                : calculs.niveauResteAVivre === 'ok' 
-                                  ? 'text-aquiz-green bg-aquiz-green/10' 
-                                  : calculs.niveauResteAVivre === 'limite' 
-                                    ? 'text-amber-600 bg-amber-50' 
-                                    : 'text-red-600 bg-red-50'
-                            }`}>
-                              {mensualiteMax > 0 ? `${formatMontant(calculs.resteAVivre)} €` : '—'}
-                            </span>
-                          </div>
-                          {mensualiteMax > 0 && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-aquiz-gray">Min requis : {formatMontant(calculs.resteAVivreMinTotal)} €/mois</span>
-                              <span className={`text-[10px] font-medium ${
-                                calculs.niveauResteAVivre === 'ok' ? 'text-aquiz-green' : calculs.niveauResteAVivre === 'limite' ? 'text-amber-500' : 'text-red-500'
-                              }`}>
-                                {calculs.niveauResteAVivre === 'ok' ? 'Confortable' : calculs.niveauResteAVivre === 'limite' ? 'Limite' : 'Insuffisant'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
+
+                      {/* Bouton CTA — détaché de la carte */}
+                      <Button
+                        type="button"
+                        className="w-full bg-aquiz-green hover:bg-aquiz-green/90 h-11 text-sm font-semibold rounded-xl shadow-md shadow-aquiz-green/20 transition-all"
+                        onClick={goToNextEtape}
+                        disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
+                      >
+                        Explorer où je peux acheter
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
                       
                     </div>
                   </aside>
@@ -1644,7 +1659,7 @@ function ModeAPageContent() {
                       onClick={goToNextEtape} 
                       disabled={mensualiteMax === 0 || calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque'}
                     >
-                      Voir mon score
+                      Explorer où je peux acheter
                       <ArrowRight className="w-4 h-4 ml-2" />
                     </Button>
                   </div>
@@ -1662,71 +1677,53 @@ function ModeAPageContent() {
                   <div className="rounded-2xl border border-aquiz-gray-lighter bg-white overflow-hidden shadow-sm">
                     <div className="h-1 bg-aquiz-green" />
 
-                    <div className="px-4 sm:px-7 py-4 sm:py-6">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                    <div className="px-4 sm:px-7 py-4 sm:py-5">
+                      <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <h2 className="text-base sm:text-xl font-bold text-aquiz-black leading-tight">
-                            Ce que je peux acheter
-                          </h2>
-                          <p className="text-xs sm:text-sm text-aquiz-gray mt-0.5 sm:mt-1">
-                            Budget max <span className="font-semibold text-aquiz-green">{formatMontant(calculs.prixAchatMax)} €</span> · {formatMontant(mensualiteRecommandee)} €/mois sur {dureeAns} ans
+                          <div className="flex items-center gap-2.5">
+                            <p className="text-[10px] sm:text-xs text-aquiz-gray uppercase tracking-wider font-medium">Votre capacité d&apos;achat</p>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${!calculs.depasseEndettement ? 'bg-aquiz-green/10 text-aquiz-green' : 'bg-red-50 text-red-500'}`}>
+                              {!calculs.depasseEndettement ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+                              {!calculs.depasseEndettement ? 'Finançable' : 'Non finançable'}
+                            </span>
+                          </div>
+                          <p className="text-2xl sm:text-3xl font-extrabold text-aquiz-black tracking-tight mt-1">
+                            {formatMontant(calculs.prixAchatMax)} €
+                          </p>
+                          <p className="text-xs text-aquiz-gray mt-1.5">
+                            {formatMontant(mensualiteRecommandee)} €/mois · {dureeAns} ans à {tauxInteret.toFixed(1)}% · Apport {formatMontant(apport)} €
                           </p>
                         </div>
 
-                        {/* Actions — masquées sur mobile (le bottom bar les remplace) */}
-                        <div className="hidden sm:flex items-center gap-2 shrink-0">
-                          <button
-                            type="button"
-                            onClick={goToPrevEtape}
-                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray text-xs font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200"
-                          >
-                            <ArrowLeft className="w-3.5 h-3.5" />
-                            Modifier
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const el = document.getElementById('pdf-gate')
-                              if (!el) return
-                              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                              el.classList.add('animate-pulse-highlight')
-                              setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                            }}
-                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
-                          >
-                            <FileDown className="w-4 h-4" />
-                            Mon rapport PDF
-                          </button>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const shareData = {
+                              title: 'Ma simulation AQUIZ',
+                              text: `Mon budget max : ${formatMontant(calculs.prixAchatMax)} € — ${formatMontant(mensualiteRecommandee)} €/mois sur ${dureeAns} ans`,
+                              url: window.location.href,
+                            }
+                            if (navigator.share) {
+                              await navigator.share(shareData)
+                            } else {
+                              await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`)
+                              const btn = document.getElementById('btn-share-result')
+                              if (btn) {
+                                btn.textContent = 'Copié !'
+                                setTimeout(() => { btn.textContent = 'Partager' }, 2000)
+                              }
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-aquiz-gray-lighter text-aquiz-gray text-[11px] font-medium hover:border-aquiz-green hover:text-aquiz-green active:scale-[0.97] transition-all duration-200 shrink-0"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span id="btn-share-result">Partager</span>
+                        </button>
                       </div>
                     </div>
-
-                    {/* Keyframe for pulse highlight + carte animations */}
-                    <style>{`
-                      @keyframes pulseHighlight {
-                        0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-                        40% { box-shadow: 0 0 0 12px rgba(34,197,94,0.15); }
-                        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-                      }
-                      .animate-pulse-highlight {
-                        animation: pulseHighlight 0.9s ease-out 2;
-                      }
-                      @keyframes shimmer {
-                        0% { transform: translateX(-100%); }
-                        100% { transform: translateX(200%); }
-                      }
-                      .animate-shimmer {
-                        animation: shimmer 2.5s ease-in-out infinite;
-                      }
-                      @keyframes ctaGlow {
-                        0%, 100% { box-shadow: 0 4px 15px rgba(16,185,129,0.25); }
-                        50% { box-shadow: 0 4px 25px rgba(16,185,129,0.45), 0 0 40px rgba(16,185,129,0.15); }
-                      }
-                      .animate-cta-glow {
-                        animation: ctaGlow 3s ease-in-out infinite;
-                      }
-                    `}</style>
                   </div>
+
+
                   
                   {/* CARTE IDF INTERACTIVE - EN PREMIER (Above the fold) */}
                   <div className="bg-white rounded-2xl shadow-sm border border-aquiz-gray-lighter overflow-hidden">
@@ -1745,15 +1742,11 @@ function ModeAPageContent() {
                             </p>
                           </div>
                         </div>
-                        <div className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-semibold shrink-0 ${!calculs.depasseEndettement ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-500 border border-red-200'}`}>
-                          {!calculs.depasseEndettement ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                          {!calculs.depasseEndettement ? 'Finançable' : 'Non finançable'}
-                        </div>
                       </div>
                     </div>
                     
                     {/* Carte Leaflet interactive */}
-                    <MiniCarteIDF departements={calculs.apercuSurfaces} onExplore={saveAndGoToCarte} />
+                    <MiniCarteIDF departements={calculs.apercuSurfaces} onExplore={saveAndGoToCarte} onDepartementClick={saveAndGoToCarteWithDept} />
                     
                     {/* Insight personnalisé — accroche contextuelle */}
                     {(() => {
@@ -1812,27 +1805,29 @@ function ModeAPageContent() {
                             strokeDasharray={213.6}
                             strokeDashoffset={213.6 - (213.6 * scoreFaisabilite) / 100}
                             strokeLinecap="round"
-                            className={scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}
+                            className={scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-amber-500' : scoreFaisabilite >= 35 ? 'text-orange-500' : 'text-red-500'}
                           />
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                          <span className={`text-xl font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}`}>{scoreFaisabilite}</span>
+                          <span className={`text-xl font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-amber-500' : scoreFaisabilite >= 35 ? 'text-orange-500' : 'text-red-500'}`}>{scoreFaisabilite}</span>
                           <span className="text-[9px] text-aquiz-gray -mt-0.5">/100</span>
                         </div>
                       </div>
                       {/* Verdict */}
                       <div className="flex-1 min-w-0">
-                        <p className={`text-lg font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'}`}>
-                          {scoreFaisabilite >= 85 ? 'Excellent' : scoreFaisabilite >= 70 ? 'Bon' : scoreFaisabilite >= 50 ? 'Moyen' : 'Fragile'}
+                        <p className={`text-lg font-bold ${scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-amber-500' : scoreFaisabilite >= 35 ? 'text-orange-500' : 'text-red-500'}`}>
+                          {scoreFaisabilite >= 80 ? 'Excellent' : scoreFaisabilite >= 70 ? 'Bon' : scoreFaisabilite >= 50 ? 'Moyen' : scoreFaisabilite >= 35 ? 'Fragile' : 'Critique'}
                         </p>
                         <p className="text-sm text-aquiz-gray leading-snug mt-0.5">
-                          {scoreFaisabilite >= 85 
+                          {scoreFaisabilite >= 80 
                             ? 'Profil solide, excellentes chances d\'obtenir votre financement.'
                             : scoreFaisabilite >= 70
                               ? 'Projet réalisable, quelques optimisations possibles.'
                               : scoreFaisabilite >= 50
                                 ? 'Des ajustements sont nécessaires.'
-                                : 'Votre dossier nécessite un renforcement.'
+                                : scoreFaisabilite >= 35
+                                  ? 'Votre dossier nécessite un renforcement significatif.'
+                                  : 'Projet très risqué — un accompagnement professionnel est recommandé.'
                           }
                         </p>
                       </div>
@@ -1849,11 +1844,11 @@ function ModeAPageContent() {
                         <p className={`text-2xl font-bold ${!calculs.depasseEndettement ? 'text-aquiz-black' : 'text-red-500'}`}>
                           {Math.round(calculs.tauxEndettementProjet)}%
                         </p>
-                        <p className="text-[10px] text-aquiz-gray mt-0.5">Maximum autorisé : 35%</p>
+                        <p className="text-[10px] text-aquiz-gray mt-0.5">Maximum visé : {tauxEndettementChoisi}%</p>
                       </div>
                       <div className="p-4">
                         <div className="flex items-center gap-2 mb-2">
-                          <PiggyBank className="w-4 h-4 text-aquiz-gray" />
+                          <Banknote className="w-4 h-4 text-aquiz-gray" />
                           <span className="text-xs text-aquiz-gray">Reste à vivre</span>
                           {calculs.niveauResteAVivre !== 'risque' ? <CheckCircle className="w-3.5 h-3.5 text-aquiz-green ml-auto" /> : <AlertCircle className="w-3.5 h-3.5 text-red-500 ml-auto" />}
                         </div>
@@ -1880,7 +1875,7 @@ function ModeAPageContent() {
                           <h2 className="text-sm font-semibold text-aquiz-black">Scoring détaillé</h2>
                           <p className="text-[10px] text-aquiz-gray mt-0.5">
                             7 critères bancaires — <span className={`font-semibold ${
-                              scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-aquiz-gray' : 'text-aquiz-black'
+                              scoreFaisabilite >= 70 ? 'text-aquiz-green' : scoreFaisabilite >= 50 ? 'text-amber-500' : scoreFaisabilite >= 35 ? 'text-orange-500' : 'text-red-500'
                             }`}>{scoreDetails.filter(d => (d.max > 0 ? (d.score / d.max) * 100 : 0) >= 75).length}/7 validés</span>
                           </p>
                         </div>
@@ -1973,6 +1968,29 @@ function ModeAPageContent() {
                     </div>
                   </div>
 
+                  {/* Section aides financières */}
+                  <div className="rounded-2xl border border-aquiz-green/20 bg-white overflow-hidden">
+                    <div className="px-5 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                          <Gift className="w-4 h-4 text-aquiz-green" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-semibold text-aquiz-black">Aides financières</h3>
+                          <p className="text-[10px] text-aquiz-gray mt-0.5">PTZ, PAS, Action Logement — vérifiez votre éligibilité</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { saveAndGoToAides(); trackEvent('cta-click', { type: 'aides', position: 'mode-a-results', page: 'mode-a' }) }}
+                        className="shrink-0 h-8 px-3.5 bg-aquiz-green/10 hover:bg-aquiz-green/20 text-aquiz-green text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
+                      >
+                        Vérifier
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
                   {/* ALERTE SI PROBLÈME + CTA CONSEILLER */}
                   {(calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque') && (
                     <div className="p-4 bg-red-50 border border-red-200 rounded-xl" role="alert" aria-live="assertive">
@@ -1997,7 +2015,7 @@ function ModeAPageContent() {
                     </div>
                   )}
 
-                  {/* CTA Bonus — Recevez votre étude personnalisée PDF par email */}
+                  {/* PDF DÉSACTIVÉ — PHASE 2
                   <div id="pdf-gate" className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-9 h-9 rounded-lg bg-aquiz-green/10 flex items-center justify-center shrink-0">
@@ -2050,19 +2068,20 @@ function ModeAPageContent() {
                       </div>
                     )}
                   </div>
+                  */}
 
                   {/* CTA Accompagnement projet — masqué sur mobile (le bottom bar a "Conseiller") */}
                   <div className="hidden sm:block bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                     <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                          <Phone className="w-5 h-5 text-slate-600" />
+                        <div className="w-11 h-11 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                          <Phone className="w-5 h-5 text-aquiz-green" />
                         </div>
                         <div>
-                          <h3 className="text-aquiz-black font-semibold text-sm">
+                          <h3 className="text-aquiz-black font-bold text-sm">
                             Besoin d&apos;aide pour la suite ?
                           </h3>
-                          <p className="text-aquiz-gray text-xs">
+                          <p className="text-aquiz-gray text-xs mt-0.5">
                             Échangez avec un conseiller pour valider votre projet — sans engagement
                           </p>
                         </div>
@@ -2072,7 +2091,7 @@ function ModeAPageContent() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'mode-a-results', page: 'mode-a' })}
-                        className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
+                        className="w-full sm:w-auto h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl px-5 flex items-center justify-center gap-2 transition-colors shadow-sm"
                       >
                         Échanger avec un conseiller
                         <ArrowRight className="w-4 h-4" />
@@ -2092,6 +2111,7 @@ function ModeAPageContent() {
                     <Button type="button" variant="outline" className="h-10 px-2.5 border-aquiz-gray-lighter rounded-xl" onClick={goToPrevEtape}>
                       <ArrowLeft className="w-4 h-4" />
                     </Button>
+                    {/* PDF DÉSACTIVÉ — PHASE 2
                     <Button
                       type="button"
                       onClick={() => {
@@ -2103,6 +2123,7 @@ function ModeAPageContent() {
                       <FileDown className="w-3.5 h-3.5" />
                       Mon PDF
                     </Button>
+                    */}
                     <Button type="button" onClick={saveAndGoToCarte} className="flex-1 h-10 bg-white hover:bg-aquiz-gray-lightest text-aquiz-black border border-aquiz-gray-lighter rounded-xl gap-1.5 text-xs font-semibold">
                       <MapPin className="w-3.5 h-3.5" />
                       Carte

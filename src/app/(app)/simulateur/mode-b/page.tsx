@@ -2,17 +2,16 @@
 
 import { LocalisationSearch } from '@/components/simulateur'
 import { AutoSaveIndicator, ResumeModal, useAutoSave } from '@/components/simulation'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/ui/MoneyInput'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Slider } from '@/components/ui/slider'
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger
 } from '@/components/ui/tooltip'
 import { SIMULATEUR_CONFIG } from '@/config/simulateur.config'
 import { useSimulationSave } from '@/hooks/useSimulationSave'
@@ -25,25 +24,23 @@ import { calculerMontantPTZ, getInfoPTZ } from '@/lib/utils/zonePTZ'
 import { getUtmData } from '@/lib/utm'
 import { hasValidEmail, useLeadStore } from '@/stores/useLeadStore'
 import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Building,
-  Check,
-  CheckCircle,
-  FileDown,
-  Home,
-  Info,
-  Loader2,
-  Mail,
-  MapPin,
-  Phone,
-  TrendingUp
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    Building,
+    Check,
+    CheckCircle,
+    Home,
+    Info,
+    MapPin,
+    Phone,
+    TrendingUp
 } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Cell, Pie, PieChart, Tooltip as RechartsTooltip } from 'recharts'
 
 const ContactModal = dynamic(() => import('@/components/contact').then(m => ({ default: m.ContactModal })), { ssr: false })
 // SimulationPDFModeB is imported dynamically inside generatePDF
@@ -245,9 +242,9 @@ export default function ModeBPage() {
       alerts,
       hasErrors: alerts.some(a => a.type === 'error'),
       hasWarnings: alerts.some(a => a.type === 'warning'),
-      canProceed: prixBien >= 50000 && !alerts.some(a => a.type === 'error')
+      canProceed: prixBien >= 50000 && codePostal.length >= 5 && !alerts.some(a => a.type === 'error')
     }
-  }, [prixBien, apport, dureeAns, tauxInteret, calculs])
+  }, [prixBien, codePostal, apport, dureeAns, tauxInteret, calculs])
 
   // Scroll to top when changing step
   const scrollToTop = () => {
@@ -769,10 +766,10 @@ export default function ModeBPage() {
         {/* ÉTAPE 1 : Le bien ciblé */}
         {etape === 1 && (
           <div className="animate-fade-in">
-            {/* Header simple */}
+            {/* Header */}
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-aquiz-black">Le bien ciblé</h2>
-              <p className="text-aquiz-gray text-sm mt-0.5">Renseignez les informations du bien que vous visez</p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-aquiz-black tracking-tight">Le bien ciblé</h2>
+              <p className="text-aquiz-gray text-sm sm:text-base mt-1">Renseignez les informations du bien que vous visez</p>
             </div>
             
             <div className="space-y-5">
@@ -891,7 +888,6 @@ export default function ModeBPage() {
                   <div className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">3</div>
                     <h3 className="font-semibold text-aquiz-black text-sm">Localisation</h3>
-                    <Badge variant="secondary" className="text-[10px] font-normal">Optionnel</Badge>
                   </div>
                 </div>
                 <div className="p-5 space-y-3">
@@ -956,11 +952,7 @@ export default function ModeBPage() {
                                   </span>
                                 </div>
                               )}
-                              {infoLocalisation.nbVentes && infoLocalisation.nbVentes > 0 && (
-                                <div className="text-[10px] text-aquiz-gray text-right">
-                                  {infoLocalisation.source} • {infoLocalisation.nbVentes} ventes
-                                </div>
-                              )}
+
                             </>
                           ) : infoLocalisation.prixFallbackM2 ? (
                             <>
@@ -1103,10 +1095,10 @@ export default function ModeBPage() {
         {etape === 2 && (
           <div className="animate-fade-in">
 
-            {/* Header simple */}
+            {/* Header */}
             <div className="mb-6">
-              <h2 className="text-xl font-bold text-aquiz-black">Financement souhaité</h2>
-              <p className="text-aquiz-gray text-sm mt-0.5">Apport et paramètres du prêt</p>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-aquiz-black tracking-tight">Financement souhaité</h2>
+              <p className="text-aquiz-gray text-sm sm:text-base mt-1">Apport et paramètres du prêt</p>
             </div>
 
             {/* Rappel du bien - style noir */}
@@ -1306,7 +1298,7 @@ export default function ModeBPage() {
                 onClick={goToNextEtape}
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
-                Lancer la vérification
+                Calculer ma capacité sur ce bien
               </Button>
             </div>
           </div>
@@ -1342,6 +1334,7 @@ export default function ModeBPage() {
                       <ArrowLeft className="w-3.5 h-3.5" />
                       Modifier
                     </button>
+                    {/* PDF DÉSACTIVÉ — PHASE 2
                     <button
                       type="button"
                       onClick={() => {
@@ -1356,6 +1349,7 @@ export default function ModeBPage() {
                       <FileDown className="w-4 h-4" />
                       Mon étude PDF
                     </button>
+                    */}
                   </div>
                 </div>
 
@@ -1377,26 +1371,21 @@ export default function ModeBPage() {
 
             <div className="space-y-5">
 
-              {/* Chiffre clé : Revenus minimums (flouté) */}
-              <div className="bg-aquiz-green rounded-xl p-4 sm:p-6 text-center">
-                <p className="text-[10px] sm:text-xs uppercase tracking-wider text-white/60 mb-1 sm:mb-2">
-                  Revenus mensuels requis
+              {/* Chiffre clé : Revenus minimums */}
+              <div className="bg-aquiz-green rounded-2xl p-5 sm:p-7">
+                <p className="text-xs uppercase tracking-widest text-white/60 mb-3">Revenus mensuels requis</p>
+                <p className="text-4xl sm:text-5xl font-extrabold text-white tabular-nums">
+                  {formatMontant(calculs.revenusMinimums35)} €
                 </p>
-                <p className="text-3xl sm:text-4xl font-bold text-white">
-                  {formatMontant(calculs.revenusMinimums33)} €
-                </p>
-                <p className="text-[10px] sm:text-xs text-white/50 mt-1">
-                  nets / mois (foyer) pour 33% d&apos;endettement
-                </p>
-                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-white/10 flex justify-center gap-4 sm:gap-8 text-xs sm:text-sm">
+                <p className="text-xs text-white/50 mt-2 mb-5">nets / mois · taux d&apos;endettement 35% (norme HCSF)</p>
+                <div className="border-t border-white/15 pt-4 flex items-center justify-between">
                   <div>
-                    <span className="text-white/50">À 35%</span>
-                    <span className="text-white font-medium ml-2">{formatMontant(calculs.revenusMinimums35)} €</span>
+                    <p className="text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Mensualité</p>
+                    <p className="text-base font-semibold text-white tabular-nums">{formatMontant(Math.round(calculs.mensualiteTotal))} € / mois</p>
                   </div>
-                  <div className="w-px bg-white/20" />
-                  <div>
-                    <span className="text-white/50">Mensualité</span>
-                    <span className="text-white font-medium ml-2">{formatMontant(Math.round(calculs.mensualiteTotal))} €</span>
+                  <div className="text-right">
+                    <p className="text-[10px] text-white/50 uppercase tracking-wider mb-0.5">Apport conseillé</p>
+                    <p className="text-base font-semibold text-white tabular-nums">{formatMontant(apport > 0 ? apport : Math.round(calculs.coutTotal * 0.1))} €</p>
                   </div>
                 </div>
               </div>
@@ -1417,7 +1406,7 @@ export default function ModeBPage() {
                     <span className="text-sm font-medium text-aquiz-black">{formatMontant(Math.round(calculs.fraisNotaire))} €</span>
                   </div>
                   <div className="flex justify-between px-5 py-3">
-                    <span className="text-sm text-aquiz-gray">Frais annexes</span>
+                    <span className="text-sm text-aquiz-gray">Frais annexes (~1,5%)</span>
                     <span className="text-sm font-medium text-aquiz-black">{formatMontant(Math.round(calculs.fraisAnnexes))} €</span>
                   </div>
                   <div className="flex justify-between px-5 py-3 bg-aquiz-gray-lightest">
@@ -1439,31 +1428,75 @@ export default function ModeBPage() {
                 </div>
               </div>
 
-              {/* Répartition du coût total */}
+              {/* Répartition du coût total — Donut premium */}
               <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                 <div className="px-4 sm:px-5 py-3 sm:py-3.5 bg-aquiz-gray-lightest border-b border-aquiz-gray-lighter flex items-center gap-2 sm:gap-3">
                   <div className="w-5 h-5 rounded-full bg-aquiz-green/10 text-aquiz-green text-xs font-bold flex items-center justify-center">2</div>
                   <h3 className="font-semibold text-aquiz-black text-sm">Répartition du coût total</h3>
                 </div>
-                <div className="divide-y divide-aquiz-gray-lighter">
-                  {calculs.repartitionCout.map((item, i) => {
-                    const pct = calculs.totalProjet > 0 ? (item.value / calculs.totalProjet) * 100 : 0
-                    return (
-                      <div key={i} className="px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-3">
-                        <span className="text-sm text-aquiz-gray w-28 sm:w-36 shrink-0">{item.label}</span>
-                        <div className="flex-1 h-2 rounded-full bg-aquiz-gray-lighter/50 overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: item.color }} />
-                        </div>
-                        <span className="text-sm font-medium text-aquiz-black tabular-nums shrink-0">{formatMontant(item.value)} €</span>
-                        <span className="text-[10px] text-aquiz-gray/70 tabular-nums w-6 text-right shrink-0">{pct.toFixed(0)}%</span>
+                <div className="p-5 sm:p-7">
+                  <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-10">
+
+                    {/* Donut avec texte centré */}
+                    <div className="relative shrink-0">
+                      <PieChart width={220} height={220}>
+                        <Pie
+                          data={calculs.repartitionCout}
+                          cx={110}
+                          cy={110}
+                          innerRadius={68}
+                          outerRadius={104}
+                          paddingAngle={3}
+                          dataKey="value"
+                          strokeWidth={0}
+                          isAnimationActive={true}
+                          animationDuration={600}
+                          animationEasing="ease-out"
+                        >
+                          {calculs.repartitionCout.map((item, i) => (
+                            <Cell key={i} fill={item.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip
+                          formatter={(value: number, name: string) => [`${formatMontant(value)} €`, name]}
+                          contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                        />
+                      </PieChart>
+                      {/* Texte au centre du donut */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-[10px] uppercase tracking-widest text-aquiz-gray mb-0.5">Coût total</span>
+                        <span className="text-base font-extrabold text-aquiz-black tabular-nums leading-tight">
+                          {formatMontant(Math.round(calculs.totalProjet))} €
+                        </span>
+                        <span className="text-[10px] text-aquiz-gray mt-0.5">sur {dureeAns} ans</span>
                       </div>
-                    )
-                  })}
-                </div>
-                <div className="px-4 sm:px-5 py-3 sm:py-4 bg-aquiz-green rounded-b-xl">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white/70">Total sur {dureeAns} ans</span>
-                    <span className="text-xl sm:text-2xl font-bold text-white">{formatMontant(Math.round(calculs.totalProjet))} €</span>
+                    </div>
+
+                    {/* Légende cartes */}
+                    <div className="flex-1 w-full grid grid-cols-1 gap-2.5">
+                      {calculs.repartitionCout.map((item, i) => {
+                        const pct = calculs.totalProjet > 0 ? (item.value / calculs.totalProjet) * 100 : 0
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-aquiz-gray-lightest"
+                            style={{ borderLeft: `4px solid ${item.color}` }}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-aquiz-gray leading-none mb-1">{item.label}</p>
+                              <p className="text-sm font-bold text-aquiz-black tabular-nums">{formatMontant(item.value)} €</p>
+                            </div>
+                            <span
+                              className="text-sm font-extrabold tabular-nums shrink-0"
+                              style={{ color: item.color }}
+                            >
+                              {pct.toFixed(0)}%
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
                   </div>
                 </div>
               </div>
@@ -1618,11 +1651,7 @@ export default function ModeBPage() {
                       }
                     </span>
                   </div>
-                  {infoLocalisation.source && (
-                    <div className="px-3 sm:px-5 py-1.5 text-[10px] text-aquiz-gray text-right border-t border-aquiz-gray-lighter">
-                      Source : {infoLocalisation.source} {infoLocalisation.nbVentes ? `• ${infoLocalisation.nbVentes} ventes` : ''}
-                    </div>
-                  )}
+
                 </div>
               </div>
               )}
@@ -1675,7 +1704,7 @@ export default function ModeBPage() {
                 </Button>
               </div>
 
-              {/* CTA Bonus — Recevez votre étude personnalisée PDF (email capture) */}
+              {/* PDF DÉSACTIVÉ — PHASE 2
               <div id="pdf-gate" className="mt-4 sm:mt-6">
                 <div className="rounded-xl border border-aquiz-gray-lighter bg-aquiz-gray-lightest/50 px-4 sm:px-5 py-4 sm:py-5">
                   <div className="flex items-center gap-3 mb-4">
@@ -1730,19 +1759,20 @@ export default function ModeBPage() {
                   )}
                 </div>
               </div>
+              */}
 
               {/* CTA Accompagnement projet — hidden on mobile, bottom bar has Conseiller */}
-              <div className="hidden sm:block mt-6 bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
-                      <Phone className="w-5 h-5 text-slate-600" />
+              <div className="hidden sm:block mt-6 rounded-2xl overflow-hidden border border-aquiz-green/20 bg-gradient-to-br from-aquiz-green/5 to-aquiz-green/10">
+                <div className="px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-aquiz-green/15 flex items-center justify-center shrink-0">
+                      <Phone className="w-5 h-5 text-aquiz-green" />
                     </div>
                     <div>
-                      <h3 className="text-aquiz-black font-semibold text-sm">
+                      <h3 className="text-aquiz-black font-bold text-sm">
                         Besoin d&apos;aide pour la suite ?
                       </h3>
-                      <p className="text-aquiz-gray text-xs">
+                      <p className="text-aquiz-gray text-xs mt-0.5">
                         Échangez avec un conseiller pour valider votre projet — sans engagement
                       </p>
                     </div>
@@ -1752,7 +1782,7 @@ export default function ModeBPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'mode-b-results', page: 'mode-b' })}
-                    className="w-full sm:w-auto h-10 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl px-5 flex items-center justify-center gap-2 transition-colors"
+                    className="w-full sm:w-auto h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl px-5 flex items-center justify-center gap-2 transition-colors shadow-sm"
                   >
                     Échanger avec un conseiller
                     <ArrowRight className="w-4 h-4" />
@@ -1777,6 +1807,7 @@ export default function ModeBPage() {
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                   </Button>
+                  {/* PDF DÉSACTIVÉ — PHASE 2
                   <Button
                     type="button"
                     onClick={() => document.getElementById('pdf-gate')?.scrollIntoView({ behavior: 'smooth' })}
@@ -1785,6 +1816,7 @@ export default function ModeBPage() {
                     <FileDown className="w-3.5 h-3.5 shrink-0" />
                     Mon PDF
                   </Button>
+                  */}
                   <Button
                     type="button"
                     onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-b-bottombar', page: 'mode-b' }) }}

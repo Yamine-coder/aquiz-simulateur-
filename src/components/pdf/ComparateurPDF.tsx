@@ -1261,8 +1261,8 @@ export function ComparateurPDF({
                   <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: a.rang === 1 ? C.greenDark : C.black }}>
                     Bien {a.rang}
                   </Text>
-                  <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 1 }}>
-                    {cleanVille(a.ville).substring(0, 14)}
+                  <Text style={{ fontSize: 5.5, color: C.grayLight, marginTop: 1, textAlign: 'center' }}>
+                    {cleanVille(a.ville).substring(0, 22)}
                   </Text>
                 </View>
               ))}
@@ -1459,262 +1459,299 @@ export function ComparateurPDF({
 
       {/* ══════════════════════════════════════════
           PAGE — ANALYSE DÉTAILLÉE (toutes les annonces)
+          Layout dynamique — TOUJOURS 1 seule page A4
+          - 2 biens → cartes larges et aérées
+          - 3 biens → cartes medium, bon espacement
+          - 4 biens → cartes compactes, tout tient
           ══════════════════════════════════════════ */}
-      <Page size="A4" style={s.pageWithFixedHeader}>
-        <FixedHeader logoUrl={logoUrl} nbBiens={n} />
-        <View style={[s.content, { marginTop: 52 }]}>
+      {(() => {
+        // ── Tailles dynamiques selon n — calibré pour occuper 1 page A4 (~700pt utile) ──
+        const lay = n <= 2 ? {
+          // 2 biens — confortable, beaucoup d'espace
+          titleFont: 8.5, subtitleFont: 6.5, bodyFont: 6, smallFont: 5.5, tinyFont: 5,
+          cardPadH: 10, cardPadV: 6, cardGap: 14, sectionPad: 8,
+          rangSize: 20, rangFont: 10, priceFont: 12, scoreFont: 7,
+          badgeSize: 12, badgeFont: 6, catPad: 5, itemPadH: 5, itemPadV: 2,
+          transportSZ: 11, pointGap: 2, topItems: 4, busMax: 8,
+        } : n === 3 ? {
+          // 3 biens — aéré, sections agrandies
+          titleFont: 8.5, subtitleFont: 6.5, bodyFont: 6, smallFont: 5.5, tinyFont: 5,
+          cardPadH: 10, cardPadV: 6, cardGap: 14, sectionPad: 7,
+          rangSize: 18, rangFont: 9, priceFont: 11, scoreFont: 6.5,
+          badgeSize: 11, badgeFont: 5.5, catPad: 5, itemPadH: 5, itemPadV: 2,
+          transportSZ: 10, pointGap: 2, topItems: 4, busMax: 8,
+        } : {
+          // 4 biens — compact lisible avec bon espacement
+          titleFont: 7, subtitleFont: 5.5, bodyFont: 5, smallFont: 4.5, tinyFont: 4,
+          cardPadH: 8, cardPadV: 4, cardGap: 12, sectionPad: 4,
+          rangSize: 14, rangFont: 7, priceFont: 8.5, scoreFont: 5,
+          badgeSize: 8, badgeFont: 4.5, catPad: 3, itemPadH: 3, itemPadV: 1,
+          transportSZ: 8, pointGap: 1, topItems: 2, busMax: 5,
+        }
 
-          <View style={{ marginTop: 4 }}>
-            <SectionTitle title="3. ANALYSE DÉTAILLÉE" />
-          </View>
+        return (
+          <Page size="A4" style={s.pageWithFixedHeader}>
+            <FixedHeader logoUrl={logoUrl} nbBiens={n} />
+            <View style={[s.content, { marginTop: 52, ...(n >= 4 ? { flex: 1 } : {}) }]}>
 
-          {sorted.map((annonce, idx) => {
-            const { forts: pointsForts, verifier: pointsVerifier } = genererPointsExpert(annonce)
+              <View style={{ marginTop: 4, marginBottom: 6 }}>
+                <SectionTitle title="3. ANALYSE DÉTAILLÉE" />
+              </View>
 
-            // Build transport groups from transportSummary (aggregated from ALL stations in radius)
-            const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo', 'fuel']
-            const typeLabels: Record<string, string> = {
-              metro: 'Métro', rer: 'RER', train: 'Train', tram: 'Tramway',
-              bus: 'Bus', velib: 'Vélib\'', velo: 'Location de vélo', fuel: 'Station service',
-            }
-            const summary = annonce.enrichissement?.quartier?.transportSummary
-            const transportGroups = (summary ?? [])
-              .filter(s => typeOrder.includes(s.type))
-              .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type))
-              .map(s => ({
-                type: s.type,
-                label: typeLabels[s.type] ?? s.type,
-                lignes: s.lignes,
-                stations: s.count,
-                nearestWalkMin: s.nearestWalkMin,
-              }))
-            const hasTransport = transportGroups.length > 0
+              <View style={n >= 4 ? { flex: 1, gap: lay.cardGap } : { gap: lay.cardGap }}>
+              {sorted.map((annonce, idx) => {
+                const { forts: pointsForts, verifier: pointsVerifier } = genererPointsExpert(annonce)
 
-            return (
-              <View key={annonce.id} style={{
-                marginTop: idx > 0 ? 4 : 2,
-                backgroundColor: C.white,
-                borderRadius: 4,
-                borderWidth: 0.5,
-                borderColor: C.grayBorder,
-                overflow: 'hidden',
-              }} wrap={false}>
-                {/* Color bar top */}
-                <View style={{ height: 2, backgroundColor: getScoreColor(annonce.scoreGlobal) }} />
+                // Build transport groups
+                const typeOrder = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo', 'fuel']
+                const typeLabels: Record<string, string> = {
+                  metro: 'Métro', rer: 'RER', train: 'Train', tram: 'Tramway',
+                  bus: 'Bus', velib: 'Vélib\'', velo: 'Location de vélo', fuel: 'Station service',
+                }
+                const summary = annonce.enrichissement?.quartier?.transportSummary
+                const transportGroups = (summary ?? [])
+                  .filter(s => typeOrder.includes(s.type))
+                  .sort((a, b) => typeOrder.indexOf(a.type) - typeOrder.indexOf(b.type))
+                  .map(s => ({
+                    type: s.type,
+                    label: typeLabels[s.type] ?? s.type,
+                    lignes: s.lignes,
+                    stations: s.count,
+                    nearestWalkMin: s.nearestWalkMin,
+                  }))
+                const hasTransport = transportGroups.length > 0
 
-                {/* ── Header compact: rang + titre + prix ── */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6, paddingVertical: 4 }}>
-                  {/* Rang badge */}
-                  <View style={{
-                    width: 16, height: 16, borderRadius: 8,
-                    backgroundColor: getScoreColor(annonce.scoreGlobal),
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{annonce.rang}</Text>
-                  </View>
-                  {/* Title + ville */}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.black }}>
-                      {cleanTitle(annonce)} — {cleanVille(annonce.ville)} ({annonce.codePostal})
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 }}>
-                      <Text style={{ fontSize: 5.5, color: C.gray }}>
-                        {annonce.surface} m² · {annonce.pieces} p · {fmt(annonce.prixM2)} EUR/m²
-                      </Text>
+                return (
+                  <View key={annonce.id} style={{
+                    ...(n >= 4 ? { flex: 1 } : {}),
+                    backgroundColor: C.white,
+                    borderRadius: 4,
+                    borderWidth: 0.5,
+                    borderColor: C.grayBorder,
+                    borderTopWidth: 2,
+                    borderTopColor: getScoreColor(annonce.scoreGlobal),
+                    overflow: 'hidden',
+                  }} wrap={false}>
+
+                    {/* ── Header: rang + titre + prix ── */}
+                    <View style={{
+                      flexDirection: 'row', alignItems: 'center', gap: lay.cardPadV + 1,
+                      paddingHorizontal: lay.cardPadH, paddingVertical: lay.cardPadV,
+                    }}>
+                      {/* Rang badge */}
                       <View style={{
-                        backgroundColor: getOpportuniteBg(annonce.scoreGlobal),
-                        borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1,
+                        width: lay.rangSize, height: lay.rangSize, borderRadius: lay.rangSize / 2,
+                        backgroundColor: getScoreColor(annonce.scoreGlobal),
+                        alignItems: 'center', justifyContent: 'center',
                       }}>
-                        <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: getOpportuniteColor(annonce.scoreGlobal) }}>
-                          {getOpportuniteLabel(annonce.scoreGlobal)}
+                        <Text style={{ fontSize: lay.rangFont, fontFamily: 'Helvetica-Bold', color: C.white }}>{annonce.rang}</Text>
+                      </View>
+                      {/* Title + ville */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: lay.titleFont, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                          {cleanTitle(annonce)} — {cleanVille(annonce.ville)} ({annonce.codePostal})
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: lay.pointGap }}>
+                          <Text style={{ fontSize: lay.subtitleFont, color: C.gray }}>
+                            {annonce.surface} m² · {annonce.pieces} p · {fmt(annonce.prixM2)} EUR/m²
+                          </Text>
+                          <View style={{
+                            backgroundColor: getOpportuniteBg(annonce.scoreGlobal),
+                            borderRadius: 2, paddingHorizontal: lay.itemPadH, paddingVertical: lay.itemPadV,
+                          }}>
+                            <Text style={{ fontSize: lay.smallFont, fontFamily: 'Helvetica-Bold', color: getOpportuniteColor(annonce.scoreGlobal) }}>
+                              {getOpportuniteLabel(annonce.scoreGlobal)}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                      {/* Score + Price */}
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: lay.priceFont, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
+                        <Text style={{ fontSize: lay.scoreFont, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal), marginTop: 1 }}>
+                          Score : {annonce.scoreGlobal}/100
                         </Text>
                       </View>
                     </View>
-                  </View>
-                  {/* Score + Price */}
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>{fmt(annonce.prix)} EUR</Text>
-                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: getScoreColor(annonce.scoreGlobal), marginTop: 1 }}>
-                      Score : {annonce.scoreGlobal}/100
-                    </Text>
-                  </View>
-                </View>
 
-                {/* ── Points forts + à vérifier (2 columns, compact) ── */}
-                <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
-                  <View style={{ flex: 1, padding: 4, borderRightWidth: 0.5, borderRightColor: C.grayBorder }}>
-                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: 2 }}>Points forts</Text>
-                    {pointsForts.map((txt, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 1 }}>
-                        <Text style={{ fontSize: 5.5, color: C.green }}>+</Text>
-                        <Text style={{ fontSize: 5, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
-                      </View>
-                    ))}
-                    {pointsForts.length === 0 && <Text style={{ fontSize: 5, color: C.grayLight, fontStyle: 'italic' }}>Aucun point fort identifié</Text>}
-                  </View>
-                  <View style={{ flex: 1, padding: 4 }}>
-                    <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: 2 }}>À vérifier</Text>
-                    {pointsVerifier.map((txt, i) => (
-                      <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: 1 }}>
-                        <Text style={{ fontSize: 5.5, color: C.grayLight }}>!</Text>
-                        <Text style={{ fontSize: 5, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {/* ── Dans la commune (style Bien'ici) ── */}
-                {(() => {
-                  const dc = annonce.enrichissement?.quartier?.detailedCounts
-                  if (!dc) return null
-
-                  const QUARTIER_CATEGORIES: Array<{
-                    key: string
-                    title: string
-                    color: string
-                    bgLight: string
-                  }> = [
-                    { key: 'loisirs', title: 'Si on sortait ?', color: C.green, bgLight: C.greenLight },
-                    { key: 'commerce', title: 'N\'oubliez pas de faire les courses', color: C.greenDark, bgLight: C.greenLight },
-                    { key: 'education', title: 'Éducation', color: C.gray, bgLight: C.grayBg },
-                    { key: 'sante', title: 'Santé', color: C.gray, bgLight: C.grayBg },
-                  ]
-
-                  const catsWithData = QUARTIER_CATEGORIES.filter(cat => {
-                    const items = dc[cat.key]
-                    return items && items.length > 0
-                  })
-
-                  if (catsWithData.length === 0) return null
-
-                  return (
-                    <View style={{ paddingHorizontal: 6, paddingTop: 3, paddingBottom: 3, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
-                      {/* Section header */}
-                      <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 3 }}>
-                        Dans la commune
-                      </Text>
-
-                      {/* Category blocks — 2 columns */}
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                        {catsWithData.map(cat => {
-                          const items = dc[cat.key] || []
-                          const topItems = items.slice(0, 3)
-                          const total = topItems.reduce((s, i) => s + i.count, 0)
-                          return (
-                            <View key={cat.key} style={{
-                              width: '48%',
-                              backgroundColor: cat.bgLight,
-                              borderRadius: 3,
-                              padding: 3,
-                              marginBottom: 1,
-                            }}>
-                              {/* Category header */}
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 2 }}>
-                                <View style={{
-                                  width: 9, height: 9, borderRadius: 2,
-                                  backgroundColor: cat.color,
-                                  alignItems: 'center', justifyContent: 'center',
-                                }}>
-                                  <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
-                                    {total}
-                                  </Text>
-                                </View>
-                                <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: cat.color }}>
-                                  {cat.title}
-                                </Text>
-                              </View>
-                              {/* Items */}
-                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2 }}>
-                                {topItems.map(item => (
-                                  <View key={item.type} style={{
-                                    flexDirection: 'row', alignItems: 'center',
-                                    backgroundColor: '#ffffff', borderRadius: 2,
-                                    paddingHorizontal: 3, paddingVertical: 1,
-                                  }}>
-                                    <Text style={{ fontSize: 4.5, color: C.black }}>
-                                      {item.label}
-                                    </Text>
-                                    <Text style={{ fontSize: 4.5, fontFamily: 'Helvetica-Bold', color: cat.color, marginLeft: 2 }}>
-                                      {item.count}
-                                    </Text>
-                                  </View>
-                                ))}
-                              </View>
-                            </View>
-                          )
-                        })}
-                      </View>
-
-                      {/* ── Transport block — style Bien'ici épuré ── */}
-                      {hasTransport && (
-                        <View style={{ marginTop: 4 }}>
-                          <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 2 }}>
-                            Et au niveau des transports ?
-                          </Text>
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
-                            {transportGroups.map(tg => {
-                              const SZ = 9
-                              const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
-                              const isBus = tg.type === 'bus'
-
-                              if (isRail && tg.lignes.length > 0) {
-                                  return (
-                                    <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
-                                      <Text style={{ fontSize: 5, color: C.gray }}>{tg.label}</Text>
-                                      <Text style={{ fontSize: 5, color: C.grayLight }}>(</Text>
-                                      {tg.lignes.map(l => {
-                                        const lc = getPdfLineColor(tg.type, l)
-                                        return (
-                                          <View key={`${tg.type}-${l}`} style={{ width: l.length > 2 ? 13 : SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
-                                            <Text style={{ fontSize: l.length > 2 ? 3.5 : 4.5, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
-                                          </View>
-                                        )
-                                      })}
-                                      <Text style={{ fontSize: 5, color: C.grayLight }}>)</Text>
-                                    </View>
-                                  )
-                                }
-
-                                if (isBus && tg.lignes.length > 0) {
-                                  return (
-                                    <View key="bus" style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
-                                      <Text style={{ fontSize: 5, color: C.gray }}>Bus</Text>
-                                      <Text style={{ fontSize: 5, color: C.grayLight }}>(</Text>
-                                      {tg.lignes.slice(0, 5).map(l => (
-                                        <View key={`bus-${l}`} style={{ backgroundColor: '#e5e7eb', borderRadius: 1.5, paddingHorizontal: 2, paddingVertical: 0.5 }}>
-                                          <Text style={{ fontSize: 4, fontFamily: 'Helvetica-Bold', color: C.black }}>{l}</Text>
-                                        </View>
-                                      ))}
-                                      {tg.lignes.length > 5 && (
-                                        <Text style={{ fontSize: 4, color: C.grayLight }}>+{tg.lignes.length - 5}</Text>
-                                      )}
-                                      <Text style={{ fontSize: 5, color: C.grayLight }}>)</Text>
-                                    </View>
-                                  )
-                                }
-
-                                // Other types (vélib', vélo, etc.) — plain text + count
-                                return (
-                                  <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 3 }}>
-                                    <Text style={{ fontSize: 5, color: C.gray }}>{tg.label}</Text>
-                                    <Text style={{ fontSize: 5, fontFamily: 'Helvetica-Bold', color: C.black }}> ({tg.stations})</Text>
-                                  </View>
-                                )
-                              })}
-                            </View>
+                    {/* ── Points forts + à vérifier (2 columns) ── */}
+                    <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: C.grayBorder, ...(n >= 4 ? { flex: 1 } : {}) }}>
+                      <View style={{ flex: 1, padding: lay.sectionPad, borderRightWidth: 0.5, borderRightColor: C.grayBorder }}>
+                        <Text style={{ fontSize: lay.bodyFont, fontFamily: 'Helvetica-Bold', color: C.greenDark, marginBottom: lay.catPad }}>Points forts</Text>
+                        {pointsForts.map((txt, i) => (
+                          <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: lay.pointGap }}>
+                            <Text style={{ fontSize: lay.bodyFont, color: C.green }}>+</Text>
+                            <Text style={{ fontSize: lay.smallFont, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
                           </View>
-                        )}
+                        ))}
+                        {pointsForts.length === 0 && <Text style={{ fontSize: lay.smallFont, color: C.grayLight, fontStyle: 'italic' }}>Aucun point fort identifié</Text>}
+                      </View>
+                      <View style={{ flex: 1, padding: lay.sectionPad }}>
+                        <Text style={{ fontSize: lay.bodyFont, fontFamily: 'Helvetica-Bold', color: C.gray, marginBottom: lay.catPad }}>À vérifier</Text>
+                        {pointsVerifier.map((txt, i) => (
+                          <View key={i} style={{ flexDirection: 'row', gap: 3, marginBottom: lay.pointGap }}>
+                            <Text style={{ fontSize: lay.bodyFont, color: C.grayLight }}>!</Text>
+                            <Text style={{ fontSize: lay.smallFont, color: C.black, flex: 1, lineHeight: 1.3 }}>{txt}</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
-                  )
-                })()}
 
+                    {/* ── Dans la commune (style Bien'ici) ── */}
+                    {(() => {
+                      const dc = annonce.enrichissement?.quartier?.detailedCounts
+                      if (!dc) return null
+
+                      const QUARTIER_CATEGORIES: Array<{
+                        key: string
+                        title: string
+                        color: string
+                        bgLight: string
+                      }> = [
+                        { key: 'loisirs', title: 'Si on sortait ?', color: C.green, bgLight: C.greenLight },
+                        { key: 'commerce', title: 'N\'oubliez pas de faire les courses', color: C.greenDark, bgLight: C.greenLight },
+                        { key: 'education', title: 'Éducation', color: C.gray, bgLight: C.grayBg },
+                        { key: 'sante', title: 'Santé', color: C.gray, bgLight: C.grayBg },
+                      ]
+
+                      const catsWithData = QUARTIER_CATEGORIES.filter(cat => {
+                        const items = dc[cat.key]
+                        return items && items.length > 0
+                      })
+
+                      if (catsWithData.length === 0 && !hasTransport) return null
+
+                      // ── Tous les modes : blocs catégories complets + transports ──
+                      return (
+                        <View style={{ paddingHorizontal: lay.cardPadH, paddingTop: lay.catPad, paddingBottom: lay.catPad, borderTopWidth: 0.5, borderTopColor: C.grayBorder }}>
+                          {/* Section header */}
+                          <Text style={{ fontSize: lay.bodyFont, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: lay.catPad }}>
+                            Dans la commune
+                          </Text>
+
+                          {/* Category blocks — 2 columns */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: lay.catPad }}>
+                            {catsWithData.map(cat => {
+                              const items = dc[cat.key] || []
+                              const topItems = items.slice(0, lay.topItems)
+                              const total = topItems.reduce((s, i) => s + i.count, 0)
+                              return (
+                                <View key={cat.key} style={{
+                                  width: '48%',
+                                  backgroundColor: cat.bgLight,
+                                  borderRadius: 3,
+                                  padding: lay.catPad,
+                                  marginBottom: lay.pointGap,
+                                }}>
+                                  {/* Category header */}
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: lay.catPad }}>
+                                    <View style={{
+                                      width: lay.badgeSize, height: lay.badgeSize, borderRadius: 2,
+                                      backgroundColor: cat.color,
+                                      alignItems: 'center', justifyContent: 'center',
+                                    }}>
+                                      <Text style={{ fontSize: lay.badgeFont, fontFamily: 'Helvetica-Bold', color: '#fff' }}>
+                                        {total}
+                                      </Text>
+                                    </View>
+                                    <Text style={{ fontSize: lay.smallFont, fontFamily: 'Helvetica-Bold', color: cat.color }}>
+                                      {cat.title}
+                                    </Text>
+                                  </View>
+                                  {/* Items */}
+                                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: lay.catPad }}>
+                                    {topItems.map(item => (
+                                      <View key={item.type} style={{
+                                        flexDirection: 'row', alignItems: 'center',
+                                        backgroundColor: '#ffffff', borderRadius: 2,
+                                        paddingHorizontal: lay.itemPadH, paddingVertical: lay.itemPadV,
+                                      }}>
+                                        <Text style={{ fontSize: lay.tinyFont, color: C.black }}>
+                                          {item.label}
+                                        </Text>
+                                        <Text style={{ fontSize: lay.tinyFont, fontFamily: 'Helvetica-Bold', color: cat.color, marginLeft: 2 }}>
+                                          {item.count}
+                                        </Text>
+                                      </View>
+                                    ))}
+                                  </View>
+                                </View>
+                              )
+                            })}
+                          </View>
+
+                          {/* ── Transport block ── */}
+                          {hasTransport && (
+                            <View style={{ marginTop: lay.sectionPad }}>
+                              <Text style={{ fontSize: lay.bodyFont, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: lay.catPad }}>
+                                Et au niveau des transports ?
+                              </Text>
+                              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: lay.catPad, alignItems: 'center' }}>
+                                {transportGroups.map(tg => {
+                                  const SZ = lay.transportSZ
+                                  const isRail = ['metro', 'rer', 'train', 'tram'].includes(tg.type)
+                                  const isBus = tg.type === 'bus'
+
+                                  if (isRail && tg.lignes.length > 0) {
+                                    return (
+                                      <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
+                                        <Text style={{ fontSize: lay.smallFont, color: C.gray }}>{tg.label}</Text>
+                                        <Text style={{ fontSize: lay.smallFont, color: C.grayLight }}>(</Text>
+                                        {tg.lignes.map(l => {
+                                          const lc = getPdfLineColor(tg.type, l)
+                                          return (
+                                            <View key={`${tg.type}-${l}`} style={{ width: l.length > 2 ? SZ + 4 : SZ, height: SZ, borderRadius: SZ / 2, backgroundColor: lc.bg, alignItems: 'center', justifyContent: 'center' }}>
+                                              <Text style={{ fontSize: l.length > 2 ? lay.tinyFont - 0.5 : lay.tinyFont, fontFamily: 'Helvetica-Bold', color: lc.fg }}>{l}</Text>
+                                            </View>
+                                          )
+                                        })}
+                                        <Text style={{ fontSize: lay.smallFont, color: C.grayLight }}>)</Text>
+                                      </View>
+                                    )
+                                  }
+
+                                  if (isBus && tg.lignes.length > 0) {
+                                    return (
+                                      <View key="bus" style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, marginRight: 3 }}>
+                                        <Text style={{ fontSize: lay.smallFont, color: C.gray }}>Bus</Text>
+                                        <Text style={{ fontSize: lay.smallFont, color: C.grayLight }}>(</Text>
+                                        {tg.lignes.slice(0, lay.busMax).map(l => (
+                                          <View key={`bus-${l}`} style={{ backgroundColor: '#e5e7eb', borderRadius: 1.5, paddingHorizontal: lay.itemPadH - 1, paddingVertical: 0.5 }}>
+                                            <Text style={{ fontSize: lay.tinyFont, fontFamily: 'Helvetica-Bold', color: C.black }}>{l}</Text>
+                                          </View>
+                                        ))}
+                                        {tg.lignes.length > lay.busMax && (
+                                          <Text style={{ fontSize: lay.tinyFont, color: C.grayLight }}>+{tg.lignes.length - lay.busMax}</Text>
+                                        )}
+                                        <Text style={{ fontSize: lay.smallFont, color: C.grayLight }}>)</Text>
+                                      </View>
+                                    )
+                                  }
+
+                                  return (
+                                    <View key={tg.type} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 3 }}>
+                                      <Text style={{ fontSize: lay.smallFont, color: C.gray }}>{tg.label}</Text>
+                                      <Text style={{ fontSize: lay.smallFont, fontFamily: 'Helvetica-Bold', color: C.black }}> ({tg.stations})</Text>
+                                    </View>
+                                  )
+                                })}
+                              </View>
+                            </View>
+                          )}
+                        </View>
+                      )
+                    })()}
+
+                  </View>
+                )
+              })}
               </View>
-            )
-          })}
 
-        </View>
-        <Footer logoUrl={logoUrl} />
-      </Page>
+            </View>
+            <Footer logoUrl={logoUrl} />
+          </Page>
+        )
+      })()}
 
       {/* ══════════════════════════════════════════
           PAGE — 4. ANALYSE MARCHÉ & PROJECTION FINANCIÈRE
@@ -1889,7 +1926,6 @@ export function ComparateurPDF({
               <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 55, textAlign: 'right' }}>Coût total</Text>
               <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 50, textAlign: 'right' }}>Val. 5 ans</Text>
               <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 42, textAlign: 'right' }}>Potentiel</Text>
-              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 48, textAlign: 'right' }}>Mensualité**</Text>
               <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: C.grayLight, width: 42, textAlign: 'right' }}>Rendt brut</Text>
             </View>
 
@@ -1897,12 +1933,10 @@ export function ComparateurPDF({
             {sorted.map((a, i) => {
               const isNeuf = a.anneeConstruction && (new Date().getFullYear() - a.anneeConstruction) <= 5
               const fraisNotaire = Math.round(a.prix * (isNeuf ? 0.025 : 0.075))
-              const budgetTravaux = a.estimations?.budgetTravauxEstime || 0
-              const coutTotal = a.prix + fraisNotaire + budgetTravaux
+              const coutTotal = a.prix + fraisNotaire
               const evolution = a.enrichissement?.marche?.evolution12Mois
               const valeur5Ans = estimerValeur5Ans(a.prix, evolution)
               const potentiel = ((valeur5Ans - coutTotal) / coutTotal * 100)
-              const mensualite = calculerMensualite(a.prix, apport || 0, effectiveTaux, effectiveDuree)
 
               return (
                 <View key={a.id} style={{
@@ -1928,9 +1962,6 @@ export function ComparateurPDF({
                       </Text>
                     </View>
                   </View>
-                  <Text style={{ fontSize: 7, color: C.black, width: 48, textAlign: 'right' }}>
-                    {mensualite > 0 ? `${fmt(mensualite)} €` : '—'}
-                  </Text>
                   {a.dpe === 'G' ? (
                     <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.red, width: 42, textAlign: 'right' }}>Interdit*</Text>
                   ) : (
@@ -1950,9 +1981,6 @@ export function ComparateurPDF({
                 * Location interdite pour les DPE G depuis le 1er janvier 2025 (loi Climat & Résilience)
               </Text>
             )}
-            <Text style={{ fontSize: 5.5, color: C.gray }}>
-              ** Mensualité estimée : taux {effectiveTaux.toFixed(1)} %, {effectiveDuree} ans{apport ? `, apport ${fmt(apport)} €` : ', hors apport'}{!tauxInteret && !dureeAns ? ' (hypothèses par défaut)' : ''}
-            </Text>
           </View>
 
           <View style={{ flex: 1 }} />
@@ -1970,10 +1998,10 @@ export function ComparateurPDF({
         <FixedHeader logoUrl={logoUrl} nbBiens={n} />
         <View style={[s.content, { marginTop: 52 }]}>
 
-          <View style={{ marginTop: 6 }}>
+          <View style={{ marginTop: n >= 4 ? 4 : 6 }}>
             <SectionTitle title="5. STRATÉGIE DE NÉGOCIATION" />
           </View>
-          <Text style={{ fontSize: 7.5, color: C.gray, marginTop: 4, marginBottom: 12, lineHeight: 1.5 }}>
+          <Text style={{ fontSize: n >= 4 ? 6.5 : 7.5, color: C.gray, marginTop: n >= 4 ? 2 : 4, marginBottom: n >= 4 ? 6 : 12, lineHeight: 1.5 }}>
             Leviers de négociation identifiés pour chaque bien, basés sur les données DVF et les caractéristiques du bien.
           </Text>
 
@@ -1983,7 +2011,7 @@ export function ComparateurPDF({
 
             return (
               <View key={`nego-${a.id}`} style={{
-                marginBottom: aIdx < sorted.length - 1 ? 12 : 6,
+                marginBottom: aIdx < sorted.length - 1 ? (n >= 4 ? 6 : 12) : (n >= 4 ? 3 : 6),
                 backgroundColor: C.white,
                 borderRadius: 6,
                 borderWidth: 0.5,
@@ -1996,37 +2024,37 @@ export function ComparateurPDF({
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  paddingVertical: 8,
-                  paddingHorizontal: 14,
+                  paddingVertical: n >= 4 ? 5 : 8,
+                  paddingHorizontal: n >= 4 ? 10 : 14,
                   backgroundColor: C.grayBg,
                   borderBottomWidth: 0.5,
                   borderBottomColor: C.grayBorder,
                 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: n >= 4 ? 4 : 6 }}>
                     <View style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 9,
+                      width: n >= 4 ? 14 : 18,
+                      height: n >= 4 ? 14 : 18,
+                      borderRadius: n >= 4 ? 7 : 9,
                       backgroundColor: getScoreColor(a.scoreGlobal),
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}>
-                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
+                      <Text style={{ fontSize: n >= 4 ? 6.5 : 8, fontFamily: 'Helvetica-Bold', color: C.white }}>{a.rang}</Text>
                     </View>
-                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
+                    <Text style={{ fontSize: n >= 4 ? 7.5 : 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
                       {cleanTitleShort(a)}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 8, color: C.gray }}>{fmt(a.prix)} €</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: n >= 4 ? 4 : 6 }}>
+                    <Text style={{ fontSize: n >= 4 ? 7 : 8, color: C.gray }}>{fmt(a.prix)} €</Text>
                     {hasArgs && (
                       <View style={{
                         backgroundColor: C.orangeLight,
                         borderRadius: 3,
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
+                        paddingHorizontal: n >= 4 ? 4 : 6,
+                        paddingVertical: n >= 4 ? 1.5 : 2,
                       }}>
-                        <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.orange }}>
+                        <Text style={{ fontSize: n >= 4 ? 6 : 7, fontFamily: 'Helvetica-Bold', color: C.orange }}>
                           {leviers.length} levier{leviers.length > 1 ? 's' : ''}
                         </Text>
                       </View>
@@ -2035,34 +2063,34 @@ export function ComparateurPDF({
                 </View>
 
                 {/* Arguments */}
-                <View style={{ paddingVertical: 8, paddingHorizontal: 14 }}>
+                <View style={{ paddingVertical: n >= 4 ? 5 : 8, paddingHorizontal: n >= 4 ? 10 : 14 }}>
                   {hasArgs ? (
                     leviers.map((arg, argIdx) => (
                       <View key={argIdx} style={{
                         flexDirection: 'row',
                         alignItems: 'flex-start',
-                        gap: 6,
-                        marginBottom: argIdx < leviers.length - 1 ? 5 : 0,
+                        gap: n >= 4 ? 4 : 6,
+                        marginBottom: argIdx < leviers.length - 1 ? (n >= 4 ? 3 : 5) : 0,
                       }}>
                         <View style={{
                           backgroundColor: getImpactColor(arg.impact),
                           borderRadius: 2,
-                          paddingHorizontal: 4,
+                          paddingHorizontal: n >= 4 ? 3 : 4,
                           paddingVertical: 1.5,
                           flexShrink: 0,
                           marginTop: 1,
                         }}>
-                          <Text style={{ fontSize: 5.5, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                          <Text style={{ fontSize: n >= 4 ? 5 : 5.5, fontFamily: 'Helvetica-Bold', color: C.white }}>
                             {getImpactLabel(arg.impact)}
                           </Text>
                         </View>
-                        <Text style={{ fontSize: 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
+                        <Text style={{ fontSize: n >= 4 ? 6.5 : 7.5, color: C.black, flex: 1, lineHeight: 1.4 }}>
                           {arg.argument}
                         </Text>
                       </View>
                     ))
                   ) : (
-                    <Text style={{ fontSize: 7.5, color: C.grayLight, lineHeight: 1.4 }}>
+                    <Text style={{ fontSize: n >= 4 ? 6.5 : 7.5, color: C.grayLight, lineHeight: 1.4 }}>
                       Peu de leviers identifiés — le prix semble cohérent avec le marché.
                     </Text>
                   )}
@@ -2072,7 +2100,7 @@ export function ComparateurPDF({
           })}
 
           {/* Disclaimer négociation */}
-          <Text style={{ fontSize: 6, color: C.grayLight, marginTop: 12, lineHeight: 1.4 }}>
+          <Text style={{ fontSize: 6, color: C.grayLight, marginTop: n >= 4 ? 6 : 12, lineHeight: 1.4 }}>
             Estimations basées sur les données DVF et les caractéristiques du bien. Ces leviers servent de base de discussion avec le vendeur ou l&apos;agent immobilier.
           </Text>
 
@@ -2082,22 +2110,22 @@ export function ComparateurPDF({
             borderRadius: 6,
             borderWidth: 1.5,
             borderColor: C.green,
-            padding: 10,
-            marginTop: 10,
+            padding: n >= 4 ? 7 : 10,
+            marginTop: n >= 4 ? 6 : 10,
           }} wrap={false}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: n >= 4 ? 4 : 6, marginBottom: n >= 4 ? 4 : 6 }}>
               <View style={{
-                width: 22,
-                height: 22,
-                borderRadius: 11,
+                width: n >= 4 ? 18 : 22,
+                height: n >= 4 ? 18 : 22,
+                borderRadius: n >= 4 ? 9 : 11,
                 backgroundColor: C.green,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
+                <Text style={{ fontSize: n >= 4 ? 8 : 10, fontFamily: 'Helvetica-Bold', color: C.white }}>A</Text>
               </View>
-              <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
+              <Text style={{ fontSize: n >= 4 ? 7.5 : 9, fontFamily: 'Helvetica-Bold', color: C.black }}>
                 ACCOMPAGNEMENT AQUIZ
               </Text>
             </View>
@@ -2110,19 +2138,19 @@ export function ComparateurPDF({
               <View key={idx} style={{
                 flexDirection: 'row',
                 alignItems: 'flex-start',
-                gap: 5,
-                marginBottom: 3,
+                gap: n >= 4 ? 4 : 5,
+                marginBottom: n >= 4 ? 2 : 3,
                 paddingLeft: 2,
               }}>
                 <View style={{
-                  width: 4,
-                  height: 4,
+                  width: n >= 4 ? 3 : 4,
+                  height: n >= 4 ? 3 : 4,
                   borderRadius: 2,
                   backgroundColor: C.green,
                   marginTop: 2.5,
                   flexShrink: 0,
                 }} />
-                <Text style={{ fontSize: 6.5, color: C.black, lineHeight: 1.4, flex: 1 }}>
+                <Text style={{ fontSize: n >= 4 ? 5.5 : 6.5, color: C.black, lineHeight: 1.4, flex: 1 }}>
                   {item}
                 </Text>
               </View>
@@ -2132,13 +2160,13 @@ export function ComparateurPDF({
               <View style={{
                 backgroundColor: C.green,
                 borderRadius: 5,
-                paddingVertical: 7,
-                paddingHorizontal: 16,
+                paddingVertical: n >= 4 ? 5 : 7,
+                paddingHorizontal: n >= 4 ? 12 : 16,
                 alignSelf: 'center',
                 alignItems: 'center',
-                marginTop: 6,
+                marginTop: n >= 4 ? 4 : 6,
               }}>
-                <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                <Text style={{ fontSize: n >= 4 ? 7.5 : 9, fontFamily: 'Helvetica-Bold', color: C.white }}>
                   Prendre rendez-vous
                 </Text>
               </View>
@@ -2146,7 +2174,7 @@ export function ComparateurPDF({
           </View>
 
           {/* ── Disclaimer ── */}
-          <View style={{ marginTop: 8, paddingHorizontal: 4 }}>
+          <View style={{ marginTop: n >= 4 ? 5 : 8, paddingHorizontal: 4 }}>
             <Text style={{ fontSize: 5, color: C.grayLight, lineHeight: 1.4 }}>
               Ce rapport est généré à partir de données publiques (DVF, Géorisques, OpenStreetMap) et d&apos;algorithmes AQUIZ.
               Les estimations sont indicatives et ne constituent pas un avis professionnel. © {new Date().getFullYear()} AQUIZ — {dateGeneration}

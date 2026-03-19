@@ -21,6 +21,7 @@ interface MiniCarteIDFProps {
   departements: DepartementData[]
   className?: string
   onExplore?: () => void
+  onDepartementClick?: (codeDept: string) => void
 }
 
 // Mapping code département -> nom
@@ -62,7 +63,7 @@ function getSurfaceOpacity(surface: number): number {
   return 0.60
 }
 
-export default function MiniCarteIDF({ departements, className = '', onExplore }: MiniCarteIDFProps) {
+export default function MiniCarteIDF({ departements, className = '', onExplore, onDepartementClick }: MiniCarteIDFProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
   const [map, setMap] = useState<L.Map | null>(null)
@@ -73,6 +74,9 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
   const layersRef = useRef<Map<string, L.Layer>>(new Map())
   const labelMarkersRef = useRef<L.Marker[]>([])
   const boundsRef = useRef<L.LatLngBounds | null>(null)
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isOverPanelRef = useRef(false)
 
   // Map des données par code département
   const dataByCode = useMemo(() => {
@@ -266,37 +270,42 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
           const data = dataByCode.get(code)
           const surface = data?.surface || 0
 
-          // Tooltip au survol avec nom du département et infos
-          if (data) {
-            const colorDot = getSurfaceColor(surface)
-            const tooltipContent = `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;">
-              <div style="width:8px;height:8px;border-radius:50%;background:${colorDot};flex-shrink:0;"></div>
-              <div>
-                <div style="font-weight:700;color:#0f172a;font-size:13px;">${DEPT_NAMES[code] || code}</div>
-                <div style="color:#64748b;font-size:11px;margin-top:1px;">${data.surface} m² • ${formatMontant(data.prixM2)}/m²</div>
-              </div>
-            </div>`
-            layer.bindTooltip(tooltipContent, {
-              direction: 'top',
-              sticky: !('ontouchstart' in window),
-              className: 'dept-tooltip',
-              opacity: 1,
-            })
-          }
+          // Panel React au survol — pas de bindPopup Leaflet
 
-          layer.on('mouseover', () => {
+          layer.on('mouseover', (e: L.LeafletMouseEvent) => {
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
             setHoveredDept(code)
+            if (mapRef.current) {
+              const rect = mapRef.current.getBoundingClientRect()
+              setMousePos({ x: e.originalEvent.clientX - rect.left, y: e.originalEvent.clientY - rect.top })
+            }
             ;(layer as L.Path).setStyle({
               weight: 2.5,
               color: '#0d9488',
               fillColor: getSurfaceHoverColor(surface),
-              fillOpacity: 0.7,
+              fillOpacity: 0.75,
             })
             ;(layer as L.Path).bringToFront()
+            if (onDepartementClick) {
+              const el = (layer as L.Path).getElement()
+              if (el) (el as HTMLElement).style.cursor = 'pointer'
+            }
+          })
+
+          layer.on('mousemove', (e: L.LeafletMouseEvent) => {
+            if (mapRef.current) {
+              const rect = mapRef.current.getBoundingClientRect()
+              setMousePos({ x: e.originalEvent.clientX - rect.left, y: e.originalEvent.clientY - rect.top })
+            }
           })
 
           layer.on('mouseout', () => {
-            setHoveredDept(null)
+            closeTimerRef.current = setTimeout(() => {
+              if (!isOverPanelRef.current) {
+                setHoveredDept(null)
+                setMousePos(null)
+              }
+            }, 150)
             ;(layer as L.Path).setStyle({
               weight: 1.8,
               color: getSurfaceBorderColor(surface),
@@ -304,6 +313,13 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
               fillOpacity: getSurfaceOpacity(surface),
             })
           })
+
+          // Clic sur un département — navigate vers la carte interactive
+          if (onDepartementClick) {
+            layer.on('click', () => {
+              onDepartementClick(code)
+            })
+          }
 
           layersRef.current.set(code, layer)
         }
@@ -395,6 +411,16 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         style={{ background: '#f1f5f9', zIndex: 0 }}
       />
 
+      {/* Hint discret en bas — disparaît au survol */}
+      {isLoaded && !hoveredDept && (
+        <div className="absolute bottom-14 sm:bottom-12 left-1/2 -translate-x-1/2 pointer-events-none z-[6] transition-opacity duration-300">
+          <div className="bg-white/85 backdrop-blur-sm rounded-full shadow border border-slate-200/80 px-3 py-1.5 flex items-center gap-1.5 whitespace-nowrap">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span className="text-[10px] text-slate-500">Survolez ou cliquez sur un département</span>
+          </div>
+        </div>
+      )}
+
       {/* Indicateur de chargement pendant init Leaflet */}
       {!isLoaded && (
         <div className="absolute inset-0 bg-slate-50 flex items-center justify-center z-10">
@@ -405,19 +431,67 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         </div>
       )}
 
-      {/* Panel info au survol */}
-      {hoveredData && (
-        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-md rounded-xl shadow-xl border border-slate-200/60 p-3.5 z-[5] min-w-[190px] transition-all duration-200 animate-fade-in">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: getSurfaceColor(hoveredData.surface) }} />
-            <p className="text-sm font-bold text-slate-900">{DEPT_NAMES[hoveredDept!] || hoveredDept}</p>
-          </div>
-          <div className="space-y-1 text-[11px] text-slate-500 pl-[18px]">
-            <p>Surface accessible : <span className="font-semibold text-slate-800">{hoveredData.surface} m²</span></p>
-            <p>Prix moyen : <span className="font-semibold text-slate-800">{formatMontant(hoveredData.prixM2)}/m²</span></p>
-            {(hoveredData.nbOpportunites || 0) > 0 && (
-              <p className="text-emerald-600 font-medium">{hoveredData.nbOpportunites} commune{(hoveredData.nbOpportunites || 0) > 1 ? 's' : ''}</p>
-            )}
+      {/* Panel React positionné à la souris — avec flèche tooltip vers le département */}
+      {hoveredData && mousePos && (
+        <div
+          className="absolute z-10 pointer-events-auto"
+          style={{
+            left: Math.min(mousePos.x + 14, (mapRef.current?.offsetWidth ?? 400) - 215),
+            top: mousePos.y > 200 ? mousePos.y - 100 : mousePos.y + 16,
+          }}
+          onMouseEnter={() => {
+            isOverPanelRef.current = true
+            if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+          }}
+          onMouseLeave={() => {
+            isOverPanelRef.current = false
+            closeTimerRef.current = setTimeout(() => {
+              setHoveredDept(null)
+              setMousePos(null)
+            }, 80)
+          }}
+        >
+          {/* Bulle tooltip unifiée — drop-shadow sur le wrapper pour une ombre cohérente */}
+          <div
+            className="flex items-center"
+            style={{ filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.13)) drop-shadow(0 1px 4px rgba(0,0,0,0.07))' }}
+          >
+            {/* Pointe — même fond que le panel, intégrée dans le même drop-shadow */}
+            <div
+              className="shrink-0 w-0 h-0"
+              style={{
+                borderTop: '10px solid transparent',
+                borderBottom: '10px solid transparent',
+                borderRight: '11px solid white',
+              }}
+            />
+            {/* Panel — pas de shadow ici, géré par le wrapper */}
+            <div className="bg-white overflow-hidden" style={{ borderRadius: '12px', minWidth: '176px' }}>
+              {/* Bande top colorée */}
+              <div className="h-[3px] w-full" style={{ background: getSurfaceColor(hoveredData.surface) }} />
+              {/* Infos */}
+              <div className="px-3 pt-2.5 pb-2">
+                <p className="text-sm font-extrabold text-slate-900 mb-1.5">{DEPT_NAMES[hoveredDept!] || hoveredDept}</p>
+                <div className="space-y-0.5 text-[11px] text-slate-500">
+                  <p><span className="font-semibold text-slate-800">{hoveredData.surface} m²</span> accessibles</p>
+                  <p>~<span className="font-semibold text-slate-800">{formatMontant(hoveredData.prixM2)} €/m²</span></p>
+                  {(hoveredData.nbOpportunites || 0) > 0 && (
+                    <p className="font-semibold" style={{ color: getSurfaceColor(hoveredData.surface) }}>{hoveredData.nbOpportunites} communes</p>
+                  )}
+                </div>
+              </div>
+              {/* CTA visible */}
+              {onDepartementClick && (
+                <div className="px-3 py-2.5 flex items-center gap-2" style={{ borderTop: '1px solid #f1f5f9', background: `${getSurfaceColor(hoveredData.surface)}0f` }}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 shrink-0" style={{ color: getSurfaceColor(hoveredData.surface), animation: 'click-cursor 1.4s ease-in-out infinite' }}>
+                    <path d="M4 0l.01 16 4-4 2.55 6.25 1.84-.75L9.85 11H15z"/>
+                  </svg>
+                  <span className="text-[11px] font-bold" style={{ color: getSurfaceColor(hoveredData.surface) }}>
+                    Cliquer pour explorer {DEPT_NAMES[hoveredDept!] || hoveredDept}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -453,22 +527,6 @@ export default function MiniCarteIDF({ departements, className = '', onExplore }
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
           Explorer la carte
-        </button>
-      )}
-
-      {/* Badge flottant — découverte communes */}
-      {onExplore && isLoaded && (
-        <button
-          type="button"
-          onClick={onExplore}
-          className="absolute bottom-14 sm:bottom-12 right-3 flex items-center gap-1.5 bg-white/95 backdrop-blur-md text-emerald-700 text-[10px] font-bold px-2.5 py-1.5 rounded-full shadow-lg border border-emerald-200 z-[5] cursor-pointer hover:bg-emerald-50 transition-all group"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          {departements.reduce((sum, d) => sum + (d.nbOpportunites || 0), 0)} communes accessibles
-          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-emerald-500 group-hover:translate-x-0.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
         </button>
       )}
 
@@ -512,15 +570,23 @@ data.gouv.fr • France-GeoJSON
           border: none !important;
           box-shadow: none !important;
         }
-        .dept-tooltip {
+        .dept-popup .leaflet-popup-content-wrapper {
           background: white !important;
-          border-radius: 10px !important;
+          border-radius: 12px !important;
           border: 1px solid #e2e8f0 !important;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06) !important;
-          padding: 8px 12px !important;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.13), 0 2px 8px rgba(0,0,0,0.07) !important;
+          padding: 0 !important;
         }
-        .dept-tooltip::before {
-          border-top-color: white !important;
+        .dept-popup .leaflet-popup-content {
+          margin: 12px 14px !important;
+          min-width: 160px !important;
+        }
+        .dept-popup .leaflet-popup-tip-container {
+          display: block !important;
+        }
+        .dept-popup .leaflet-popup-tip {
+          background: white !important;
+          box-shadow: none !important;
         }
         .animate-fade-in {
           animation: fadeIn 0.15s ease-out;

@@ -24,6 +24,8 @@ import { AnnonceSkeletonGrid } from '@/components/comparateur/AnnonceCardSkeleto
 import { ConfirmDeleteDialog } from '@/components/comparateur/ConfirmDeleteDialog'
 import type { AnnonceScoreData } from '@/components/comparateur/EmailComparisonModal'
 import { countActiveFilters, FiltresPanel, FiltresToggle } from '@/components/comparateur/FiltresBar'
+import { ProfilScoringSelector } from '@/components/comparateur/ProfilScoringSelector'
+import { PROFILS_SCORING, type ProfilScoring, type ProfilScoringId } from '@/lib/comparateur/scoreComparateur'
 
 import { ContactModal } from '@/components/contact'
 import { Button } from '@/components/ui/button'
@@ -60,16 +62,14 @@ import {
     Check,
     CheckSquare,
     ChevronLeft,
-    FileDown,
     Grid3X3,
     Heart,
     Import,
     Info,
     LayoutGrid,
     List,
-    Loader2,
-    Mail,
     MapPin,
+    Phone,
     Plus,
     RotateCcw,
     Scale,
@@ -141,6 +141,11 @@ export default function ComparateurPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'liste' | 'comparaison'>('liste')
+  const [activeProfilId, setActiveProfilId] = useState<ProfilScoringId>('equilibre')
+  const activeProfil = useMemo<ProfilScoring>(
+    () => PROFILS_SCORING.find(p => p.id === activeProfilId) ?? PROFILS_SCORING[0],
+    [activeProfilId]
+  )
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [filtresOpen, setFiltresOpen] = useState(false)
   const filtresActiveCount = useMemo(() => countActiveFilters(comparateur.filtres), [comparateur.filtres])
@@ -372,6 +377,9 @@ export default function ComparateurPage() {
               sante: (score.enrichissement.quartier as Record<string, unknown>).sante as number | undefined,
               espaceVerts: (score.enrichissement.quartier as Record<string, unknown>).espaceVerts as number | undefined,
               counts: (score.enrichissement.quartier as Record<string, unknown>).counts as { transport: number; commerce: number; education: number; sante: number; loisirs: number; vert: number } | undefined,
+              detailedCounts: (score.enrichissement.quartier as Record<string, unknown>).detailedCounts as Record<string, Array<{ type: string; label: string; count: number }>> | undefined,
+              transportsProches: (score.enrichissement.quartier as Record<string, unknown>).transportsProches as Array<{ type: string; typeTransport: string; nom: string; distance: number; lat?: number; lon?: number; walkMin?: number; lignes?: string[]; operateur?: string; couleur?: string }> | undefined,
+              transportSummary: (score.enrichissement.quartier as Record<string, unknown>).transportSummary as Array<{ type: string; lignes: string[]; count: number; nearestWalkMin?: number }> | undefined,
             } : undefined,
             communeInfos: score.enrichissement.communeInfos ?? undefined,
           } : undefined,
@@ -566,6 +574,16 @@ export default function ComparateurPage() {
               Faire une simulation
             </Link>
           </p>
+          <div className="flex items-center justify-center mt-3">
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="flex items-center gap-2 text-[11px] sm:text-xs text-aquiz-gray hover:text-aquiz-green transition-colors font-medium"
+            >
+              <Phone className="w-3 h-3" />
+              Vous souhaitez être guidé dans votre recherche ?
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -921,7 +939,7 @@ export default function ComparateurPage() {
               ) : (
                 <div className={`grid gap-3 sm:gap-5 ${
                   viewMode === 'grid'
-                    ? 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3'
+                    ? 'grid-cols-1 xs:grid-cols-2 lg:grid-cols-3'
                     : 'grid-cols-1 max-w-3xl'
                 }`}>
                   {annoncesFiltrees.map((annonce) => {
@@ -948,6 +966,8 @@ export default function ComparateurPage() {
                   })}
                 </div>
               )}
+
+
             </div>
           )}
 
@@ -955,12 +975,12 @@ export default function ComparateurPage() {
           {activeTab === 'comparaison' && (
             <div id="tabpanel-comparaison" role="tabpanel" aria-label="Comparaison des biens sélectionnés" className="animate-in fade-in slide-in-from-bottom-2 duration-200">
               {annoncesSelectionnees.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-aquiz-gray-lighter py-16 px-6 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-5">
-                    <Scale className="h-7 w-7 text-aquiz-green" />
+                <div className="bg-white rounded-2xl border border-aquiz-gray-lighter py-12 sm:py-16 px-5 sm:px-6 text-center">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-aquiz-green/10 flex items-center justify-center mx-auto mb-4 sm:mb-5">
+                    <Scale className="h-6 w-6 sm:h-7 sm:w-7 text-aquiz-green" />
                   </div>
-                  <h3 className="text-lg font-semibold text-aquiz-black mb-2">Prêt à comparer ?</h3>
-                  <p className="text-sm text-aquiz-gray mb-6 max-w-sm mx-auto">
+                  <h3 className="text-base sm:text-lg font-semibold text-aquiz-black mb-2">Prêt à comparer ?</h3>
+                  <p className="text-xs sm:text-sm text-aquiz-gray mb-5 sm:mb-6 max-w-sm mx-auto">
                     Sélectionnez entre 2 et 4 biens depuis l&apos;onglet Annonces
                   </p>
                   <Button
@@ -973,63 +993,93 @@ export default function ComparateurPage() {
                 </div>
               ) : (
                 <div className="space-y-3 sm:space-y-5">
-                  {/* Header comparaison — hidden on mobile (already in main header) */}
-                  <div className="hidden sm:flex bg-white rounded-2xl border border-aquiz-gray-lighter px-5 py-4 items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
-                        <Scale className="h-4 w-4 text-aquiz-green" />
+
+                  {/* Header comparaison */}
+                  <div className="bg-white rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
+                    {/* Ligne titre + actions — desktop */}
+                    <div className="hidden sm:flex px-5 py-4 items-center justify-between border-b border-aquiz-gray-lightest">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
+                          <Scale className="h-4 w-4 text-aquiz-green" />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold text-aquiz-black text-sm">
+                            {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
+                          </h2>
+                          <p className="text-[11px] text-aquiz-gray">Analyse comparative détaillée</p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="font-semibold text-aquiz-black text-sm">
-                          {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
-                        </h2>
-                        <p className="text-[11px] text-aquiz-gray">Analyse comparative détaillée</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => comparateur.deselectionnerTout()}
+                          className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Réinitialiser</span>
+                        </button>
+                        {scoresForEmail.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(window.location.href)
+                                  setLinkCopied(true)
+                                  setTimeout(() => setLinkCopied(false), 2000)
+                                } catch { /* fallback */ }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray-dark text-xs font-medium hover:bg-aquiz-gray-lightest active:scale-[0.97] transition-all duration-200"
+                            >
+                              {linkCopied ? <Check className="w-3.5 h-3.5 text-aquiz-green" /> : <Share2 className="w-3.5 h-3.5" />}
+                              {linkCopied ? 'Copié !' : 'Partager'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => comparateur.deselectionnerTout()}
-                        className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Réinitialiser</span>
-                      </button>
-                      {scoresForEmail.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(window.location.href)
-                                setLinkCopied(true)
-                                setTimeout(() => setLinkCopied(false), 2000)
-                              } catch { /* fallback */ }
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray-dark text-xs font-medium hover:bg-aquiz-gray-lightest active:scale-[0.97] transition-all duration-200"
-                          >
-                            {linkCopied ? <Check className="w-3.5 h-3.5 text-aquiz-green" /> : <Share2 className="w-3.5 h-3.5" />}
-                            {linkCopied ? 'Copié !' : 'Partager'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const el = document.getElementById('pdf-gate')
-                              if (!el) return
-                              el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                              el.classList.add('animate-pulse-highlight')
-                              setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                            }}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-aquiz-black text-white text-xs font-semibold hover:bg-aquiz-black/85 active:scale-[0.97] transition-all duration-200"
-                          >
-                            {isEnrichmentLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
-                            {isEnrichmentLoading ? 'Analyse…' : 'Mon rapport PDF'}
-                          </button>
-                        </>
-                      )}
+                    {/* Sélecteur de profil — desktop */}
+                    <div className="hidden sm:block px-5 py-3 border-b border-aquiz-gray-lightest">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-semibold text-aquiz-gray uppercase tracking-wide shrink-0">Profil</span>
+                        <ProfilScoringSelector
+                          activeProfilId={activeProfilId}
+                          onProfilChange={p => setActiveProfilId(p.id)}
+                          compact
+                        />
+                      </div>
+                    </div>
+                    {/* Ligne titre + actions + profil — mobile */}
+                    <div className="sm:hidden border-b border-aquiz-gray-lightest">
+                      {/* Ligne titre */}
+                      <div className="flex items-center justify-between px-3 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-aquiz-black">
+                            {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => comparateur.deselectionnerTout()}
+                          className="flex items-center gap-1 text-[11px] text-aquiz-gray hover:text-red-500 font-medium transition-colors"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Réinitialiser
+                        </button>
+                      </div>
+                      {/* Profil — pleine largeur */}
+                      <div className="px-3 pb-2.5">
+                        <span className="text-[10px] font-semibold text-aquiz-gray uppercase tracking-wide block mb-1.5">Profil de scoring</span>
+                        <ProfilScoringSelector
+                          activeProfilId={activeProfilId}
+                          onProfilChange={p => setActiveProfilId(p.id)}
+                          compact
+                          className="w-full"
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Bandeau info PDF */}
+                  {/* PDF DÉSACTIVÉ — PHASE 2
                   {scoresForEmail.length > 0 && !pdfEmailSent && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-aquiz-green/5 border border-aquiz-gray-lighter">
                       <FileDown className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
@@ -1057,6 +1107,7 @@ export default function ComparateurPage() {
                       )}
                     </div>
                   )}
+                  */}
 
                   {/* Tableau */}
                   <div className="bg-white border border-aquiz-gray-lighter overflow-hidden -mx-3 sm:mx-0 rounded-none sm:rounded-2xl border-x-0 sm:border-x">
@@ -1070,8 +1121,42 @@ export default function ComparateurPage() {
                       tauxInteret={parametresModeA?.tauxInteret ?? parametresModeB?.tauxInteret}
                       dureeAns={parametresModeA?.dureeAns ?? parametresModeB?.dureeAns}
                       apport={parametresModeA?.apport ?? parametresModeB?.apport}
+                      profil={activeProfil}
                     />
                   </div>
+
+                  {/* ═══ CTA Conseil ═══ */}
+                  {scoresForEmail.length > 0 && (() => {
+                    const bestScore = Math.max(...scoresForEmail.map(s => s.scoreGlobal))
+                    const bestId = scoresForEmail.find(s => s.scoreGlobal === bestScore)?.annonceId
+                    const bestAnnonce = annoncesSelectionnees.find(a => a.id === bestId)
+                    return (
+                      <div className="rounded-2xl border border-aquiz-green/20 bg-linear-to-br from-aquiz-green/5 to-aquiz-green/10 px-4 sm:px-5 py-4 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-aquiz-black">
+                            {bestAnnonce
+                              ? <>Notre analyse recommande <span className="text-aquiz-green">{bestAnnonce.ville}</span> — Score {bestScore}/100</>
+                              : 'Votre comparatif est prêt'}
+                          </p>
+                          <p className="text-xs text-aquiz-gray mt-0.5">
+                            {bestAnnonce
+                              ? 'Un conseiller peut vous aider à vous positionner sur ce bien avant qu\'il parte.'
+                              : 'Un conseiller peut vous accompagner sur le bien qui vous correspond le mieux.'}
+                          </p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'comparateur-cta', page: 'comparateur', commune: bestAnnonce?.ville, score: bestScore }) }}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-aquiz-green hover:bg-aquiz-green/90 transition-colors text-white text-xs font-semibold shadow-sm shadow-aquiz-green/20 whitespace-nowrap"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            Être accompagné
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {/* ═══ ANALYSE IA (invisible — alimente le PDF via callback) + PDF GATE ═══ */}
                   {annoncesSelectionnees.length >= 2 && (
@@ -1087,7 +1172,7 @@ export default function ComparateurPage() {
                           />
                         </div>
 
-                        {/* ═══ PDF GATE SECTION (email capture) ═══ */}
+                        {/* PDF DÉSACTIVÉ — PHASE 2
                         {scoresForEmail.length > 0 && (() => {
                           return (
                           <div id="pdf-gate" className="mt-6 sm:mt-8">
@@ -1148,6 +1233,7 @@ export default function ComparateurPage() {
                           </div>
                           )
                         })()}
+                        */}
 
                         {/* Pulse highlight animation */}
                         <style>{`
@@ -1182,7 +1268,7 @@ export default function ComparateurPage() {
 
       {/* ═══ FLOATING MANAGE BAR ═══ */}
       {manageMode && activeTab === 'liste' && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] sm:w-auto animate-in slide-in-from-bottom-4 fade-in duration-300">
+        <div className="fixed bottom-6 pb-[env(safe-area-inset-bottom)] left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] sm:w-auto animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="flex items-center justify-center gap-2.5 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-rose-600 text-white shadow-xl shadow-rose-600/30">
             {/* Tout sélectionner / désélectionner */}
             <button
@@ -1327,6 +1413,32 @@ export default function ComparateurPage() {
       </Sheet>
 
 
+      {/* ─── Bande CTA verte — pleine largeur, collée au footer — visible sur onglet liste uniquement ─── */}
+      {comparateur.annonces.length >= 2 && activeTab === 'liste' && (
+        <div className="bg-aquiz-green">
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-xs sm:text-sm font-semibold text-white text-center sm:text-left leading-relaxed">
+              Un doute sur ces biens ? Un conseiller peut analyser votre sélection avec vous.
+            </p>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab('comparaison')}
+                className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-aquiz-green border-2 border-white text-white font-semibold rounded-xl hover:bg-aquiz-green/85 transition-colors text-[11px] sm:text-xs"
+              >
+                Lancer la comparaison
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'comparateur-banner', page: 'comparateur' }) }}
+                className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white text-aquiz-black font-semibold rounded-xl hover:bg-aquiz-gray-lightest transition-colors text-[11px] sm:text-xs"
+              >
+                Être accompagné
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

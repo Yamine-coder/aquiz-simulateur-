@@ -18,6 +18,7 @@ import { useAnalyseEnrichie } from '@/hooks/useAnalyseEnrichie'
 import { calculerCoutTotal, calculerMensualite, estimerFraisNotaire } from '@/lib/comparateur/financier'
 import {
     calculerScorePro,
+    type ProfilScoring,
 } from '@/lib/comparateur/scoreComparateur'
 import { toEnrichiesScoring } from '@/lib/comparateur/toEnrichiesScoring'
 import { cleanVille } from '@/lib/utils'
@@ -29,7 +30,6 @@ import {
     ChevronDown,
     CreditCard,
     ExternalLink,
-    FileDown,
     Home,
     Info,
     Key,
@@ -75,6 +75,8 @@ interface TableauComparaisonProps {
   tauxInteret?: number
   dureeAns?: number
   apport?: number
+  /** Profil de scoring adaptatif */
+  profil?: ProfilScoring | null
 }
 
 /** Configuration pour l'édition inline d'une ligne */
@@ -192,11 +194,11 @@ function LigneComparaison({
   
   return (
     <tr className={`border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors ${muted ? 'opacity-50' : ''}`}>
-      <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+      <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80 align-middle whitespace-nowrap">
         {label}
       </td>
       {values.map((value, index) => (
-        <td key={index} className="py-3.5 px-4 text-center text-sm overflow-visible relative">
+        <td key={index} className="py-3.5 px-4 text-center text-sm align-middle overflow-visible relative">
           {formatValue(value, index)}
         </td>
       ))}
@@ -215,7 +217,8 @@ export function TableauComparaison({
   onEnrichmentLoadingChange,
   tauxInteret,
   dureeAns,
-  apport
+  apport,
+  profil,
 }: TableauComparaisonProps) {
   // Hook pour l'analyse enrichie avec les APIs (DVF, Géorisques, OSM)
   const { 
@@ -229,9 +232,9 @@ export function TableauComparaison({
     return annonces.map(annonce => {
       const enrichie = getAnalyseEnrichie(annonce.id)
       const enrichiScoring = toEnrichiesScoring(enrichie ?? null)
-      return calculerScorePro(annonce, annonces, enrichiScoring, budgetMax, null)
+      return calculerScorePro(annonce, annonces, enrichiScoring, budgetMax, profil ?? null)
     })
-  }, [annonces, budgetMax, getAnalyseEnrichie])
+  }, [annonces, budgetMax, getAnalyseEnrichie, profil])
   
   const getScorePro = (id: string) => scoresPro.find(s => s.annonceId === id)
 
@@ -333,12 +336,12 @@ export function TableauComparaison({
       {/* Vue Desktop - Tableau */}
       <div className="hidden md:block">
         <div className="overflow-x-auto overflow-y-visible rounded-2xl border border-aquiz-gray-lighter/60 shadow-sm bg-white">
-          <table className="w-full min-w-150 table-fixed">
-            {/* Colonnes à largeurs fixes et égales */}
+          <table className="w-full min-w-150">
+            {/* Colonnes proportionnelles */}
             <colgroup>
-              <col className="w-44" />
+              <col style={{ width: '180px' }} />
               {annonces.map((a) => (
-                <col key={a.id} />
+                <col key={a.id} style={{ width: `${Math.floor(100 / annonces.length)}%` }} />
               ))}
             </colgroup>
             {/* Header avec cartes des biens */}
@@ -357,7 +360,7 @@ export function TableauComparaison({
                   const isRecommande = annonce.id === bestScoreId
                   
                   return (
-                    <th key={annonce.id} className="py-5 px-3 align-top">
+                    <th key={annonce.id} className="py-5 px-4 align-top">
                       <div className="relative pt-2">
                         {/* Badge recommandé — basé sur le meilleur Score AQUIZ */}
                         {isRecommande && (
@@ -706,22 +709,17 @@ export function TableauComparaison({
                     <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs text-xs">
-                    <p>Prix + frais de notaire + travaux estimés</p>
+                    <p>Prix + frais de notaire</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
             </td>
             {annonces.map((a) => {
-              const sp = getScorePro(a.id)
               const { montant: notaire } = estimerFraisNotaire(a.prix, a.anneeConstruction)
-              const travaux = sp?.estimations.budgetTravauxEstime || 0
-              const total = calculerCoutTotal(a.prix, notaire, travaux)
+              const total = calculerCoutTotal(a.prix, notaire)
               return (
                 <td key={a.id} className="py-4 px-4 text-center text-sm">
                   <span className="font-bold text-aquiz-black text-lg">{total.toLocaleString('fr-FR')} €</span>
-                  {travaux > 0 && (
-                    <div className="text-[10px] text-orange-600 mt-0.5">dont ~{travaux.toLocaleString('fr-FR')} € travaux</div>
-                  )}
                 </td>
               )
             })}
@@ -731,25 +729,9 @@ export function TableauComparaison({
           {/* Section Caractéristiques */}
           <tr className="bg-aquiz-gray-lightest/60">
             <td colSpan={annonces.length + 1} className="py-2.5 px-5 border-l-[3px] border-aquiz-gray-light">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
-                  <Home className="w-4 h-4 text-aquiz-gray" />
-                  Caractéristiques
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById('pdf-gate')
-                    if (!el) return
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    el.classList.add('animate-pulse-highlight')
-                    setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                  }}
-                  className="flex items-center gap-1 text-[10px] text-aquiz-gray/60 hover:text-aquiz-green transition-colors"
-                >
-                  <FileDown className="w-3 h-3" />
-                  <span>+ conseil négo dans le PDF</span>
-                </button>
+              <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
+                <Home className="w-4 h-4 text-aquiz-gray" />
+                Caractéristiques
               </div>
             </td>
           </tr>
@@ -836,25 +818,9 @@ export function TableauComparaison({
           {/* Section Performance */}
           <tr className="bg-aquiz-gray-lightest/60">
             <td colSpan={annonces.length + 1} className="py-2.5 px-5 border-l-[3px] border-aquiz-gray-light">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
-                  <Zap className="w-4 h-4 text-aquiz-gray" />
-                  Performance énergétique
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById('pdf-gate')
-                    if (!el) return
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                    el.classList.add('animate-pulse-highlight')
-                    setTimeout(() => el.classList.remove('animate-pulse-highlight'), 1800)
-                  }}
-                  className="flex items-center gap-1 text-[10px] text-aquiz-gray/60 hover:text-aquiz-green transition-colors"
-                >
-                  <FileDown className="w-3 h-3" />
-                  <span>+ détail quartier dans le PDF</span>
-                </button>
+              <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
+                <Zap className="w-4 h-4 text-aquiz-gray" />
+                Performance énergétique
               </div>
             </td>
           </tr>

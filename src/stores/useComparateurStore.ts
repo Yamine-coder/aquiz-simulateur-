@@ -167,15 +167,17 @@ export const useComparateurStore = create<ComparateurState>()(
           }
         }
         
+        const surfaceClean = Math.round(nouvelleAnnonce.surface * 100) / 100
         const annonce: Annonce = {
           id,
           source: detecterSource(nouvelleAnnonce.url),
-          prixM2: nouvelleAnnonce.surface > 0
-            ? Math.round(nouvelleAnnonce.prix / nouvelleAnnonce.surface)
+          prixM2: surfaceClean > 0
+            ? Math.round(nouvelleAnnonce.prix / surfaceClean)
             : 0,
           dateAjout: new Date(),
           favori: false,
           ...nouvelleAnnonce,
+          surface: surfaceClean,
           ...(departement ? { departement } : {}),
         }
         
@@ -192,6 +194,10 @@ export const useComparateurStore = create<ComparateurState>()(
             if (ann.id !== id) return ann
             
             const updated = { ...ann, ...updates }
+            // Arrondir la surface si modifiée
+            if ('surface' in updates) {
+              updated.surface = Math.round(updated.surface * 100) / 100
+            }
             // Recalculer prix/m² si prix ou surface modifié
             if ('prix' in updates || 'surface' in updates) {
               updated.prixM2 = updated.surface > 0
@@ -342,6 +348,12 @@ export const useComparateurStore = create<ComparateurState>()(
       onRehydrateStorage: () => (state, error) => {
         if (error) {
           console.warn('[Comparateur] Erreur rehydratation:', error)
+        }
+        // Arrondir les surfaces existantes (corrige le float 40.06999969482422 → 40.07)
+        if (state && !error) {
+          for (const a of state.annonces) {
+            a.surface = Math.round(a.surface * 100) / 100
+          }
         }
         // Nettoyer les sélections orphelines (IDs qui ne correspondent plus à des annonces existantes)
         if (state && !error) {

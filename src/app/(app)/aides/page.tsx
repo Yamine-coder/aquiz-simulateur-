@@ -9,7 +9,6 @@
  */
 
 import { ContactModal } from '@/components/contact'
-import { LeadCaptureGate } from '@/components/lead/LeadCaptureGate'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -25,7 +24,6 @@ import { useAidesFreshness } from '@/hooks/useAidesFreshness'
 import { trackEvent } from '@/lib/analytics'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
-    ArrowLeft,
     ArrowRight,
     Banknote,
     Calculator,
@@ -40,7 +38,6 @@ import {
     MapPin,
     MapPinned,
     Percent,
-    Phone,
     Shield,
     ShieldCheck,
     Star
@@ -54,14 +51,14 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 // =====================================================
 
 const DEPARTEMENTS_IDF = [
-  { code: '75', nom: 'Paris', zone: 'Abis', cp: '75001', desc: 'Capitale' },
-  { code: '92', nom: 'Hauts-de-Seine', zone: 'Abis', cp: '92000', desc: 'Petite couronne' },
-  { code: '93', nom: 'Seine-Saint-Denis', zone: 'A', cp: '93000', desc: 'Petite couronne' },
-  { code: '94', nom: 'Val-de-Marne', zone: 'A', cp: '94000', desc: 'Petite couronne' },
-  { code: '78', nom: 'Yvelines', zone: 'A', cp: '78000', desc: 'Grande couronne' },
-  { code: '91', nom: 'Essonne', zone: 'A', cp: '91000', desc: 'Grande couronne' },
-  { code: '77', nom: 'Seine-et-Marne', zone: 'B1', cp: '77000', desc: 'Grande couronne' },
-  { code: '95', nom: "Val-d'Oise", zone: 'A', cp: '95000', desc: 'Grande couronne' },
+  { code: '75', nom: 'Paris', zone: 'Abis', cp: '75001', desc: 'Capitale', loc: 'à Paris' },
+  { code: '92', nom: 'Hauts-de-Seine', zone: 'Abis', cp: '92000', desc: 'Petite couronne', loc: 'dans les Hauts-de-Seine' },
+  { code: '93', nom: 'Seine-Saint-Denis', zone: 'A', cp: '93000', desc: 'Petite couronne', loc: 'en Seine-Saint-Denis' },
+  { code: '94', nom: 'Val-de-Marne', zone: 'A', cp: '94000', desc: 'Petite couronne', loc: 'dans le Val-de-Marne' },
+  { code: '78', nom: 'Yvelines', zone: 'A', cp: '78000', desc: 'Grande couronne', loc: 'dans les Yvelines' },
+  { code: '91', nom: 'Essonne', zone: 'A', cp: '91000', desc: 'Grande couronne', loc: 'en Essonne' },
+  { code: '77', nom: 'Seine-et-Marne', zone: 'B1', cp: '77000', desc: 'Grande couronne', loc: 'en Seine-et-Marne' },
+  { code: '95', nom: "Val-d'Oise", zone: 'A', cp: '95000', desc: 'Grande couronne', loc: "dans le Val-d'Oise" },
 ] as const
 
 type ZoneCode = 'Abis' | 'A' | 'B1'
@@ -637,72 +634,33 @@ function AidesPageContent() {
           )}
         </div>
 
-        {/* Lead capture — Récapitulatif aides par email */}
-        {aidesEligibles.length > 0 && (
-          <div className="mb-6">
-            <LeadCaptureGate
-              titre="Recevez votre récapitulatif d'aides"
-              description={`${aidesEligibles.length} aide${aidesEligibles.length > 1 ? 's' : ''} identifiée${aidesEligibles.length > 1 ? 's' : ''} pour votre profil — gardez une trace pour vos démarches.`}
-              source="aides"
-              contexte={{
-                zone: zoneSelectionnee.zonePTZ,
-                commune: zoneSelectionnee.nomCommune,
-                departement: zoneSelectionnee.codeDepartement,
-                nbAides: aidesEligibles.length,
-                totalAides,
-              }}
-              variant="inline"
-              buttonText="Recevoir mon récapitulatif"
-              successText="Récapitulatif envoyé !"
-            />
-          </div>
-        )}
-
-        {/* CTA Contact */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-5 p-4 sm:p-6 rounded-2xl bg-aquiz-gray-lightest/60 border border-aquiz-gray-lighter mb-8">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white border border-aquiz-gray-lighter flex items-center justify-center shrink-0 shadow-sm">
-              <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-aquiz-gray" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-aquiz-black">
-                Besoin d&apos;accompagnement ?
-              </p>
-              <p className="text-xs text-aquiz-gray-light mt-0.5">
-                Un conseiller vous aide à constituer vos dossiers d&apos;aides
-              </p>
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="bg-aquiz-green hover:bg-aquiz-green/90 text-white rounded-xl shadow-none font-semibold h-9 sm:h-10 px-4 sm:px-5 text-xs w-full sm:w-auto shrink-0"
-            onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'aides-results', page: 'aides' }) }}
-          >
-            Être rappelé
-            <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
-          </Button>
-        </div>
-
         {/* Note */}
-        <p className="text-[11px] text-aquiz-gray-light text-center mb-6 leading-relaxed">
+        <p className="text-[11px] text-aquiz-gray-light text-center pb-8 leading-relaxed">
           Liste indicative · zone {zoneSelectionnee.zonePTZ} · vérifiez l&apos;éligibilité auprès des organismes ou d&apos;un conseiller ADIL
         </p>
+      </div>
 
-        {/* Nav bas */}
-        <div className="flex items-center justify-between pt-5 pb-12 border-t border-aquiz-gray-lighter">
-          <button
-            onClick={() => fromStore ? router.push('/carte') : setLocalZone(null)}
-            className="text-xs text-aquiz-gray-light hover:text-aquiz-gray flex items-center gap-1.5 transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            {fromStore ? 'Retour à la carte' : 'Tous les départements'}
-          </button>
-          <Button asChild size="sm" variant="outline" className="rounded-xl border-aquiz-gray-lighter text-xs h-9 px-4">
-            <Link href="/simulateur/mode-a">
-              {fromStore ? 'Récapitulatif' : 'Simuler'}
-              <ArrowRight className="ml-1.5 w-3.5 h-3.5" />
+      {/* Bande verte CTA — pleine largeur, orientée département */}
+      <div className="bg-aquiz-green">
+        <div className="max-w-5xl mx-auto px-6 sm:px-10 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-10">
+          <p className="text-xs sm:text-sm font-semibold text-white text-center sm:text-left leading-relaxed whitespace-nowrap">
+            Un conseiller est à vos côtés à chaque étape de votre projet{DEPARTEMENTS_IDF.find(d => d.code === zoneSelectionnee.codeDepartement)?.loc ? ` ${DEPARTEMENTS_IDF.find(d => d.code === zoneSelectionnee.codeDepartement)!.loc}` : ' immobilier'}.
+          </p>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Link
+              href="/simulateur"
+              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white text-aquiz-black font-semibold rounded-xl hover:bg-aquiz-gray-lightest transition-colors text-[11px] sm:text-xs"
+              onClick={() => trackEvent('cta-click', { type: 'simulateur', position: 'aides-green-banner', page: 'aides' })}
+            >
+              Lancer une simulation
             </Link>
-          </Button>
+            <button
+              onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'aides-green-banner', page: 'aides' }) }}
+              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white/15 text-white font-semibold rounded-xl hover:bg-white/25 border border-white/25 transition-colors text-[11px] sm:text-xs"
+            >
+              Prendre rendez-vous
+            </button>
+          </div>
         </div>
       </div>
 

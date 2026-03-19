@@ -79,6 +79,9 @@
   --color-aquiz-blue: #6b7280;
   --color-aquiz-blue-light: #9ca3af;
   --color-aquiz-blue-dark: #4a4a4a;
+  
+  /* Custom breakpoint — 2-column cards on wide phones */
+  --breakpoint-xs: 420px;
 }
 
 :root {
@@ -191,6 +194,34 @@
   }
 }
 
+/* Pulse highlight (résultats) */
+@keyframes pulse-highlight {
+  0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  40% { box-shadow: 0 0 0 12px rgba(34,197,94,0.15); }
+  100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+.animate-pulse-highlight {
+  animation: pulse-highlight 0.9s ease-out 2;
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.animate-shimmer {
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+/* CTA glow */
+@keyframes cta-glow {
+  0%, 100% { box-shadow: 0 4px 15px rgba(16,185,129,0.25); }
+  50% { box-shadow: 0 4px 25px rgba(16,185,129,0.45), 0 0 40px rgba(16,185,129,0.15); }
+}
+.animate-cta-glow {
+  animation: cta-glow 3s ease-in-out infinite;
+}
+
 /* Classes d'animation */
 .animate-fade-in {
   animation: fade-in 0.5s ease-out forwards;
@@ -199,6 +230,12 @@
 .animate-fade-in-up {
   animation: fade-in-up 0.6s ease-out forwards;
   opacity: 0;
+}
+
+/* Curseur cliqueur animé pour la mini carte */
+@keyframes click-cursor {
+  0%, 60%, 100% { transform: scale(1) rotate(-10deg); opacity: 1; }
+  30% { transform: scale(0.82) rotate(-10deg); opacity: 0.7; }
 }
 
 /* ============================================ */

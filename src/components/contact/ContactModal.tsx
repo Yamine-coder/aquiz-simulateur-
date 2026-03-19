@@ -14,14 +14,10 @@ import { logger } from '@/lib/logger'
 import { useSimulateurStore } from '@/stores/useSimulateurStore'
 import {
     ArrowRight,
-    Calendar,
     Check,
-    Clock,
     Moon,
-    Phone,
     Sun,
     Sunrise,
-    Video,
     X
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -30,13 +26,14 @@ interface ContactModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess?: () => void
+  commune?: string
+  budgetOverride?: number
 }
 
-export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) {
+export function ContactModal({ isOpen, onClose, onSuccess, commune, budgetOverride }: ContactModalProps) {
   const { resultats, profil } = useSimulateurStore()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  const [activeTab, setActiveTab] = useState<'rappel' | 'rdv'>('rappel')
   const focusTrapRef = useFocusTrap(isOpen)
   
   // Formulaire de rappel
@@ -66,7 +63,6 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
   // Reset à la fermeture - utiliser un callback pour éviter setState synchrone
   const resetForm = () => {
     setIsSubmitted(false)
-    setActiveTab('rappel')
     setFormData({ prenom: '', telephone: '', email: '', creneau: 'matin', accepte: false })
   }
 
@@ -153,7 +149,8 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
 
   if (!isOpen) return null
 
-  const budget = resultats?.prixAchatMax || 0
+  const budget = budgetOverride ?? resultats?.prixAchatMax ?? 0
+  const budgetLabel = budgetOverride !== undefined ? 'Budget carte' : 'Budget estimé'
   const formatMontant = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
   return (
@@ -183,10 +180,13 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
           <div className="flex items-start justify-between">
             <div>
               <h2 id="contact-modal-title" className="text-lg font-semibold text-aquiz-black">
-                Parlons de votre projet
+                {commune ? `Votre projet à ${commune}` : 'Parlons de votre projet'}
               </h2>
               <p className="text-sm text-aquiz-gray mt-0.5">
-                Choisissez le mode de contact qui vous convient
+                {commune
+                  ? `Un conseiller vous rappelle pour vous accompagner sur ${commune} et ses environs.`
+                  : 'Renseignez vos coordonnées, un conseiller vous rappelle.'
+                }
               </p>
             </div>
             <button 
@@ -198,38 +198,11 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
             </button>
           </div>
           
-          {/* Onglets Rappel / RDV */}
-          <div className="mt-4 p-1 bg-aquiz-gray-lightest rounded-xl flex gap-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('rappel')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'rappel'
-                  ? 'bg-white text-aquiz-black shadow-sm'
-                  : 'text-aquiz-gray hover:text-aquiz-black'
-              }`}
-            >
-              <Phone className="w-4 h-4" />
-              Être rappelé
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('rdv')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${
-                activeTab === 'rdv'
-                  ? 'bg-white text-aquiz-black shadow-sm'
-                  : 'text-aquiz-gray hover:text-aquiz-black'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              Prendre RDV
-            </button>
-          </div>
           
           {/* Budget compact avec accent vert */}
           {budget > 0 && (
             <div className="mt-4 flex items-center justify-between py-3 px-4 bg-aquiz-green/5 border border-aquiz-green/20 rounded-xl">
-              <span className="text-sm text-aquiz-gray">Budget estimé</span>
+              <span className="text-sm text-aquiz-gray">{budgetLabel}</span>
               <span className="font-semibold text-aquiz-green">{formatMontant(budget)} €</span>
             </div>
           )}
@@ -241,11 +214,8 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
         {/* Content - scrollable */}
         <div className="p-5 sm:p-6 overflow-y-auto flex-1">
           
-          {/* ===== ONGLET RAPPEL ===== */}
-          {activeTab === 'rappel' && (
-            <>
-              {/* Formulaire Rappel */}
-              {isSubmitted ? (
+          {/* Formulaire Rappel */}
+          {isSubmitted ? (
                 <div className="text-center py-6">
                   <div className="w-12 h-12 rounded-full bg-aquiz-green/10 flex items-center justify-center mx-auto mb-3">
                     <Check className="w-5 h-5 text-aquiz-green" />
@@ -372,51 +342,6 @@ export function ContactModal({ isOpen, onClose, onSuccess }: ContactModalProps) 
                   </Button>
                 </form>
               )}
-            </>
-          )}
-          
-          {/* ===== ONGLET RDV ===== */}
-          {activeTab === 'rdv' && (
-            <div className="space-y-6">
-              {/* Intro sobre */}
-              <p className="text-sm text-aquiz-gray">
-                Échangez avec un conseiller pour affiner votre projet immobilier.
-              </p>
-              
-              {/* Avantages RDV */}
-              <div className="space-y-2.5">
-                {[
-                  { icon: Clock, text: 'Entretien de 30 minutes' },
-                  { icon: Video, text: 'Visio ou téléphone, au choix' },
-                  { icon: Check, text: 'Sans engagement' },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-aquiz-gray-lightest flex items-center justify-center shrink-0">
-                      <item.icon className="w-4 h-4 text-aquiz-gray" />
-                    </div>
-                    <span className="text-sm text-aquiz-black">{item.text}</span>
-                  </div>
-                ))}
-              </div>
-              
-              {/* CTA Principal */}
-              <a
-                href="https://calendly.com/contact-aquiz/30min"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'modal-rdv', page: window.location.pathname })}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-aquiz-black hover:bg-aquiz-black/90 text-white font-medium rounded-lg transition-colors"
-              >
-                <Calendar className="w-4 h-4" />
-                Choisir un créneau
-              </a>
-              
-              {/* Note */}
-              <p className="text-xs text-aquiz-gray text-center">
-                Vous serez redirigé vers notre agenda en ligne
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -31,7 +31,7 @@ const scoreExcellent: RegleConseil = {
   groupe: 'score',
   priorite: 1,
   poids: 100,
-  condition: (d) => d.scoreFaisabilite >= 85,
+  condition: (d) => d.scoreFaisabilite >= 80,
   generer: (d) => ({
     categorie: 'diagnostic',
     titre: 'Dossier solide — vous avez la main',
