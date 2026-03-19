@@ -180,13 +180,11 @@ export function ContactModal({ isOpen, onClose, onSuccess, commune, budgetOverri
 
   // Titre header dynamique selon étape
   const headerTitle = localisation
-    ? (step === 'choice' ? `Votre projet à ${localisation}` : step === 'rdv' ? `Prendre RDV — ${localisation}` : `Être rappelé — ${localisation}`)
-    : (step === 'rdv' ? 'Prendre rendez-vous' : step === 'rappel' ? 'Être rappelé' : 'Parlons de votre projet')
+    ? (step === 'choice' ? `Votre projet à ${localisation}` : `Être rappelé — ${localisation}`)
+    : (step === 'rappel' ? 'Être rappelé' : 'Parlons de votre projet')
 
   const headerSubtitle = step === 'choice'
     ? 'Comment souhaitez-vous être accompagné ?'
-    : step === 'rdv'
-    ? 'Un conseiller vous confirme votre créneau rapidement.'
     : localisation
     ? `Un conseiller vous rappelle pour votre projet sur ${localisation}.`
     : 'Renseignez vos coordonnées, un conseiller vous rappelle.'
