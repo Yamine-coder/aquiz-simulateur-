@@ -929,13 +929,39 @@ function parseBienIciData(json: Record<string, unknown>, url: string): Extractio
   if (typeof json.description === 'string') data.description = (json.description as string).substring(0, 1000)
   if (typeof json.title === 'string') data.titre = json.title
   
-  // Coordonnées GPS (Bien'ici fournit blurredCoordinates ou district)
-  const coords = json.blurredCoordinates || json.coordinates || json.position || json.district
-  if (coords && typeof coords === 'object') {
-    const c = coords as Record<string, unknown>
-    const lat = c.lat ?? c.latitude
-    const lng = c.lng ?? c.longitude ?? c.lon
-    if (typeof lat === 'number' && typeof lng === 'number' && lat !== 0 && lng !== 0) {
+  // Coordonnées GPS — BienIci utilise 'blurredLocation' ou 'blurredCoordinates' selon la version API
+  // 'district' est un objet {name, id} non géographique, ne pas l'inclure
+  const gpsCandidates = [
+    json.blurredLocation,      // champ principal BienIci (testé en premier)
+    json.blurredCoordinates,   // ancienne variante
+    json.coordinates,
+    json.location,             // certaines APIs renvoient tout dans location
+    json.position,
+    json.geo,
+  ]
+  for (const c of gpsCandidates) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) continue
+    const obj = c as Record<string, unknown>
+    const latRaw = obj.lat ?? obj.latitude
+    const lngRaw = obj.lng ?? obj.longitude ?? obj.lon
+    const lat = typeof latRaw === 'number' ? latRaw : typeof latRaw === 'string' ? parseFloat(latRaw) : NaN
+    const lng = typeof lngRaw === 'number' ? lngRaw : typeof lngRaw === 'string' ? parseFloat(lngRaw) : NaN
+    // Validation : coordonnées dans la zone France (métropole + DOM-TOM) + non nulles
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 &&
+        lat >= -22 && lat <= 52 && lng >= -62 && lng <= 56) {
+      data.latitude = lat
+      data.longitude = lng
+      break
+    }
+  }
+  // Fallback : coordonnées directement à la racine du JSON (certaines APIs BienIci)
+  if (!data.latitude || !data.longitude) {
+    const latRaw = json.latitude ?? json.lat
+    const lngRaw = json.longitude ?? json.lng ?? json.lon
+    const lat = typeof latRaw === 'number' ? latRaw : typeof latRaw === 'string' ? parseFloat(String(latRaw)) : NaN
+    const lng = typeof lngRaw === 'number' ? lngRaw : typeof lngRaw === 'string' ? parseFloat(String(lngRaw)) : NaN
+    if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0 &&
+        lat >= -22 && lat <= 52 && lng >= -62 && lng <= 56) {
       data.latitude = lat
       data.longitude = lng
     }

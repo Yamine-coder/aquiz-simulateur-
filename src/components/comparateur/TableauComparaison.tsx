@@ -30,20 +30,27 @@ import {
     ChevronDown,
     CreditCard,
     ExternalLink,
+    GraduationCap,
+    HeartPulse,
     Home,
     Info,
     Key,
     Loader2,
     MapPin,
     Minus,
+    ShoppingBag,
+    Train,
     Trash2,
+    TreePine,
     TrendingUp,
+    Users,
     X,
     Zap
 } from 'lucide-react'
 import Image from 'next/image'
 import { useEffect, useMemo, useRef } from 'react'
 import { EditableCell, type EditableFieldType } from './EditableCell'
+import { LineBadge } from './TransportIcons'
 import { VueMobileAccordeon } from './VueMobileAccordeon'
 
 /** Couleur du score */
@@ -922,7 +929,330 @@ export function TableauComparaison({
               fieldType: 'boolean',
             }}
           />
-          
+
+          {/* ═══════════════════════════════════════
+               Section Quartier & Cadre de vie
+          ═══════════════════════════════════════ */}
+          <tr className="bg-aquiz-green/5">
+            <td colSpan={annonces.length + 1} className="py-2.5 px-5 border-l-[3px] border-aquiz-green">
+              <div className="flex items-center gap-2 text-xs font-bold text-aquiz-gray-dark uppercase tracking-wider">
+                <MapPin className="w-4 h-4 text-aquiz-green" />
+                Quartier &amp; Cadre de vie
+              </div>
+            </td>
+          </tr>
+
+          {/* Score global quartier */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <span>Score quartier</span>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Info className="w-3 h-3 text-aquiz-gray-light cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">
+                    <p>Score calculé via OpenStreetMap : transports, commerces, écoles, santé, espaces verts dans un rayon de 500 m</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {qr ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`text-base font-extrabold ${
+                        (qr.scoreQuartier ?? 0) >= 75 ? 'text-aquiz-green' :
+                        (qr.scoreQuartier ?? 0) >= 55 ? 'text-aquiz-green/70' :
+                        (qr.scoreQuartier ?? 0) >= 35 ? 'text-amber-500' : 'text-red-500'
+                      }`}>
+                        {qr.scoreQuartier ?? '—'}<span className="text-[10px] text-aquiz-gray font-normal">/100</span>
+                      </span>
+                      {qr.verdict && (
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                          qr.verdict === 'excellent' ? 'bg-aquiz-green/15 text-aquiz-green' :
+                          qr.verdict === 'bon' ? 'bg-aquiz-green/10 text-aquiz-green/80' :
+                          qr.verdict === 'moyen' ? 'bg-amber-100 text-amber-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {qr.verdict === 'excellent' ? 'Excellent' :
+                           qr.verdict === 'bon' ? 'Bon' :
+                           qr.verdict === 'moyen' ? 'Moyen' : 'Faible'}
+                        </span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin" />
+                      <span className="text-[9px] text-aquiz-gray-light">Chargement…</span>
+                    </div>
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Transports à proximité */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <Train className="w-4 h-4 text-aquiz-gray" />
+                <span>Transports proches</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-2.5 px-4 text-center">
+                  {qr?.transportSummary && qr.transportSummary.length > 0 ? (() => {
+                    const sorted = qr.transportSummary
+                      .filter(tg => ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo'].includes(tg.type))
+                      .sort((tgA, tgB) => {
+                        const order = ['metro', 'rer', 'train', 'tram', 'bus', 'velib', 'velo']
+                        return order.indexOf(tgA.type) - order.indexOf(tgB.type)
+                      })
+                    const railGroups = sorted.filter(tg => ['metro', 'rer', 'train', 'tram'].includes(tg.type) && tg.lignes.length > 0)
+                    const allRailLines = railGroups.flatMap(tg => tg.lignes.map(l => ({ l, type: tg.type })))
+                    const nearestMin = railGroups.find(tg => tg.nearestWalkMin)?.nearestWalkMin
+                    const busGroup = sorted.find(tg => tg.type === 'bus')
+                    const otherGroups = sorted.filter(tg => ['velib', 'velo'].includes(tg.type))
+                    const MAX_BADGES = 6
+                    return (
+                      <div className="flex flex-col items-center gap-1.5">
+                        {/* Ligne 1 : badges rail uniquement */}
+                        {allRailLines.length > 0 && (
+                          <div className="flex flex-wrap justify-center items-center gap-0.5">
+                            {allRailLines.slice(0, MAX_BADGES).map(({ l, type }, j) => (
+                              <LineBadge key={j} ligne={l} typeTransport={type} />
+                            ))}
+                            {allRailLines.length > MAX_BADGES && (
+                              <span className="text-[9px] text-aquiz-gray-light font-medium">+{allRailLines.length - MAX_BADGES}</span>
+                            )}
+                            {nearestMin && (
+                              <span className="text-[9px] text-aquiz-gray-light ml-0.5">~{nearestMin}min</span>
+                            )}
+                          </div>
+                        )}
+                        {/* Ligne 2 : bus + vélib/vélo en texte compact */}
+                        <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-0.5">
+                          {busGroup && busGroup.lignes.length > 0 && (
+                            <span className="text-[10px] text-aquiz-gray">
+                              Bus
+                              <span className="font-semibold text-aquiz-black ml-1">{busGroup.lignes.length} ligne{busGroup.lignes.length > 1 ? 's' : ''}</span>
+                            </span>
+                          )}
+                          {otherGroups.map(tg => (
+                            <span key={tg.type} className="text-[10px] text-aquiz-gray">
+                              {tg.type === 'velib' ? "Vélib'" : 'Vélo'}
+                              <span className="font-semibold text-aquiz-black ml-1">{tg.count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })() : loading ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin" />
+                      <span className="text-[9px] text-aquiz-gray-light">Chargement…</span>
+                    </div>
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Commerces & services */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <ShoppingBag className="w-4 h-4 text-aquiz-gray" />
+                <span>Commerces &amp; services</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {qr ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      {qr.commerces !== undefined && (
+                        <span className={`font-semibold ${
+                          qr.commerces >= 75 ? 'text-aquiz-green' : qr.commerces >= 55 ? 'text-aquiz-green/70' : qr.commerces >= 35 ? 'text-amber-500' : 'text-red-500'
+                        }`}>{qr.commerces}<span className="text-[10px] text-aquiz-gray font-normal">/100</span></span>
+                      )}
+                      {qr.counts?.commerce != null && (
+                        <span className="text-[10px] text-aquiz-gray">{qr.counts.commerce} au rayon 500m</span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Écoles & éducation */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-aquiz-gray" />
+                <span>Écoles &amp; éducation</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {qr ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      {qr.ecoles !== undefined && (
+                        <span className={`font-semibold ${
+                          qr.ecoles >= 75 ? 'text-aquiz-green' : qr.ecoles >= 55 ? 'text-aquiz-green/70' : qr.ecoles >= 35 ? 'text-amber-500' : 'text-red-500'
+                        }`}>{qr.ecoles}<span className="text-[10px] text-aquiz-gray font-normal">/100</span></span>
+                      )}
+                      {qr.counts?.education != null && (
+                        <span className="text-[10px] text-aquiz-gray">{qr.counts.education} établissements</span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Santé */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="w-4 h-4 text-aquiz-gray" />
+                <span>Santé</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {qr ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      {qr.sante !== undefined && (
+                        <span className={`font-semibold ${
+                          qr.sante >= 75 ? 'text-aquiz-green' : qr.sante >= 55 ? 'text-aquiz-green/70' : qr.sante >= 35 ? 'text-amber-500' : 'text-red-500'
+                        }`}>{qr.sante}<span className="text-[10px] text-aquiz-gray font-normal">/100</span></span>
+                      )}
+                      {qr.counts?.sante != null && (
+                        <span className="text-[10px] text-aquiz-gray">{qr.counts.sante} établissements</span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Espaces verts */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <TreePine className="w-4 h-4 text-aquiz-green" />
+                <span>Espaces verts</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const qr = enrichie?.quartier?.success ? enrichie.quartier : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {qr ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      {qr.espaceVerts !== undefined && (
+                        <span className={`font-semibold ${
+                          qr.espaceVerts >= 75 ? 'text-aquiz-green' : qr.espaceVerts >= 55 ? 'text-aquiz-green/70' : qr.espaceVerts >= 35 ? 'text-amber-500' : 'text-red-500'
+                        }`}>{qr.espaceVerts}<span className="text-[10px] text-aquiz-gray font-normal">/100</span></span>
+                      )}
+                      {qr.counts?.vert != null && (
+                        <span className="text-[10px] text-aquiz-gray">{qr.counts.vert} parcs/jardins</span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
+          {/* Population commune */}
+          <tr className="border-b border-aquiz-gray-lightest/70 hover:bg-slate-50/60 transition-colors">
+            <td className="py-3.5 px-5 text-sm text-aquiz-gray-dark/80">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-aquiz-gray" />
+                <span>Population commune</span>
+              </div>
+            </td>
+            {annonces.map((a) => {
+              const enrichie = getAnalyseEnrichie(a.id)
+              const ci = enrichie?.communeInfos?.success ? enrichie.communeInfos : undefined
+              const loading = loadingIds.has(a.id)
+              return (
+                <td key={a.id} className="py-3.5 px-4 text-center text-sm">
+                  {ci?.population ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="font-semibold text-aquiz-black">
+                        {ci.population >= 1_000_000
+                          ? `${(ci.population / 1_000_000).toLocaleString('fr-FR', { maximumFractionDigits: 1 })}M hab.`
+                          : ci.population >= 1_000
+                          ? `${Math.round(ci.population / 1_000)}k hab.`
+                          : `${ci.population} hab.`}
+                      </span>
+                      {ci.population >= 1_000_000 && (
+                        <span className="text-[9px] text-amber-500">Commune entière</span>
+                      )}
+                      {ci.densitePopulation != null && (
+                        <span className="text-[10px] text-aquiz-gray">
+                          {Math.round(ci.densitePopulation)} hab./km²
+                        </span>
+                      )}
+                    </div>
+                  ) : loading ? (
+                    <Loader2 className="w-4 h-4 text-aquiz-gray-light animate-spin mx-auto" />
+                  ) : (
+                    <Minus className="w-4 h-4 text-aquiz-gray-lighter mx-auto" />
+                  )}
+                </td>
+              )
+            })}
+          </tr>
+
           {/* Comparaison budget si disponible */}
           {budgetMax && (
             <>

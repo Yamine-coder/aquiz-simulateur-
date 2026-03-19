@@ -997,50 +997,53 @@ export default function ComparateurPage() {
                   {/* Header comparaison */}
                   <div className="bg-white rounded-2xl border border-aquiz-gray-lighter overflow-hidden">
                     {/* Ligne titre + actions — desktop */}
-                    <div className="hidden sm:flex px-5 py-4 items-center justify-between border-b border-aquiz-gray-lightest">
+                    <div className="hidden sm:flex px-5 py-3.5 items-center justify-between border-b border-aquiz-gray-lightest/70">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center">
-                          <Scale className="h-4 w-4 text-aquiz-green" />
+                        <div className="w-8 h-8 rounded-xl bg-aquiz-green flex items-center justify-center shrink-0 shadow-sm">
+                          <span className="text-white text-sm font-extrabold tabular-nums leading-none">{annoncesSelectionnees.length}</span>
                         </div>
                         <div>
-                          <h2 className="font-semibold text-aquiz-black text-sm">
-                            {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
+                          <h2 className="font-bold text-aquiz-black text-sm leading-none">
+                            Comparaison de {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''}
                           </h2>
-                          <p className="text-[11px] text-aquiz-gray">Analyse comparative détaillée</p>
+                          <p className="text-[11px] text-aquiz-gray mt-0.5">Analyse comparative détaillée</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => comparateur.deselectionnerTout()}
-                          className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-2.5 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                          className="flex items-center gap-1.5 text-xs text-aquiz-gray hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100 transition-all"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Réinitialiser</span>
+                          Réinitialiser
                         </button>
                         {scoresForEmail.length > 0 && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(window.location.href)
-                                  setLinkCopied(true)
-                                  setTimeout(() => setLinkCopied(false), 2000)
-                                } catch { /* fallback */ }
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-aquiz-gray-lighter text-aquiz-gray-dark text-xs font-medium hover:bg-aquiz-gray-lightest active:scale-[0.97] transition-all duration-200"
-                            >
-                              {linkCopied ? <Check className="w-3.5 h-3.5 text-aquiz-green" /> : <Share2 className="w-3.5 h-3.5" />}
-                              {linkCopied ? 'Copié !' : 'Partager'}
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(window.location.href)
+                                setLinkCopied(true)
+                                setTimeout(() => setLinkCopied(false), 2000)
+                              } catch { /* fallback */ }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-aquiz-gray-lighter text-aquiz-gray-dark text-xs font-medium hover:bg-aquiz-gray-lightest hover:border-aquiz-gray-light active:scale-[0.97] transition-all duration-200"
+                          >
+                            {linkCopied ? <Check className="w-3.5 h-3.5 text-aquiz-green" /> : <Share2 className="w-3.5 h-3.5" />}
+                            {linkCopied ? 'Copié !' : 'Partager'}
+                          </button>
                         )}
                       </div>
                     </div>
                     {/* Sélecteur de profil — desktop */}
-                    <div className="hidden sm:block px-5 py-3 border-b border-aquiz-gray-lightest">
-                      <div className="flex items-center gap-3">
-                        <span className="text-[11px] font-semibold text-aquiz-gray uppercase tracking-wide shrink-0">Profil</span>
+                    <div className="hidden sm:flex items-center border-b border-aquiz-gray-lightest bg-aquiz-gray-lightest/30">
+                      {/* Accent bar */}
+                      <div className="flex items-center gap-2 px-5 py-3.5 border-r border-aquiz-gray-lighter/60 shrink-0 bg-white/60 self-stretch">
+                        <Scale className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
+                        <span className="text-[10px] font-bold text-aquiz-gray-dark uppercase tracking-widest whitespace-nowrap">Profil de scoring</span>
+                      </div>
+                      {/* Pills + description inline */}
+                      <div className="flex-1 min-w-0 px-4 py-3">
                         <ProfilScoringSelector
                           activeProfilId={activeProfilId}
                           onProfilChange={p => setActiveProfilId(p.id)}
@@ -1051,27 +1054,33 @@ export default function ComparateurPage() {
                     {/* Ligne titre + actions + profil — mobile */}
                     <div className="sm:hidden border-b border-aquiz-gray-lightest">
                       {/* Ligne titre */}
-                      <div className="flex items-center justify-between px-3 py-2.5">
+                      <div className="flex items-center justify-between px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-aquiz-black">
-                            {annoncesSelectionnees.length} bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-aquiz-green text-white text-[10px] font-bold shrink-0">
+                            {annoncesSelectionnees.length}
+                          </span>
+                          <span className="text-sm font-semibold text-aquiz-black">
+                            bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
                           </span>
                         </div>
                         <button
                           onClick={() => comparateur.deselectionnerTout()}
-                          className="flex items-center gap-1 text-[11px] text-aquiz-gray hover:text-red-500 font-medium transition-colors"
+                          className="flex items-center gap-1.5 text-[11px] text-aquiz-gray hover:text-red-500 font-medium transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
                         >
                           <RotateCcw className="h-3 w-3" />
                           Réinitialiser
                         </button>
                       </div>
                       {/* Profil — pleine largeur */}
-                      <div className="px-3 pb-2.5">
-                        <span className="text-[10px] font-semibold text-aquiz-gray uppercase tracking-wide block mb-1.5">Profil de scoring</span>
+                      <div className="px-4 pb-3 pt-1">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-[10px] font-bold text-aquiz-gray uppercase tracking-widest">Profil de scoring</span>
+                        </div>
                         <ProfilScoringSelector
                           activeProfilId={activeProfilId}
                           onProfilChange={p => setActiveProfilId(p.id)}
                           compact
+                          wrapPills
                           className="w-full"
                         />
                       </div>

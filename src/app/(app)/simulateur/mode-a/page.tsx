@@ -1315,7 +1315,7 @@ function ModeAPageContent() {
                   
                   {/* === FORMULAIRE === */}
                   <div className="space-y-3 sm:space-y-5">
-                    
+
                     {/* Section 1: Budget mensuel */}
                     <div className="bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
                       <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-aquiz-gray-lighter/60 flex items-center gap-2.5 sm:gap-3">
@@ -1529,6 +1529,61 @@ function ModeAPageContent() {
                       </div>
                     </div>
                     
+                    {/* Card résultats — mobile uniquement, en bas du formulaire */}
+                    <div className="lg:hidden rounded-2xl overflow-hidden border border-aquiz-green/20 bg-white shadow-sm" aria-live="polite">
+                      {/* Hero centré */}
+                      <div className="bg-linear-to-b from-aquiz-green/8 to-transparent px-5 pt-5 pb-4 text-center">
+                        <p className="text-[10px] text-aquiz-green uppercase tracking-widest font-semibold flex items-center justify-center gap-1.5 mb-2">
+                          <CheckCircle className="w-3 h-3 shrink-0" />
+                          Prix d&apos;achat maximum
+                        </p>
+                        <p className="text-4xl font-extrabold text-aquiz-black tracking-tight leading-none">
+                          {mensualiteMax > 0 ? `${formatMontant(calculs.prixAchatMax)} €` : '— €'}
+                        </p>
+                        {mensualiteMax > 0 && (
+                          <p className="text-xs text-aquiz-gray mt-2">
+                            Dont {formatMontant(calculs.fraisNotaire)} € de frais de notaire ({typeBien === 'neuf' ? '~2.5%' : '~8%'})
+                          </p>
+                        )}
+                        {mensualiteRecommandee > 0 && (
+                          <div className="flex items-center justify-center gap-2 mt-3">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${
+                              calculs.depasseEndettement ? 'bg-red-100 text-red-600' : 'bg-aquiz-green/10 text-aquiz-green'
+                            }`}>
+                              {Math.round(calculs.tauxEndettementProjet)}% endettement {calculs.depasseEndettement ? '✗' : '✓'}
+                            </span>
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-semibold ${
+                              calculs.niveauResteAVivre === 'risque' ? 'bg-red-100 text-red-600'
+                              : calculs.niveauResteAVivre === 'limite' ? 'bg-amber-100 text-amber-600'
+                              : 'bg-aquiz-green/10 text-aquiz-green'
+                            }`}>
+                              {calculs.niveauResteAVivre === 'ok' ? 'Confortable ✓' : calculs.niveauResteAVivre === 'limite' ? 'Limite ⚠' : 'Insuffisant ✗'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Grille 3 colonnes */}
+                      {mensualiteRecommandee > 0 && (
+                        <div className="grid grid-cols-3 divide-x divide-aquiz-green/10 border-t border-aquiz-green/10">
+                          <div className="text-center px-2 py-3">
+                            <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Mensualité</p>
+                            <p className="text-sm font-bold text-aquiz-black mt-1">{formatMontant(mensualiteRecommandee)} €</p>
+                            <p className="text-[9px] text-aquiz-gray mt-0.5">/mois</p>
+                          </div>
+                          <div className="text-center px-2 py-3">
+                            <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Emprunt</p>
+                            <p className="text-sm font-bold text-aquiz-black mt-1">{formatMontant(calculs.capitalEmpruntable)} €</p>
+                            <p className="text-[9px] text-aquiz-gray mt-0.5">{dureeAns} ans · {tauxInteret.toFixed(1)}%</p>
+                          </div>
+                          <div className="text-center px-2 py-3">
+                            <p className="text-[9px] text-aquiz-gray uppercase tracking-wider font-medium">Apport</p>
+                            <p className="text-sm font-bold text-aquiz-black mt-1">{formatMontant(apport)} €</p>
+                            <p className="text-[9px] text-aquiz-gray mt-0.5">{apport > 0 ? `${((apport / (apport + calculs.capitalEmpruntable)) * 100).toFixed(0)}% du total` : '—'}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     {/* Alerte si problème */}
                     {mensualiteMax > 0 && (calculs.depasseEndettement || calculs.niveauResteAVivre === 'risque') && (
                       <div className="p-4 bg-red-50 border border-red-200 rounded-xl" role="alert" aria-live="assertive">
@@ -1548,7 +1603,6 @@ function ModeAPageContent() {
                         </div>
                       </div>
                     )}
-                    
 
                   </div>
                   
@@ -1970,23 +2024,23 @@ function ModeAPageContent() {
 
                   {/* Section aides financières */}
                   <div className="rounded-2xl border border-aquiz-green/20 bg-white overflow-hidden">
-                    <div className="px-5 py-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                          <Gift className="w-4 h-4 text-aquiz-green" />
+                    <div className="px-6 py-5 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                          <Gift className="w-6 h-6 text-aquiz-green" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-semibold text-aquiz-black">Aides financières</h3>
-                          <p className="text-[10px] text-aquiz-gray mt-0.5">PTZ, PAS, Action Logement — vérifiez votre éligibilité</p>
+                          <h3 className="text-base font-semibold text-aquiz-black">Aides financières</h3>
+                          <p className="text-xs text-aquiz-gray mt-0.5">PTZ, PAS, Action Logement — vérifiez votre éligibilité</p>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => { saveAndGoToAides(); trackEvent('cta-click', { type: 'aides', position: 'mode-a-results', page: 'mode-a' }) }}
-                        className="shrink-0 h-8 px-3.5 bg-aquiz-green/10 hover:bg-aquiz-green/20 text-aquiz-green text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors"
+                        className="shrink-0 h-10 px-5 bg-aquiz-green/10 hover:bg-aquiz-green/20 text-aquiz-green text-sm font-semibold rounded-xl flex items-center gap-2 transition-colors"
                       >
                         Vérifier
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <ArrowRight className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -2072,16 +2126,16 @@ function ModeAPageContent() {
 
                   {/* CTA Accompagnement projet — masqué sur mobile (le bottom bar a "Conseiller") */}
                   <div className="hidden sm:block bg-white rounded-xl border border-aquiz-gray-lighter overflow-hidden">
-                    <div className="px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
-                          <Phone className="w-5 h-5 text-aquiz-green" />
+                    <div className="px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-aquiz-green/10 flex items-center justify-center shrink-0">
+                          <Phone className="w-6 h-6 text-aquiz-green" />
                         </div>
                         <div>
-                          <h3 className="text-aquiz-black font-bold text-sm">
+                          <h3 className="text-aquiz-black font-bold text-base">
                             Besoin d&apos;aide pour la suite ?
                           </h3>
-                          <p className="text-aquiz-gray text-xs mt-0.5">
+                          <p className="text-aquiz-gray text-sm mt-0.5">
                             Échangez avec un conseiller pour valider votre projet — sans engagement
                           </p>
                         </div>
@@ -2091,7 +2145,7 @@ function ModeAPageContent() {
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={() => trackEvent('cta-click', { type: 'calendly', position: 'mode-a-results', page: 'mode-a' })}
-                        className="w-full sm:w-auto h-10 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl px-5 flex items-center justify-center gap-2 transition-colors shadow-sm"
+                        className="w-full sm:w-auto h-12 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-base font-semibold rounded-xl px-6 flex items-center justify-center gap-2 transition-colors shadow-sm"
                       >
                         Échanger avec un conseiller
                         <ArrowRight className="w-4 h-4" />

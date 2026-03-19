@@ -98,9 +98,11 @@ export default function ModeBPage() {
         : SIMULATEUR_CONFIG.fraisNotaireAncien
     const fraisNotaire = prixBien * tauxNotaire
 
-    // Frais annexes (garantie, dossier, etc.) - environ 1.5% du prêt
-    const tauxFraisAnnexes = 0.015
-    const fraisAnnexes = prixBien * tauxFraisAnnexes
+    // Honoraires AQUIZ selon la tranche du bien
+    const fraisAnnexes =
+      prixBien < 500_000 ? 5_900 :
+      prixBien < 800_000 ? 8_900 :
+      Math.round(prixBien * 0.02)
 
     // Coût total
     const coutTotal = prixBien + fraisNotaire + fraisAnnexes
@@ -168,7 +170,7 @@ export default function ModeBPage() {
     const repartitionCout = [
       { label: 'Prix du bien', value: prixBien, color: '#1a1a1a' },
       { label: 'Frais de notaire', value: fraisNotaireArrondi, color: '#6b7280' },
-      { label: 'Frais annexes', value: fraisAnnexesArrondi, color: '#9ca3af' },
+      { label: 'Honoraires AQUIZ', value: fraisAnnexesArrondi, color: '#9ca3af' },
       { label: 'Intérêts + Assurance', value: coutTotalCreditArrondi, color: '#22c55e' },
     ]
     const totalProjet = prixBien + fraisNotaireArrondi + fraisAnnexesArrondi + coutTotalCreditArrondi
@@ -226,16 +228,6 @@ export default function ModeBPage() {
     }
     if (tauxInteret > 6) {
       alerts.push({ type: 'warning', message: 'Taux élevé. Comparez plusieurs banques pour optimiser.' })
-    }
-    
-    // Revenus requis
-    if (calculs.revenusMinimums33 > 15000) {
-      alerts.push({ type: 'info', message: 'Revenus requis élevés. Envisagez un apport plus important ou une durée plus longue.' })
-    }
-    
-    // Mensualité
-    if (calculs.mensualiteTotal > 5000) {
-      alerts.push({ type: 'info', message: 'Mensualité importante. Assurez-vous d\'avoir une épargne de précaution.' })
     }
     
     return {
@@ -1002,7 +994,7 @@ export default function ModeBPage() {
                         <p className="font-bold text-aquiz-black">{formatMontant(Math.round(calculs.fraisNotaire))} €</p>
                       </div>
                       <div className="p-3 bg-white rounded-lg">
-                        <p className="text-xs text-aquiz-gray">Frais annexes</p>
+                        <p className="text-xs text-aquiz-gray">Honoraires AQUIZ</p>
                         <p className="font-bold text-aquiz-black">{formatMontant(Math.round(calculs.fraisAnnexes))} €</p>
                       </div>
                       <div className="p-3 bg-aquiz-green rounded-lg">
@@ -1045,15 +1037,13 @@ export default function ModeBPage() {
                     <button
                       type="button"
                       onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'mode-b-accompagne', page: 'mode-b' }) }}
-                      className="group p-4 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-md shadow-aquiz-green/20 flex items-center gap-4"
+                      className="group relative overflow-hidden p-5 bg-aquiz-green hover:bg-aquiz-green/90 rounded-xl transition-all shadow-lg shadow-aquiz-green/25 flex flex-col items-center justify-center gap-2 min-h-[80px]"
                     >
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-white/20 transition-colors">
-                        <Phone className="w-5 h-5 text-white" />
+                      <div className="flex items-center gap-3">
+                        <Phone className="w-5 h-5 text-white/90 shrink-0" />
+                        <p className="text-xl font-extrabold text-white tracking-tight">On s&apos;en occupe ?</p>
                       </div>
-                      <div className="text-left">
-                        <p className="font-semibold text-white">Je veux être accompagné</p>
-                        <p className="text-xs text-white/60 mt-0.5">Un conseiller me rappelle gratuitement</p>
-                      </div>
+                      <p className="text-[11px] text-white/70 font-medium">Je prends RDV dès maintenant !</p>
                     </button>
                     
                     {/* Option 2 : Continuer la simulation */}
@@ -1061,15 +1051,13 @@ export default function ModeBPage() {
                       type="button"
                       onClick={goToNextEtape}
                       disabled={!validations.canProceed}
-                      className="group p-4 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-4"
+                      className="group p-5 bg-white hover:bg-aquiz-green/5 border-2 border-aquiz-green rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center gap-2 min-h-[80px]"
                     >
-                      <div className="w-10 h-10 rounded-full bg-aquiz-green/10 flex items-center justify-center shrink-0 group-hover:bg-aquiz-green/20 transition-colors">
-                        <ArrowRight className="w-5 h-5 text-aquiz-green" />
+                      <div className="flex items-center gap-3">
+                        <ArrowRight className="w-5 h-5 text-aquiz-green shrink-0" />
+                        <p className="text-xl font-extrabold text-aquiz-green tracking-tight">Continuer</p>
                       </div>
-                      <div className="text-left">
-                        <p className="font-semibold text-aquiz-green">Continuer ma simulation</p>
-                        <p className="text-xs text-aquiz-gray mt-0.5">Voir les mensualités et revenus requis</p>
-                      </div>
+                      <p className="text-[11px] text-aquiz-gray font-medium">Voir les mensualités et revenus requis</p>
                     </button>
                   </div>
                 </div>
@@ -1406,7 +1394,7 @@ export default function ModeBPage() {
                     <span className="text-sm font-medium text-aquiz-black">{formatMontant(Math.round(calculs.fraisNotaire))} €</span>
                   </div>
                   <div className="flex justify-between px-5 py-3">
-                    <span className="text-sm text-aquiz-gray">Frais annexes (~1,5%)</span>
+                    <span className="text-sm text-aquiz-gray">Honoraires AQUIZ</span>
                     <span className="text-sm font-medium text-aquiz-black">{formatMontant(Math.round(calculs.fraisAnnexes))} €</span>
                   </div>
                   <div className="flex justify-between px-5 py-3 bg-aquiz-gray-lightest">
@@ -1448,6 +1436,7 @@ export default function ModeBPage() {
                           outerRadius={104}
                           paddingAngle={3}
                           dataKey="value"
+                          nameKey="label"
                           strokeWidth={0}
                           isAnimationActive={true}
                           animationDuration={600}
@@ -1846,6 +1835,13 @@ export default function ModeBPage() {
         if (etape === 1) {
           goToNextEtape()
         }
+      }}
+      contextData={{
+        prixBien: prixBien > 0 ? prixBien : undefined,
+        localisation: nomCommune ? `${codePostal} — ${nomCommune}` : codePostal || undefined,
+        typeBien: typeBien,
+        mensualite: calculs.mensualiteTotal > 0 ? Math.round(calculs.mensualiteTotal) : undefined,
+        honoraires: calculs.fraisAnnexes,
       }}
     />
     

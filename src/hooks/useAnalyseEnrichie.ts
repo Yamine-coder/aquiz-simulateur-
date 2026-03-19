@@ -131,14 +131,29 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
     const analyserTout = async () => {
       try {
         const resultats: Array<{ id: string; analyse: AnalyseComplete | null }> = []
-        for (const annonce of annoncesSansAnalyse) {
+        // Partage en-cours : si une annonce réussit le quartier pour un CP, les suivantes du
+        // même CP réutilisent directement ce résultat sans rappeler Overpass.
+        const quartierByCPLive = new Map<string, AnalyseComplete['quartier']>()
+
+        for (let i = 0; i < annoncesSansAnalyse.length; i++) {
+          const annonce = annoncesSansAnalyse[i]
+          // Délai entre chaque annonce : Overpass rate-limite par IP.
+          // 2000ms laisse le temps à la connexion Overpass précédente de se fermer.
+          if (i > 0) await new Promise(resolve => setTimeout(resolve, 2000))
           try {
             const bien = annonceToBienAnalyse(annonce)
-            // BUG-16 : Valider le code postal avant l'appel API
             if (!bien.codePostal || bien.codePostal.length !== 5) {
               logger.warn(`Analyse ${annonce.id} : code postal manquant ou invalide ("${bien.codePostal}"). Enrichissement partiel.`)
             }
             const analyse = await analyserBien(bien)
+            // Si on a déjà un quartier réussi pour ce CP, l'injecter si l'analyse a échoué le sien
+            if (analyse && !analyse.quartier?.success && bien.codePostal && quartierByCPLive.has(bien.codePostal)) {
+              analyse.quartier = quartierByCPLive.get(bien.codePostal)
+            }
+            // Mémoriser pour les annonces suivantes du même CP
+            if (analyse?.quartier?.success && bien.codePostal) {
+              quartierByCPLive.set(bien.codePostal, analyse.quartier)
+            }
             resultats.push({ id: annonce.id, analyse })
           } catch (err) {
             logger.error(`Erreur analyse ${annonce.id}:`, err)

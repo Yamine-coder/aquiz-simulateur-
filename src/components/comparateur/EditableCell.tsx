@@ -20,7 +20,7 @@ import { useComparateurStore } from '@/stores/useComparateurStore'
 import type { Annonce, ClasseDPE, NouvelleAnnonce } from '@/types/annonces'
 import { COULEURS_DPE } from '@/types/annonces'
 import { ArrowDown, ArrowDownLeft, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Check, ChevronDown, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 export type EditableFieldType = 'number' | 'text' | 'boolean' | 'dpe' | 'orientation'
@@ -101,42 +101,45 @@ const ORIENTATION_OPTIONS = [
  * Recalcule sa position sur scroll/resize pour suivre la cellule ancre.
  */
 function FixedPicker({ getPos, onDismiss, children }: { getPos: () => { top: number; left: number }; onDismiss?: () => void; children: React.ReactNode }) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [visible, setVisible] = useState(false)
 
-  // Calcul initial + recalcul sur scroll/resize, avec ajustement viewport
+  /** Calcule la position clampée sur le viewport */
+  const calcPos = useCallback(() => {
+    const el = ref.current
+    const raw = getPos()
+    if (!el) return raw
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+    let { left, top } = raw
+    // translate(-50%,-50%) décale de moitié — garder 8px de marge
+    if (left + w / 2 > vw - 8) left = vw - 8 - w / 2
+    if (left - w / 2 < 8) left = 8 + w / 2
+    if (top + h / 2 > vh - 8) top = vh - 8 - h / 2
+    if (top - h / 2 < 8) top = 8 + h / 2
+    return { top, left }
+  }, [getPos])
+
+  // Après montage : mesurer l'élément et positionner correctement avant le premier paint
+  useLayoutEffect(() => {
+    setPos(calcPos())
+    setVisible(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Recalcul sur scroll / resize
   useEffect(() => {
-    const update = () => {
-      const raw = getPos()
-      // Ajuster si le picker déborde du viewport (utilise la taille connue du picker)
-      const el = ref.current
-      if (el) {
-        const w = el.offsetWidth
-        const h = el.offsetHeight
-        const vw = window.innerWidth
-        const vh = window.innerHeight
-        let left = raw.left
-        let top = raw.top
-        // translate(-50%,-50%) décale de moitié
-        if (left + w / 2 > vw - 8) left = vw - 8 - w / 2
-        if (left - w / 2 < 8) left = 8 + w / 2
-        if (top + h / 2 > vh - 8) top = vh - 8 - h / 2
-        if (top - h / 2 < 8) top = 8 + h / 2
-        setPos({ top, left })
-      } else {
-        setPos(raw)
-      }
-    }
-    update()
-
+    const update = () => setPos(calcPos())
     window.addEventListener('scroll', update, true)
     window.addEventListener('resize', update)
     return () => {
       window.removeEventListener('scroll', update, true)
       window.removeEventListener('resize', update)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [calcPos])
 
   // Fermer si on clique en dehors
   useEffect(() => {
@@ -150,12 +153,16 @@ function FixedPicker({ getPos, onDismiss, children }: { getPos: () => { top: num
     return () => document.removeEventListener('mousedown', handleClick)
   }, [onDismiss])
 
-  if (!pos) return null
   return (
     <div
       ref={ref}
       className="fixed z-9999 bg-white rounded-xl border border-aquiz-gray-lighter/80 shadow-lg p-1.5 animate-in fade-in-0 zoom-in-95 duration-150 whitespace-nowrap"
-      style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -50%)' }}
+      style={{
+        top: pos.top,
+        left: pos.left,
+        transform: 'translate(-50%, -50%)',
+        visibility: visible ? 'visible' : 'hidden',
+      }}
     >
       {children}
     </div>

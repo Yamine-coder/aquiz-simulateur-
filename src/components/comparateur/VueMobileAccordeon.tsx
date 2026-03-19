@@ -15,11 +15,15 @@ import {
     AlertTriangle,
     Building2,
     ExternalLink,
+    GraduationCap,
+    HeartPulse,
     Home,
     MapPin,
     ShieldCheck,
+    ShoppingBag,
     Sparkles,
     Train,
+    TreePine,
     TrendingDown,
     TrendingUp,
     X
@@ -221,15 +225,17 @@ export function VueMobileAccordeon({
                         <span className="text-[10px] uppercase tracking-wide text-aquiz-gray font-medium">Prix/m²</span>
                         <div className="text-sm font-bold text-aquiz-black mt-0.5">{annonce.prixM2.toLocaleString('fr-FR')} €</div>
                       </div>
-                      <div className="min-h-11 flex flex-col justify-start">
-                        <div className="mt-1">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-aquiz-gray font-medium">Charges / mois</span>
+                        <div className="mt-0.5">
                           <EditableCell annonceId={annonce.id} field="chargesMensuelles" fieldType="number" rawValue={annonce.chargesMensuelles} suffix="€/mois" placeholder="Ex: 150">
-                            <span className="text-sm font-medium">{annonce.chargesMensuelles != null ? `${annonce.chargesMensuelles} €` : <span className="text-aquiz-gray-light text-xs">+ Ajouter</span>}</span>
+                            <span className="text-sm font-medium">{annonce.chargesMensuelles != null ? `${annonce.chargesMensuelles} €/mois` : <span className="text-aquiz-gray-light text-xs">+ Ajouter</span>}</span>
                           </EditableCell>
                         </div>
                       </div>
-                      <div className="min-h-11 flex flex-col justify-start">
-                        <div className="mt-1">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wide text-aquiz-gray font-medium">Taxe foncière</span>
+                        <div className="mt-0.5">
                           <EditableCell annonceId={annonce.id} field="taxeFonciere" fieldType="number" rawValue={annonce.taxeFonciere} suffix="€/an" placeholder="Ex: 1200">
                             <span className="text-sm font-medium">{annonce.taxeFonciere != null ? `${annonce.taxeFonciere} €/an` : <span className="text-aquiz-gray-light text-xs">+ Ajouter</span>}</span>
                           </EditableCell>
@@ -373,6 +379,67 @@ export function VueMobileAccordeon({
                     </div>
                   )}
 
+                  {/* ── Quartier & Services ── */}
+                  {enrichi?.quartier?.success && (enrichi.quartier.commerces !== undefined || enrichi.quartier.sante !== undefined) && (
+                    <div className="rounded-xl bg-white border border-aquiz-gray-lighter p-3">
+                      <div className="flex items-center justify-between gap-2 mb-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-aquiz-green/10 flex items-center justify-center">
+                            <MapPin className="w-3.5 h-3.5 text-aquiz-green" />
+                          </div>
+                          <span className="text-xs font-bold text-aquiz-black">Quartier</span>
+                        </div>
+                        {enrichi.quartier.scoreQuartier !== undefined && (
+                          <span className={`text-sm font-extrabold ${
+                            enrichi.quartier.scoreQuartier >= 75 ? 'text-aquiz-green' :
+                            enrichi.quartier.scoreQuartier >= 55 ? 'text-aquiz-green/70' :
+                            enrichi.quartier.scoreQuartier >= 35 ? 'text-amber-500' : 'text-red-500'
+                          }`}>
+                            {enrichi.quartier.scoreQuartier}<span className="text-[10px] text-aquiz-gray font-normal">/100</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {enrichi.quartier.commerces !== undefined && (
+                          <div className="flex items-center gap-1.5 bg-aquiz-gray-lightest/50 rounded-lg px-2 py-1.5">
+                            <ShoppingBag className="w-3 h-3 text-aquiz-gray shrink-0" />
+                            <div>
+                              <div className="text-[10px] text-aquiz-gray">Commerces</div>
+                              <div className={`text-xs font-bold ${enrichi.quartier.commerces >= 60 ? 'text-aquiz-green' : enrichi.quartier.commerces >= 35 ? 'text-amber-500' : 'text-red-500'}`}>{enrichi.quartier.commerces}/100</div>
+                            </div>
+                          </div>
+                        )}
+                        {enrichi.quartier.ecoles !== undefined && (
+                          <div className="flex items-center gap-1.5 bg-aquiz-gray-lightest/50 rounded-lg px-2 py-1.5">
+                            <GraduationCap className="w-3 h-3 text-aquiz-gray shrink-0" />
+                            <div>
+                              <div className="text-[10px] text-aquiz-gray">Écoles</div>
+                              <div className={`text-xs font-bold ${enrichi.quartier.ecoles >= 60 ? 'text-aquiz-green' : enrichi.quartier.ecoles >= 35 ? 'text-amber-500' : 'text-red-500'}`}>{enrichi.quartier.ecoles}/100</div>
+                            </div>
+                          </div>
+                        )}
+                        {enrichi.quartier.sante !== undefined && (
+                          <div className="flex items-center gap-1.5 bg-aquiz-gray-lightest/50 rounded-lg px-2 py-1.5">
+                            <HeartPulse className="w-3 h-3 text-aquiz-gray shrink-0" />
+                            <div>
+                              <div className="text-[10px] text-aquiz-gray">Santé</div>
+                              <div className={`text-xs font-bold ${enrichi.quartier.sante >= 60 ? 'text-aquiz-green' : enrichi.quartier.sante >= 35 ? 'text-amber-500' : 'text-red-500'}`}>{enrichi.quartier.sante}/100</div>
+                            </div>
+                          </div>
+                        )}
+                        {enrichi.quartier.espaceVerts !== undefined && (
+                          <div className="flex items-center gap-1.5 bg-aquiz-gray-lightest/50 rounded-lg px-2 py-1.5">
+                            <TreePine className="w-3 h-3 text-aquiz-green shrink-0" />
+                            <div>
+                              <div className="text-[10px] text-aquiz-gray">Espaces verts</div>
+                              <div className={`text-xs font-bold ${enrichi.quartier.espaceVerts >= 60 ? 'text-aquiz-green' : enrichi.quartier.espaceVerts >= 35 ? 'text-amber-500' : 'text-red-500'}`}>{enrichi.quartier.espaceVerts}/100</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ── Risques naturels ── */}
                   {enrichi?.risques?.success && (
                     <div className={`rounded-xl p-3 border ${
@@ -440,6 +507,30 @@ export function VueMobileAccordeon({
                         </EditableCell>
                         <span className="text-[9px] text-aquiz-gray block">Étage</span>
                       </div>
+                      <div className="bg-aquiz-gray-lightest/60 rounded-lg py-2 px-1 flex flex-col items-center justify-center gap-0.5 min-h-13">
+                        <EditableCell annonceId={annonce.id} field="anneeConstruction" fieldType="number" rawValue={annonce.anneeConstruction} placeholder="Ex: 1985">
+                          <div className="text-sm font-bold text-aquiz-black">
+                            {annonce.anneeConstruction ?? '—'}
+                          </div>
+                        </EditableCell>
+                        <span className="text-[9px] text-aquiz-gray block">Année</span>
+                      </div>
+                      <div className="bg-aquiz-gray-lightest/60 rounded-lg py-2 px-1 flex flex-col items-center justify-center gap-0.5 min-h-13">
+                        <EditableCell annonceId={annonce.id} field="orientation" fieldType="orientation" rawValue={annonce.orientation}>
+                          <div className="text-sm font-bold text-aquiz-black">
+                            {annonce.orientation ?? '—'}
+                          </div>
+                        </EditableCell>
+                        <span className="text-[9px] text-aquiz-gray block">Orientation</span>
+                      </div>
+                      <div className="bg-aquiz-gray-lightest/60 rounded-lg py-2 px-1 flex flex-col items-center justify-center gap-0.5 min-h-13">
+                        <EditableCell annonceId={annonce.id} field="nbSallesBains" fieldType="number" rawValue={annonce.nbSallesBains} placeholder="Ex: 1">
+                          <div className="text-sm font-bold text-aquiz-black">
+                            {annonce.nbSallesBains ?? '—'}
+                          </div>
+                        </EditableCell>
+                        <span className="text-[9px] text-aquiz-gray block">Sdb</span>
+                      </div>
                     </div>
                     
                     {/* DPE + Équipements — row */}
@@ -464,6 +555,11 @@ export function VueMobileAccordeon({
                       <EditableCell annonceId={annonce.id} field="cave" fieldType="boolean" rawValue={annonce.cave}>
                         <span className={`text-[10px] font-medium ${annonce.cave ? 'text-aquiz-black' : 'text-aquiz-gray-light'}`}>
                           {annonce.cave ? '✓ Cave' : '✗ Cave'}
+                        </span>
+                      </EditableCell>
+                      <EditableCell annonceId={annonce.id} field="ascenseur" fieldType="boolean" rawValue={annonce.ascenseur}>
+                        <span className={`text-[10px] font-medium ${annonce.ascenseur ? 'text-aquiz-black' : 'text-aquiz-gray-light'}`}>
+                          {annonce.ascenseur ? '✓ Ascenseur' : '✗ Ascenseur'}
                         </span>
                       </EditableCell>
                     </div>

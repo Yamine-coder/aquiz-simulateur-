@@ -10,10 +10,16 @@
 
 import revenusCommunes from '@/data/revenus-communes.json'
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit'
-import { ServerCache } from '@/lib/serverCache'
+import { DiskCache, ServerCache } from '@/lib/serverCache'
 import { NextRequest, NextResponse } from 'next/server'
 
+// Vercel: autorise jusqu'à 35s d'exécution (Overpass area-level peut prendre 20-25s)
+export const maxDuration = 35
+export const dynamic = 'force-dynamic'
+
 const communeCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 300 })
+// Cache L2 persistant — survit aux hot-reloads
+const communeDiskCache = new DiskCache<unknown>('commune-infos', { ttlMs: 24 * 60 * 60 * 1000 })
 
 /** Lookup statique Filosofi 2019 : code INSEE → revenu médian annuel */
 const REVENUS: Record<string, number> = revenusCommunes as Record<string, number>
@@ -21,8 +27,11 @@ const REVENUS: Record<string, number> = revenusCommunes as Record<string, number
 /** Revenu médian national annuel (source INSEE Filosofi 2019) */
 const REVENU_MEDIAN_NATIONAL = 22_040
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
-const OVERPASS_FALLBACK = 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+const OVERPASS_SERVERS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+]
 
 /**
  * Ensoleillement moyen annuel par département (heures/an)
@@ -70,27 +79,55 @@ export async function GET(request: NextRequest) {
     )
   }
 
+  // ── Arrondissements de Paris, Lyon, Marseille ──────────────────────────────
+  // geo.api.gouv.fr avec codePostal renvoie la commune-mère (Paris, 2,1M hab.)
+  // On dérive le code INSEE de l'arrondissement pour appeler ?code= directement.
+  function arrondissementInsee(cp: string): string | null {
+    const n = parseInt(cp, 10)
+    // Paris 75001-75020 → INSEE 75101-75120
+    if (n >= 75001 && n <= 75020) return `751${String(n - 75000).padStart(2, '0')}`
+    // Lyon 69001-69009 → INSEE 69381-69389
+    if (n >= 69001 && n <= 69009) return `6938${n - 69000}`
+    // Marseille 13001-13016 → INSEE 13201-13216
+    if (n >= 13001 && n <= 13016) return `132${String(n - 13000).padStart(2, '0')}`
+    return null
+  }
+
+  const inseeArrondissement = arrondissementInsee(codePostal)
+
   // Cache
   const cacheKey = `commune_${codePostal}`
   const cached = communeCache.get(cacheKey)
   if (cached) return NextResponse.json(cached)
+  // Cache L2 disque
+  const diskCached = communeDiskCache.get(cacheKey)
+  if (diskCached) {
+    communeCache.set(cacheKey, diskCached)
+    return NextResponse.json(diskCached)
+  }
 
   try {
     // Appel geo.api.gouv.fr — retourne population, surface, département
-    const res = await fetch(
-      `https://geo.api.gouv.fr/communes?codePostal=${codePostal}&fields=code,nom,population,surface,departement,codesPostaux&limit=1`,
-      { signal: AbortSignal.timeout(5000) }
-    )
+    // Pour les arrondissements PLM on utilise ?code= pour avoir la bonne population
+    const geoUrl = inseeArrondissement
+      ? `https://geo.api.gouv.fr/communes/${inseeArrondissement}?fields=code,nom,population,surface,departement,codesPostaux`
+      : `https://geo.api.gouv.fr/communes?codePostal=${codePostal}&fields=code,nom,population,surface,departement,codesPostaux&limit=1`
+    const res = await fetch(geoUrl, { signal: AbortSignal.timeout(5000) })
     if (!res.ok) {
       return NextResponse.json({ success: true, data: null, source: 'geo.api.gouv.fr' })
     }
 
     const communes = await res.json()
-    if (!Array.isArray(communes) || communes.length === 0) {
+    if (!res.ok) {
       return NextResponse.json({ success: true, data: null, source: 'geo.api.gouv.fr' })
     }
 
-    const commune = communes[0]
+    // L'API retourne un objet direct quand on appelle par code INSEE (?code=),
+    // ou un tableau quand on appelle par code postal (?codePostal=)
+    const commune = Array.isArray(communes) ? communes[0] : communes
+    if (!commune || !commune.code) {
+      return NextResponse.json({ success: true, data: null, source: 'geo.api.gouv.fr' })
+    }
     const population: number | null = commune.population ?? null
     const surfaceHa: number | null = commune.surface ?? null // surface en hectares
     const surfaceKm2 = surfaceHa ? surfaceHa / 100 : null
@@ -122,8 +159,9 @@ export async function GET(request: NextRequest) {
     } = { education: null, commerce: null, sante: null, transport: null, loisirs: null }
 
     try {
+      // [timeout:15] suffit : les 3 serveurs tournent en parallèle, le plus rapide gagne
       const overpassQuery = `
-        [out:json][timeout:25];
+        [out:json][timeout:15];
         area["ref:INSEE"="${codeInsee}"]->.commune;
         (
           node["amenity"~"school|kindergarten|college|university"](area.commune);
@@ -155,12 +193,15 @@ export async function GET(request: NextRequest) {
         .loisirs out count;
       `
 
-      /** Fetch Overpass with fallback */
-      async function fetchOverpassCount(url: string): Promise<Record<string, number>> {
+      /**
+       * Fetch Overpass since all 3 servers in parallel (Promise.any).
+       * Worst case = 1× timeout instead of 3× sequential.
+       */
+      async function fetchOverpassCount(serverUrl: string): Promise<Record<string, number>> {
         const ctrl = new AbortController()
-        const tid = setTimeout(() => ctrl.abort(), 20000)
+        const tid = setTimeout(() => ctrl.abort(), 18000)
         try {
-          const r = await fetch(url, {
+          const r = await fetch(serverUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: `data=${encodeURIComponent(overpassQuery)}`,
@@ -169,7 +210,6 @@ export async function GET(request: NextRequest) {
           clearTimeout(tid)
           if (!r.ok) throw new Error(`HTTP ${r.status}`)
           const json = await r.json()
-          // Overpass "out count" returns elements with tags.total for each set
           const counts: Record<string, number> = {}
           const cats = ['education', 'commerce', 'sante', 'transport', 'loisirs']
           const elements = (json.elements || []) as Array<{ tags?: Record<string, string> }>
@@ -178,6 +218,7 @@ export async function GET(request: NextRequest) {
               counts[cats[idx]] = parseInt(el.tags.total, 10) || 0
             }
           })
+          if (Object.keys(counts).length === 0) throw new Error('empty response')
           return counts
         } catch {
           clearTimeout(tid)
@@ -185,16 +226,12 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Lance les 3 serveurs en parallèle — le premier qui répond gagne
       let overpassCounts: Record<string, number> = {}
       try {
-        overpassCounts = await fetchOverpassCount(OVERPASS_URL)
+        overpassCounts = await Promise.any(OVERPASS_SERVERS.map(s => fetchOverpassCount(s)))
       } catch {
-        // Fallback to secondary server
-        try {
-          overpassCounts = await fetchOverpassCount(OVERPASS_FALLBACK)
-        } catch {
-          // Both failed — leave counts as null
-        }
+        // AggregateError — tous les serveurs ont échoué — counts restent null
       }
 
       if (Object.keys(overpassCounts).length > 0) {
@@ -227,6 +264,7 @@ export async function GET(request: NextRequest) {
     }
 
     communeCache.set(cacheKey, responseData)
+    communeDiskCache.set(cacheKey, responseData)
     return NextResponse.json(responseData)
   } catch {
     return NextResponse.json({ success: true, data: null, source: 'geo.api.gouv.fr' })

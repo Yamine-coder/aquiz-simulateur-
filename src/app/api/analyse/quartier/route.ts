@@ -4,10 +4,12 @@
  */
 
 import { checkRateLimit, getClientIP, RATE_LIMITS } from '@/lib/rateLimit';
-import { ServerCache } from '@/lib/serverCache';
+import { DiskCache, ServerCache } from '@/lib/serverCache';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Route dynamique (appelée côté client)
+// Vercel: autorise jusqu'à 50s d'exécution (3 requêtes Overpass séquentielles × 14s chacune)
+export const maxDuration = 50
+export const dynamic = 'force-dynamic'
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 const OVERPASS_FALLBACK_URL = 'https://overpass.kumi.systems/api/interpreter'
@@ -15,6 +17,8 @@ const OVERPASS_FALLBACK_2 = 'https://overpass.private.coffee/api/interpreter'
 
 // Cache serveur borné — POIs changent rarement (TTL 24h, max 200 entrées)
 const quartierCache = new ServerCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 200 })
+// Cache L2 persistant — survit aux hot-reloads et redémarrages (tmpdir)
+const quartierDiskCache = new DiskCache<unknown>('quartier', { ttlMs: 24 * 60 * 60 * 1000 })
 
 // Catégories et leur poids dans le score
 const CATEGORIES = {
@@ -148,10 +152,16 @@ export async function GET(request: NextRequest) {
   
   try {
     // Vérifier le cache serveur (v2 : inclut rayon transport lourd dans la clé)
-    const cacheKey = `v36_${lat}_${lon}_${rayon}`
+    const cacheKey = `v37_${lat}_${lon}_${rayon}`
     const cached = quartierCache.get(cacheKey)
     if (cached) {
       return NextResponse.json(cached)
+    }
+    // Cache L2 disque : récupère si le serveur a redémarré depuis le dernier appel
+    const diskCached = quartierDiskCache.get(cacheKey)
+    if (diskCached) {
+      quartierCache.set(cacheKey, diskCached) // réchauffe le cache mémoire
+      return NextResponse.json(diskCached)
     }
 
     // Construire la requête Overpass
@@ -167,6 +177,8 @@ export async function GET(request: NextRequest) {
     // ── 3 requêtes séparées pour éviter les 429 (rate-limit) ──────────────
     
     // Requête 1 : POIs standards + bus + shops + vélos + gares proches (rayon normal)
+    // [timeout:15] — requête lourde (~38 types d'amenity). Communes denses (Paris banlieue)
+    // nécessitent plus de temps qu'une ville rurale → timeout relevé de 12 à 15s.
     const queryBase = `
       [out:json][timeout:15];
       (
@@ -193,11 +205,29 @@ export async function GET(request: NextRequest) {
       out center;
     `
     
+    // Version allégée de queryBase utilisée sur retry — 8 clauses vs 19, regex 16 items vs 38.
+    // Prioritise les amenity types les plus courants et fiables dans OSM.
+    // Exécution ~4-6s vs 12-15s pour la version complète → résiste aux communes très denses.
+    const queryBaseLight = `
+      [out:json][timeout:22];
+      (
+        node["amenity"~"^(supermarket|bakery|restaurant|cafe|convenience|bank|post_office|school|kindergarten|childcare|hospital|clinic|pharmacy|dentist|sports_centre|bicycle_rental|bus_stop|bar)$"](around:${rayon},${lat},${lon});
+        way["amenity"~"^(supermarket|school|kindergarten|hospital|sports_centre)$"](around:${rayon},${lat},${lon});
+        node["healthcare"~"^(doctor|clinic|dentist|hospital|pharmacy)$"](around:${rayon},${lat},${lon});
+        node["leisure"~"^(park|garden|playground|sports_centre|fitness_centre)$"](around:${rayon},${lat},${lon});
+        way["leisure"~"^(park|garden|playground)$"](around:${rayon},${lat},${lon});
+        node["highway"="bus_stop"](around:${rayon},${lat},${lon});
+        node["shop"~"^(supermarket|bakery|convenience|butcher)$"](around:${rayon},${lat},${lon});
+        node["railway"~"^(station|halt)$"](around:${rayon},${lat},${lon});
+      );
+      out center;
+    `
+    
     // Requête 2 : Nœuds transport lourd + tram + stop_positions (rayon élargi)
     // Les stop_position (railway=stop) sont les nœuds sur les voies référencés
     // par les relations de route — nécessaires pour le mapping stationToLines
     const queryTransportNodes = `
-      [out:json][timeout:15];
+      [out:json][timeout:8];
       (
         node["railway"~"^(station|halt|tram_stop|subway_entrance|stop)$"](around:${rayonTransportLourd},${lat},${lon});
         node["public_transport"="station"](around:${rayonTransportLourd},${lat},${lon});
@@ -211,7 +241,7 @@ export async function GET(request: NextRequest) {
     // Requête 3 : Relations de route (enrichissement lignes — optionnel)
     // Inclut "bus" en rayon réduit pour récupérer TOUTES les lignes de bus (pas juste les tags directs)
     const queryRelations = `
-      [out:json][timeout:20];
+      [out:json][timeout:10];
       (
         rel["route"~"^(train|subway|light_rail|tram)$"]["ref"](around:${rayonTransportLourd},${lat},${lon});
         rel["route"="bus"]["ref"](around:${rayon},${lat},${lon});
@@ -224,9 +254,12 @@ export async function GET(request: NextRequest) {
     // Tracker les serveurs 429-bloqués pour cette requête
     const blocked429 = new Set<string>()
 
-    async function fetchOverpass(query: string, timeoutMs: number, serverUrl: string): Promise<{ elements: unknown[] }> {
+    async function fetchOverpass(query: string, timeoutMs: number, serverUrl: string, cancelSignal?: AbortSignal): Promise<{ elements: unknown[] }> {
       const ctrl = new AbortController()
       const tid = setTimeout(() => ctrl.abort(), timeoutMs)
+      // Annuler ce serveur si un concurrent a déjà répondu
+      const onCancel = () => ctrl.abort()
+      cancelSignal?.addEventListener('abort', onCancel)
       try {
         const res = await fetch(serverUrl, {
           method: 'POST',
@@ -235,57 +268,76 @@ export async function GET(request: NextRequest) {
           signal: ctrl.signal,
         })
         clearTimeout(tid)
+        cancelSignal?.removeEventListener('abort', onCancel)
         if (res.status === 429) {
           blocked429.add(serverUrl)
           throw new Error(`429 rate-limited`)
         }
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return await res.json()
+        const json = await res.json() as { elements?: unknown[]; remark?: string }
+        // Overpass renvoie parfois 200 avec {"remark":"runtime error..."} et elements:[]
+        // On traite ça comme un échec pour que Promise.any essaie le serveur suivant
+        if (json.remark && (!json.elements || json.elements.length === 0)) {
+          throw new Error(`Overpass remark: ${json.remark.slice(0, 80)}`)
+        }
+        return json as { elements: unknown[] }
       } catch (e) {
         clearTimeout(tid)
+        cancelSignal?.removeEventListener('abort', onCancel)
         throw e
       }
     }
 
     /**
-     * Fetch robuste avec rotation de serveurs :
-     * 1. Essaie chaque serveur non-bloqué dans l'ordre
-     * 2. Sur 429, marque le serveur comme bloqué et passe au suivant
-     * 3. Délai de 1s entre les tentatives pour ne pas saturer
+     * Race tous les serveurs disponibles en PARALLÈLE — premier succès gagne.
+     * Les serveurs perdants sont ANNULÉS dès qu'un vainqueur est connu,
+     * afin de ne pas maintenir 9 connexions simultanées vers Overpass.
+     * Pire cas = 1× timeout au lieu de N× en séquentiel.
      */
     async function fetchWithRotation(query: string, timeoutMs: number, label: string): Promise<{ elements: unknown[] }> {
-      const errors: string[] = []
-      for (const server of SERVERS) {
-        if (blocked429.has(server)) continue
-        try {
-          return await fetchOverpass(query, timeoutMs, server)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          errors.push(`${server}: ${msg}`)
-          // Petit délai avant d'essayer le serveur suivant
-          await new Promise(r => setTimeout(r, 1000))
-        }
+      const available = SERVERS.filter(s => !blocked429.has(s))
+      if (available.length === 0) {
+        console.error(`[Quartier API] ${label}: no servers available`)
+        return { elements: [] }
       }
-      // Si tous les serveurs ont échoué, réessayer le serveur principal après un délai
-      // (le rate-limit a peut-être expiré)
+      // Un AbortController par serveur — abandonne les perdants dès qu'un gagnant répond
+      const cancelCtrls = available.map(() => new AbortController())
+      let winnerId = -1
       try {
-        await new Promise(r => setTimeout(r, 3000))
-        return await fetchOverpass(query, timeoutMs, OVERPASS_URL)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        errors.push(`last-resort: ${msg}`)
+        const result = await Promise.any(
+          available.map((server, i) =>
+            fetchOverpass(query, timeoutMs, server, cancelCtrls[i].signal)
+              .then(data => { winnerId = i; return data })
+          )
+        )
+        // Annuler les serveurs encore en cours
+        cancelCtrls.forEach((c, i) => { if (i !== winnerId) c.abort() })
+        return result
+      } catch {
+        // AggregateError — tous les serveurs ont échoué
+        console.error(`[Quartier API] ${label} failed on all servers`)
+        return { elements: [] }
       }
-      console.error(`[Quartier API] ${label} failed on all servers:`, errors.join(' | '))
-      return { elements: [] }
     }
 
-    // ── Lancer les 3 requêtes en PARALLÈLE (3 requêtes pour 1 seul lieu = OK) ──
-    // La sérialisation entre ANNONCES se fait côté client (useAnalyseEnrichie)
-    const [baseResult, transportNodesResult, relationsResult] = await Promise.all([
-      fetchWithRotation(queryBase, 18000, 'Base'),
-      fetchWithRotation(queryTransportNodes, 18000, 'TransportNodes'),
-      fetchWithRotation(queryRelations, 22000, 'Relations'),
-    ])
+    // ── Lancer les 3 requêtes SÉQUENTIELLEMENT (anti rate-limit Overpass) ───────────
+    // Parallèle (3×3=9 connexions) → Overpass rate-limite les annonces suivantes.
+    // Séquentiel (3 connexions max, une après l'autre) → fiable pour N annonces.
+    // Compromis : +5-10s par analyse non-cachée, mais 100% de réussite.
+    let baseResult = await fetchWithRotation(queryBase, 17000, 'Base')
+    const transportNodesResult = await fetchWithRotation(queryTransportNodes, 10000, 'TransportNodes')
+    const relationsResult = await fetchWithRotation(queryRelations, 10000, 'Relations')
+
+    // ── Retry automatique de queryBase si vide ──────────────────────────────────
+    // Pattern : queryTransportNodes trouve du transport (RER, bus) mais queryBase
+    // revient vide → timeout Overpass sur requête complexe (commune dense).
+    // On retente avec queryBaseLight (8 clauses, regex 16 items, [timeout:22])
+    // qui résiste bien mieux aux banlieues denses type Fontenay-sous-Bois.
+    if (baseResult.elements.length === 0 && transportNodesResult.elements.length > 0) {
+      console.warn(`[Quartier API] queryBase retourné vide malgré transport trouvé — retry allégé dans 2s`)
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      baseResult = await fetchWithRotation(queryBaseLight, 26000, 'Base-retry-light')
+    }
 
     // ── Assembler les résultats ──
     const routeRelations = ((relationsResult.elements || []) as Array<Record<string, unknown>>)
@@ -586,6 +638,11 @@ export async function GET(request: NextRequest) {
       bicycle_rental: 5,    // Vélo en libre-service
     }
 
+    // Aucun POI trouvé = Overpass a échoué (timeout ou rate-limit) → ne pas renvoyer 0/100
+    if (pois.length === 0) {
+      return NextResponse.json({ success: false, error: 'Données OpenStreetMap indisponibles' }, { status: 503 })
+    }
+
     // Calculer les scores par catégorie
     const categories: { categorie: string; score: number; count: number }[] = []
     
@@ -599,10 +656,17 @@ export async function GET(request: NextRequest) {
 
         if (catKey === 'transport') {
           // Score de comptage pondéré par mode (métro/RER vaut plus qu'un bus)
+          // Pas de cap : le transport lourd doit toujours dominer le bus
+          // Référence: 2 métros = 50pts, 1 RER+Transilien = 45pts, 10 bus seuls = 80pts max
           const weightedCount = poisCat.reduce((sum, p) => {
             return sum + (POIDS_COUNT_TRANSPORT[p.type] ?? 10)
           }, 0)
-          countScore = Math.min(weightedCount, 60)
+          // Cap différencié : transport lourd présent (métro/RER/tram) → cap 80
+          // Bus-seulement → cap 40 (bus ≠ bonne desserte pour l'immobilier)
+          const hasHeavyTransport = poisCat.some(p =>
+            ['subway_entrance', 'rer_station', 'station', 'halt', 'train_station', 'tram_stop'].includes(p.type)
+          )
+          countScore = Math.min(weightedCount, hasHeavyTransport ? 80 : 40)
 
           // Score de proximité pondéré par mode
           const withProx = poisCat.map(p => {
@@ -616,11 +680,11 @@ export async function GET(request: NextRequest) {
           // Catégories non-transport : scoring logarithmique pour mieux différencier
           // Les petits nombres comptent beaucoup, les grands saturent progressivement
           const COUNT_THRESHOLDS: Record<string, number> = {
-            commerce: 40,    // 40 commerces = score max (centre-ville dense IDF)
-            education: 12,   // 12 écoles = score max
-            sante: 12,       // 12 établissements = score max
-            loisirs: 8,      // 8 lieux = score max
-            vert: 10,        // 10 espaces verts = score max
+            commerce:  40,   // 40 commerces = score max (centre-ville dense IDF)
+            education: 20,   // 20 établissements = score max (relevé — 12 saturait trop vite)
+            sante:     25,   // 25 établissements = score max (relevé — 12 saturait trop vite)
+            loisirs:   8,    // 8 lieux = score max
+            vert:      25,   // 25 espaces verts = score max (évite saturation prématurée en urbain dense)
           }
           const threshold = COUNT_THRESHOLDS[catKey] ?? 15
           // Courbe logarithmique : progression rapide au début, lente ensuite
@@ -1025,8 +1089,9 @@ export async function GET(request: NextRequest) {
       source: 'OpenStreetMap'
     }
 
-    // Stocker en cache
+    // Stocker en cache mémoire + disque
     quartierCache.set(cacheKey, responseData)
+    quartierDiskCache.set(cacheKey, responseData)
 
     return NextResponse.json(responseData)
     

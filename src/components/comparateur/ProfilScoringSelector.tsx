@@ -22,6 +22,7 @@ interface ProfilScoringSelectorProps {
   onProfilChange: (profil: ProfilScoring) => void
   className?: string
   compact?: boolean
+  wrapPills?: boolean
 }
 
 /** Axes prioritaires + axes réduits par profil */
@@ -62,6 +63,7 @@ export function ProfilScoringSelector({
   onProfilChange,
   className,
   compact = false,
+  wrapPills = false,
 }: ProfilScoringSelectorProps) {
   const handleSelect = useCallback((profil: ProfilScoring) => {
     onProfilChange(profil)
@@ -71,9 +73,9 @@ export function ProfilScoringSelector({
 
   if (compact) {
     return (
-      <div className={cn('flex flex-col gap-1.5', className)}>
+      <div className={cn(wrapPills ? 'flex flex-col gap-2' : 'flex flex-row items-center gap-3 flex-wrap', className)}>
         {/* Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+        <div className={cn('flex items-center gap-x-1.5 gap-y-2 py-0.5 shrink-0', wrapPills ? 'flex-wrap' : 'overflow-x-auto scrollbar-hide')}>
           {PROFILS_SCORING.map(profil => {
             const isActive = profil.id === activeProfilId
             const colors = getProfilColor(profil.id)
@@ -82,13 +84,13 @@ export function ProfilScoringSelector({
                 key={profil.id}
                 onClick={() => handleSelect(profil)}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all duration-200 shrink-0',
+                  'flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-semibold whitespace-nowrap transition-all duration-200 shrink-0 active:scale-95',
                   isActive
                     ? `${colors.activeBg} text-white shadow-sm ring-2 ${colors.ring} ring-offset-1`
-                    : `${colors.bg} ${colors.text} border ${colors.border} hover:shadow-sm active:scale-95`
+                    : `${colors.bg} ${colors.text} border ${colors.border} hover:shadow-sm`
                 )}
               >
-                <ProfilIcon id={profil.id} className="h-3 w-3" />
+                <ProfilIcon id={profil.id} className="h-3.5 w-3.5" />
                 {profil.label}
               </button>
             )
@@ -96,11 +98,24 @@ export function ProfilScoringSelector({
         </div>
         {/* Description profil actif */}
         {activeProfil && (
-          <p className="text-[10px] text-aquiz-gray leading-tight pl-0.5 animate-in fade-in duration-200">
-            <span className="font-medium text-aquiz-gray-dark">{activeProfil.label}</span>
-            {' — '}
-            {PROFIL_DETAIL[activeProfilId].prioritaires.join(' · ')}
-          </p>
+          <div className="flex items-center gap-1.5 animate-in fade-in duration-200 shrink-0">
+            {!wrapPills && (
+              <span className="text-aquiz-gray-lighter select-none">—</span>
+            )}
+            {wrapPills && (
+              <span className={cn(
+                'inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full',
+                getProfilColor(activeProfilId).bg,
+                getProfilColor(activeProfilId).text,
+              )}>
+                <ProfilIcon id={activeProfilId} className="h-2.5 w-2.5" />
+                {activeProfil.label}
+              </span>
+            )}
+            <span className="text-[11px] text-aquiz-gray leading-tight">
+              {PROFIL_DETAIL[activeProfilId].prioritaires.join(' · ')}
+            </span>
+          </div>
         )}
       </div>
     )

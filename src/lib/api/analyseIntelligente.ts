@@ -185,7 +185,7 @@ async function geocoderAdresseImpl(
     if (adresse) params.set('adresse', adresse)
     if (codePostal) params.set('code_postal', codePostal)
     
-    const response = await fetch(`/api/analyse/geocode?${params.toString()}`)
+    const response = await fetch(`/api/analyse/geocode?${params.toString()}`, { signal: AbortSignal.timeout(8000) })
     const result = await response.json()
     
     if (result.success && result.data) {
@@ -212,8 +212,9 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
   
   if (!latitude || !longitude) {
     // Géocoder l'adresse pour avoir les coordonnées
+    // Priorité : adresse complète > code postal > ville (pour les annonces sans coordonnées explicites)
     const geo = await geocoderAdresse(
-      bien.adresse || '', 
+      bien.adresse || bien.ville || '',
       bien.codePostal
     )
     if (geo) {
@@ -222,32 +223,36 @@ export async function analyserBien(bien: BienAnalyse): Promise<AnalyseComplete> 
     }
   }
   
-  // 2. Lancer les analyses en parallèle
-  // Quartier : réutiliser le cache par code postal pour éviter les 429 Overpass
+  // 2. Analyses en 2 phases pour éviter la saturation Overpass
+  // Phase A : Quartier SEUL en premier (3 requêtes Overpass séquentielles côté serveur).
+  //           Le faire avant commune-infos évite 4+ connexions Overpass simultanées
+  //           qui causent des timeouts silencieux sur les annonces suivantes.
   const cachedQuartier = bien.codePostal ? quartierCacheByCP.get(bien.codePostal) : undefined
 
-  const [marcheResult, risquesResult, quartierResult, communeResult] = await Promise.all([
-    analyserMarche(bien),
-    latitude && longitude ? analyserRisques(latitude, longitude) : Promise.resolve(null),
-    cachedQuartier
-      ? Promise.resolve(cachedQuartier)
-      : latitude && longitude
-        ? analyserQuartier(latitude, longitude)
-        : Promise.resolve(null),
-    bien.codePostal ? fetchCommuneInfos(bien.codePostal) : Promise.resolve(null),
-  ])
+  const quartierResult = cachedQuartier
+    ? cachedQuartier
+    : latitude && longitude
+      ? await analyserQuartier(latitude, longitude)
+      : null
 
   // Cacher le résultat quartier par code postal (si succès)
   if (quartierResult && quartierResult.success && bien.codePostal && !quartierCacheByCP.has(bien.codePostal)) {
     quartierCacheByCP.set(bien.codePostal, quartierResult)
   }
-  
-  // Fallback : si quartier échoué, re-vérifier le cache (un autre bien du même CP a pu le peupler)
+
+  // Fallback cache CP avant la phase B
   let finalQuartierResult = quartierResult
   if ((!finalQuartierResult || !finalQuartierResult.success) && bien.codePostal) {
     const cachedFallback = quartierCacheByCP.get(bien.codePostal)
     if (cachedFallback?.success) finalQuartierResult = cachedFallback
   }
+
+  // Phase B : Marché, risques, commune — maintenant qu'Overpass est libre
+  const [marcheResult, risquesResult, communeResult] = await Promise.all([
+    analyserMarche(bien),
+    latitude && longitude ? analyserRisques(latitude, longitude) : Promise.resolve(null),
+    bien.codePostal ? fetchCommuneInfos(bien.codePostal) : Promise.resolve(null),
+  ])
   
   // 3. Construire les résultats
   const marche = marcheResult || { success: false }
@@ -305,7 +310,7 @@ async function analyserMarche(bien: BienAnalyse): Promise<AnalyseMarche> {
       surface_max: surfaceMax.toString()
     })
     
-    const response = await fetch(`/api/analyse/dvf?${params.toString()}`)
+    const response = await fetch(`/api/analyse/dvf?${params.toString()}`, { signal: AbortSignal.timeout(12000) })
     const result = await response.json()
     
     if (!result.success || !result.data) {
@@ -404,7 +409,7 @@ async function analyserRisquesImpl(
       rayon: '1000'
     })
     
-    const response = await fetch(`/api/analyse/georisques?${params.toString()}`)
+    const response = await fetch(`/api/analyse/georisques?${params.toString()}`, { signal: AbortSignal.timeout(12000) })
     const result = await response.json()
     
     if (!result.success || !result.data) {
@@ -480,64 +485,52 @@ async function analyserQuartierImpl(
   })
   const url = `/api/analyse/quartier?${params.toString()}`
 
-  // Retry avec backoff exponentiel (2 tentatives max)
-  const MAX_RETRIES = 2
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const response = await fetch(url)
-      const result = await response.json()
+  // Une seule tentative — si Overpass est en surcharge, un 2e essai immédiat ne changera rien
+  // Timeout client 45s > timeout serveur max ~34s (3 requêtes séquentielles × ~12s)
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(45000) })
+    const result = await response.json()
 
-      if (!result.success || !result.data) {
-        // Si erreur serveur (502/503/504), retenter
-        if (response.status >= 500 && attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
-          continue
-        }
-        return { success: false, message: 'Analyse quartier non disponible' }
-      }
-
-      const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches, transportSummary, counts, detailedCounts } = result.data
-
-      // Verdict
-      let verdict: AnalyseQuartier['verdict']
-      const message: string = synthese
-
-      if (scoreGlobal >= 75) {
-        verdict = 'excellent'
-      } else if (scoreGlobal >= 50) {
-        verdict = 'bon'
-      } else if (scoreGlobal >= 25) {
-        verdict = 'moyen'
-      } else {
-        verdict = 'faible'
-      }
-
-      return {
-        success: true,
-        scoreQuartier: scoreGlobal,
-        transports,
-        commerces,
-        ecoles,
-        sante,
-        espaceVerts,
-        transportsProches: transportsProches ?? [],
-        transportSummary: transportSummary ?? undefined,
-        verdict,
-        message,
-        counts: counts ?? undefined,
-        detailedCounts: detailedCounts ?? undefined,
-      }
-
-    } catch (error) {
-      if (attempt < MAX_RETRIES) {
-        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)))
-        continue
-      }
-      console.error('Erreur analyse quartier:', error)
-      return { success: false, message: 'Erreur lors de l\'analyse du quartier' }
+    if (!result.success || !result.data) {
+      return { success: false, message: 'Analyse quartier non disponible' }
     }
+
+    const { scoreGlobal, transports, commerces, ecoles, sante, espaceVerts, synthese, transportsProches, transportSummary, counts, detailedCounts } = result.data
+
+    // Verdict
+    let verdict: AnalyseQuartier['verdict']
+    const message: string = synthese
+
+    if (scoreGlobal >= 75) {
+      verdict = 'excellent'
+    } else if (scoreGlobal >= 50) {
+      verdict = 'bon'
+    } else if (scoreGlobal >= 25) {
+      verdict = 'moyen'
+    } else {
+      verdict = 'faible'
+    }
+
+    return {
+      success: true,
+      scoreQuartier: scoreGlobal,
+      transports,
+      commerces,
+      ecoles,
+      sante,
+      espaceVerts,
+      transportsProches: transportsProches ?? [],
+      transportSummary: transportSummary ?? undefined,
+      verdict,
+      message,
+      counts: counts ?? undefined,
+      detailedCounts: detailedCounts ?? undefined,
+    }
+
+  } catch (error) {
+    console.error('Erreur analyse quartier:', error)
+    return { success: false, message: 'Analyse quartier indisponible' }
   }
-  return { success: false, message: 'Analyse quartier non disponible après retries' }
 }
 
 // ============================================
@@ -546,7 +539,8 @@ async function analyserQuartierImpl(
 
 async function fetchCommuneInfos(codePostal: string): Promise<CommuneInfos> {
   try {
-    const response = await fetch(`/api/analyse/commune-infos?codePostal=${codePostal}`)
+    // Timeout client 35s > timeout serveur 20s (Overpass [timeout:25] + latence réseau)
+    const response = await fetch(`/api/analyse/commune-infos?codePostal=${codePostal}`, { signal: AbortSignal.timeout(35000) })
     const result = await response.json()
 
     if (!result.success || !result.data) {
