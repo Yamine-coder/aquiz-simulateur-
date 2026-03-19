@@ -148,7 +148,7 @@ export function useAnalyseEnrichie(annonces: Annonce[]): UseAnalyseEnrichieRetur
             const analyse = await analyserBien(bien)
             // Si on a déjà un quartier réussi pour ce CP, l'injecter si l'analyse a échoué le sien
             if (analyse && !analyse.quartier?.success && bien.codePostal && quartierByCPLive.has(bien.codePostal)) {
-              analyse.quartier = quartierByCPLive.get(bien.codePostal)
+              analyse.quartier = quartierByCPLive.get(bien.codePostal)!
             }
             // Mémoriser pour les annonces suivantes du même CP
             if (analyse?.quartier?.success && bien.codePostal) {
