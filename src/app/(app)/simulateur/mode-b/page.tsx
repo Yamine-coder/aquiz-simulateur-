@@ -1458,7 +1458,7 @@ export default function ModeBPage() {
                           ))}
                         </Pie>
                         <RechartsTooltip
-                          formatter={(value: number, name: string) => [`${formatMontant(value)} €`, name]}
+                          formatter={(value, name) => [`${formatMontant(Number(value))} €`, name as string]}
                           contentStyle={{ fontSize: '12px', borderRadius: '10px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
                         />
                       </PieChart>
