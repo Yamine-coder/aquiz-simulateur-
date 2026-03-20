@@ -316,9 +316,7 @@ export default function CarteMapLibre({
   useEffect(() => {
     if (!containerRef.current) return
 
-    // Log container dimensions for debugging
     const rect = containerRef.current.getBoundingClientRect()
-    console.log(`[MapLibre] Container: ${rect.width}x${rect.height} at (${rect.left},${rect.top})`)
 
     // Safety: if container has no dimensions, force a minimum
     if (rect.height < 10) {
@@ -344,8 +342,6 @@ export default function CarteMapLibre({
       return
     }
 
-    console.log('[MapLibre] Map instance created')
-
     map.addControl(
       new maplibregl.AttributionControl({ compact: true }),
       'bottom-right',
@@ -355,13 +351,11 @@ export default function CarteMapLibre({
     let loadFired = false
 
     map.on('style.load', () => {
-      console.log('[MapLibre] EVENT: style.load')
       // Re-crée les couches après changement de style (dark/light)
       try { addLayers(map) } catch (e) { console.warn('[MapLibre] addLayers in style.load failed:', e) }
     })
 
     map.on('load', () => {
-      console.log('[MapLibre] EVENT: load')
       loadFired = true
       clearTimeout(fallback)
       map.resize()
@@ -382,7 +376,6 @@ export default function CarteMapLibre({
     const resizeTimer = setTimeout(() => {
       if (mapRef.current) {
         mapRef.current.resize()
-        console.log('[MapLibre] Delayed resize executed')
       }
     }, 500)
 

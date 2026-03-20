@@ -196,10 +196,10 @@ export function VueMobileAccordeon({
                           <div className="text-[10px] text-aquiz-gray leading-snug truncate">{scorePro.recommandation}</div>
                         </div>
                       </div>
-                      {/* Points clés — 2 max */}
-                      {scorePro.points.length > 0 && (
+                      {/* Points clés — 3 max, sans mentions travaux */}
+                      {scorePro.points.filter(p => !/travaux|rafra[îi]chissement/i.test(p.texte)).length > 0 && (
                         <div className="space-y-1 mt-2 pt-2 border-t border-current/10">
-                          {scorePro.points.slice(0, 3).map((p, i) => (
+                          {scorePro.points.filter(p => !/travaux|rafra[îi]chissement/i.test(p.texte)).slice(0, 3).map((p, i) => (
                             <div key={i} className="flex items-start gap-1.5">
                               <span className={`shrink-0 mt-0.5 text-[10px] ${
                                 p.type === 'avantage' ? 'text-green-500' : p.type === 'attention' ? 'text-amber-500' : 'text-blue-500'
@@ -572,7 +572,7 @@ export function VueMobileAccordeon({
                         href={annonce.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex-1 flex items-center justify-center gap-2 h-11 bg-aquiz-black text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform"
+                        className="flex-1 flex items-center justify-center gap-2 h-11 bg-aquiz-green hover:bg-aquiz-green/90 text-white text-sm font-semibold rounded-xl active:scale-[0.98] transition-all shadow-sm"
                       >
                         <ExternalLink className="w-4 h-4" />
                         Voir l&apos;annonce
@@ -580,7 +580,7 @@ export function VueMobileAccordeon({
                     )}
                     <button
                       onClick={() => onRemove(annonce.id)}
-                      className="h-11 w-11 flex items-center justify-center bg-red-50 text-red-500 rounded-xl active:scale-[0.98] transition-transform shrink-0"
+                      className="h-11 w-11 flex items-center justify-center bg-aquiz-gray-lightest text-aquiz-gray hover:text-red-500 hover:bg-red-50 rounded-xl active:scale-[0.98] transition-all border border-aquiz-gray-lighter shrink-0"
                       aria-label="Retirer de la comparaison"
                     >
                       <X className="w-4 h-4" />

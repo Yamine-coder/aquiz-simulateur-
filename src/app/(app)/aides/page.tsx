@@ -642,21 +642,21 @@ function AidesPageContent() {
 
       {/* Bande verte CTA — pleine largeur, orientée département */}
       <div className="bg-aquiz-green">
-        <div className="max-w-5xl mx-auto px-6 sm:px-10 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-10">
-          <p className="text-xs sm:text-sm font-semibold text-white text-center sm:text-left leading-relaxed whitespace-nowrap">
+        <div className="max-w-5xl mx-auto px-4 sm:px-10 py-5 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-10">
+          <p className="text-[13px] sm:text-sm font-semibold text-white text-center sm:text-left leading-relaxed">
             Un conseiller est à vos côtés à chaque étape de votre projet{DEPARTEMENTS_IDF.find(d => d.code === zoneSelectionnee.codeDepartement)?.loc ? ` ${DEPARTEMENTS_IDF.find(d => d.code === zoneSelectionnee.codeDepartement)!.loc}` : ' immobilier'}.
           </p>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex gap-2.5 w-full sm:w-auto shrink-0">
             <Link
               href="/simulateur"
-              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white text-aquiz-black font-semibold rounded-xl hover:bg-aquiz-gray-lightest transition-colors text-[11px] sm:text-xs"
+              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2.5 bg-white text-aquiz-black font-semibold rounded-xl hover:bg-aquiz-gray-lightest transition-colors text-xs"
               onClick={() => trackEvent('cta-click', { type: 'simulateur', position: 'aides-green-banner', page: 'aides' })}
             >
               Lancer une simulation
             </Link>
             <button
               onClick={() => { setShowContactModal(true); trackEvent('cta-click', { type: 'contact-modal', position: 'aides-green-banner', page: 'aides' }) }}
-              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2 sm:py-2.5 bg-white/15 text-white font-semibold rounded-xl hover:bg-white/25 border border-white/25 transition-colors text-[11px] sm:text-xs"
+              className="flex-1 sm:flex-none text-center px-4 sm:px-5 py-2.5 bg-white/15 text-white font-semibold rounded-xl hover:bg-white/25 border border-white/25 transition-colors text-xs"
             >
               Prendre rendez-vous
             </button>

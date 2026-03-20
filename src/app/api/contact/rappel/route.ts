@@ -149,9 +149,7 @@ export async function POST(request: NextRequest) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            // IMPORTANT: Utiliser onboarding@resend.dev pour les comptes sans domaine vérifié
-            // Une fois ton domaine vérifié, change en: 'AQUIZ <noreply@aquiz.fr>'
-            from: 'AQUIZ <onboarding@resend.dev>',
+            from: process.env.EMAIL_FROM || 'AQUIZ <onboarding@resend.dev>',
             to: emailTo,
             subject: `Nouvelle demande de rappel - ${demande.prenom}`,
             html: `

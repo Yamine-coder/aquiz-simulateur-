@@ -560,7 +560,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'AQUIZ <onboarding@resend.dev>',
+        from: process.env.EMAIL_FROM || 'AQUIZ <onboarding@resend.dev>',
         to: email,
         subject: `Votre rapport AQUIZ — ${annonces.length} bien${annonces.length > 1 ? 's' : ''} analysé${annonces.length > 1 ? 's' : ''}`,
         html: htmlContent,
@@ -584,7 +584,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'AQUIZ <onboarding@resend.dev>',
+          from: process.env.EMAIL_FROM || 'AQUIZ <onboarding@resend.dev>',
           to: notifyTo,
           subject: `Rapport comparaison envoyé — ${escapeHtml(email)}`,
           html: `

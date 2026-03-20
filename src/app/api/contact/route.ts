@@ -40,7 +40,7 @@ async function sendEmailViaResend(body: ContactPayload): Promise<boolean> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'AQUIZ <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'AQUIZ <onboarding@resend.dev>',
       to: emailTo,
       subject: `Nouveau message de ${safeNom}`,
       html: `

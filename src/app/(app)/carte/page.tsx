@@ -228,17 +228,18 @@ function CartePageContent() {
       {/* BARRE D'OUTILS PRO                         */}
       {/* ════════════════════════════════════════════ */}
       <div className="shrink-0 border-b relative z-40 bg-white border-slate-200/80">
-        <div className="px-2 sm:px-4 h-12 flex items-center justify-between gap-1 sm:gap-2">
+        {/* Row 1: Nav + Type + Controls */}
+        <div className="px-2 sm:px-4 h-12 flex items-center justify-between gap-1.5 sm:gap-2">
 
-          {/* Gauche: Retour + Type + Recherche */}
-          <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+          {/* Gauche: Retour + Type */}
+          <div className="flex items-center gap-1 sm:gap-2 min-w-0">
             {fromSimulation ? (
               <button
                 onClick={() => {
                   sessionStorage.removeItem('aquiz-carte-from-simulation')
                   router.push('/simulateur/mode-a?returning=1')
                 }}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100 shrink-0"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Simulation</span>
@@ -246,7 +247,7 @@ function CartePageContent() {
             ) : (
               <button
                 onClick={() => router.push('/')}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100"
+                className="flex items-center gap-1 px-2 py-1.5 rounded-full text-[11px] font-medium transition-all text-slate-500 hover:text-slate-800 hover:bg-slate-100 shrink-0"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Retour</span>
@@ -254,7 +255,7 @@ function CartePageContent() {
             )}
 
             {/* Type toggle */}
-            <div className="flex items-center gap-0.5 rounded-full p-0.75 bg-slate-100">
+            <div className="flex items-center gap-0.5 rounded-full p-0.75 bg-slate-100 shrink-0">
               <button
                 onClick={() => setTypeBien('appartement')}
                 className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
@@ -280,7 +281,7 @@ function CartePageContent() {
               </button>
             </div>
 
-            {/* Search — desktop inline, mobile toggle */}
+            {/* Search — desktop inline */}
             <div className="hidden md:block flex-1 max-w-xs">
               <SearchAdresse
                 onSelect={(result) => {
@@ -289,69 +290,73 @@ function CartePageContent() {
                 placeholder="Rechercher une ville..."
               />
             </div>
+          </div>
+
+          {/* Droite: Search + Budget (desktop) + Heatmap + Filtres */}
+          <div className="flex items-center gap-1.5 sm:gap-1.5 shrink-0">
+            {/* Search toggle — mobile only */}
             <button
               onClick={() => { setShowSearch(!showSearch); if (!showSearch) setShowFilters(false) }}
-              className={`md:hidden p-1.5 rounded-full transition-colors ${
+              className={`md:hidden p-2 rounded-full transition-colors shrink-0 ${
                 showSearch
                   ? 'bg-slate-900 text-white'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
               }`}
             >
-              <Search className="w-3.5 h-3.5" />
+              <Search className="w-4 h-4" />
             </button>
-          </div>
 
-          {/* Droite: Budget + Contrôles Pro + Filtres */}
-          <div className="flex items-center gap-1 sm:gap-1.5">
-            {/* Budget */}
-            {fromSimulation ? (
-              <div className="relative group">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50/80 rounded-full border border-emerald-200/50">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-[11px] font-bold text-emerald-700 tabular-nums">{formatMontant(budget)} €</span>
-                  <Info className="w-3 h-3 text-emerald-400" />
-                </div>
-                <div className="absolute top-full right-0 mt-1.5 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
-                  <div className="bg-slate-900 text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
-                    <span className="text-emerald-400 font-semibold">Budget issu de votre simulation</span>
-                    <br /><span className="text-slate-400">Relancez une simulation pour modifier</span>
-                    <div className="absolute -top-1 right-4 w-2 h-2 bg-slate-900 rotate-45" />
+            {/* Budget — desktop/tablet only (mobile shows in row 2) */}
+            <div className="hidden sm:block">
+              {fromSimulation ? (
+                <div className="relative group">
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50/80 rounded-full border border-emerald-200/50">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[11px] font-bold text-emerald-700 tabular-nums">{formatMontant(budget)} €</span>
+                    <Info className="w-3 h-3 text-emerald-400" />
+                  </div>
+                  <div className="absolute top-full right-0 mt-1.5 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-50">
+                    <div className="bg-slate-900 text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap">
+                      <span className="text-emerald-400 font-semibold">Budget issu de votre simulation</span>
+                      <br /><span className="text-slate-400">Relancez une simulation pour modifier</span>
+                      <div className="absolute -top-1 right-4 w-2 h-2 bg-slate-900 rotate-45" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="relative">
-                <div className="flex items-center gap-1 sm:gap-1.5 px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200">
-                  <span className="text-[10px] font-medium hidden sm:inline text-slate-500">Budget</span>
-                  <input
-                    ref={budgetInputRef}
-                    type="text"
-                    inputMode="numeric"
-                    value={budgetInputValue}
-                    onChange={handleBudgetChange}
-                    onFocus={handleBudgetFocus}
-                    onBlur={handleBudgetBlur}
-                    className="w-18 sm:w-24 text-[11px] font-bold bg-transparent border-none outline-none tabular-nums text-right text-slate-800"
-                  />
-                  <span className="text-[10px] text-slate-500">€</span>
-                </div>
-                <div className={`absolute top-full right-0 mt-1.5 z-50 transition-all duration-300 ${
-                  showBudgetHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
-                }`}>
-                  <div className="bg-aquiz-black text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1.5">
-                    <Lightbulb className="w-3 h-3 text-aquiz-green shrink-0" />
-                    <span><span className="text-aquiz-green font-semibold">Modifiez le budget</span><span className="text-slate-300"> pour adapter la carte</span></span>
-                    <div className="absolute -top-1 right-4 w-2 h-2 bg-aquiz-black rotate-45" />
+              ) : (
+                <div className="relative">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border bg-slate-50 border-slate-200">
+                    <span className="text-[10px] font-medium text-slate-500">Budget</span>
+                    <input
+                      ref={budgetInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      value={budgetInputValue}
+                      onChange={handleBudgetChange}
+                      onFocus={handleBudgetFocus}
+                      onBlur={handleBudgetBlur}
+                      className="w-24 text-[11px] font-bold bg-transparent border-none outline-none tabular-nums text-right text-slate-800"
+                    />
+                    <span className="text-[10px] text-slate-500">€</span>
+                  </div>
+                  <div className={`absolute top-full right-0 mt-1.5 z-50 transition-all duration-300 ${
+                    showBudgetHint ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'
+                  }`}>
+                    <div className="bg-aquiz-black text-white text-[10px] leading-relaxed px-3 py-2 rounded-lg shadow-lg whitespace-nowrap flex items-center gap-1.5">
+                      <Lightbulb className="w-3 h-3 text-aquiz-green shrink-0" />
+                      <span><span className="text-aquiz-green font-semibold">Modifiez le budget</span><span className="text-slate-300"> pour adapter la carte</span></span>
+                      <div className="absolute -top-1 right-4 w-2 h-2 bg-aquiz-black rotate-45" />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Heatmap toggle */}
             <button
               onClick={() => setShowHeatmap(!showHeatmap)}
               title={showHeatmap ? 'Masquer la heatmap' : 'Afficher la heatmap'}
-              className={`p-[6px] rounded-full text-[11px] transition-all duration-200 ${
+              className={`p-[6px] rounded-full text-[11px] transition-all duration-200 shrink-0 ${
                 showHeatmap
                   ? 'bg-orange-500/15 text-orange-500'
                   : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
@@ -363,7 +368,7 @@ function CartePageContent() {
             {/* Filtres */}
             <button
               onClick={() => { setShowFilters(!showFilters); if (!showFilters) setShowSearch(false) }}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-[5px] rounded-full text-[11px] font-semibold transition-all duration-200 shrink-0 ${
                 showFilters
                   ? 'bg-slate-900 text-white shadow-md'
                   : (filtreStatuts.length > 0 || filtreDepartements.length > 0)
@@ -466,11 +471,40 @@ function CartePageContent() {
           </div>
         </div>
 
-        {/* Zone count badge + filtres actifs */}
-        <div className={`absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 ${showFilters ? 'hidden' : ''}`}>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg border bg-white/95 backdrop-blur border-white/50 text-slate-600">
+        {/* Zone count badge + budget mobile + filtres actifs */}
+        <div className={`absolute top-3 left-3 z-20 flex flex-col items-start gap-1.5 ${showFilters ? 'hidden' : ''} max-w-[calc(100%-60px)] sm:max-w-none`}>
+          {/* Desktop: zone count only */}
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg border bg-white/95 backdrop-blur border-white/50 text-slate-600">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span className="font-bold text-slate-800">{stats.total}</span> zones · {typeBien === 'appartement' ? 'Appart.' : 'Maisons'} · WebGL
+          </div>
+          {/* Mobile: zone count + budget combined */}
+          <div className="sm:hidden flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium shadow-lg border bg-white/95 backdrop-blur border-white/50 text-slate-600">
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="font-bold text-slate-800">{stats.total}</span> zones
+            </div>
+            <div className="w-px h-3.5 bg-slate-200" />
+            {fromSimulation ? (
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-bold text-emerald-700 tabular-nums">{formatMontant(budget)} €</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-0.5">
+                <input
+                  ref={budgetInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  value={budgetInputValue}
+                  onChange={handleBudgetChange}
+                  onFocus={handleBudgetFocus}
+                  onBlur={handleBudgetBlur}
+                  className="w-16 text-[11px] font-bold bg-transparent border-none outline-none tabular-nums text-right text-slate-800"
+                />
+                <span className="text-[10px] text-slate-500">€</span>
+              </div>
+            )}
           </div>
           {(filtreDepartements.length > 0 || filtreStatuts.length > 0) && (
             <div className="flex flex-wrap gap-1">

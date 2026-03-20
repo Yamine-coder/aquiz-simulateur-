@@ -61,6 +61,7 @@ import {
     BarChart3,
     Check,
     CheckSquare,
+    ChevronDown,
     ChevronLeft,
     Grid3X3,
     Heart,
@@ -142,6 +143,7 @@ export default function ComparateurPage() {
   const [linkCopied, setLinkCopied] = useState(false)
   const [activeTab, setActiveTab] = useState<'liste' | 'comparaison'>('liste')
   const [activeProfilId, setActiveProfilId] = useState<ProfilScoringId>('equilibre')
+  const [mobileProfilOpen, setMobileProfilOpen] = useState(false)
   const activeProfil = useMemo<ProfilScoring>(
     () => PROFILS_SCORING.find(p => p.id === activeProfilId) ?? PROFILS_SCORING[0],
     [activeProfilId]
@@ -227,7 +229,6 @@ export default function ComparateurPage() {
 
       // ── Fallback : appel API direct si toujours pas de synthèse IA ──
       if (!iaData) {
-        console.log('[PDF] Synthèse IA non reçue du composant, appel API direct...')
         try {
           const classementTmp = genererSyntheseComparaison(
             scoresForEmail
@@ -293,7 +294,6 @@ export default function ComparateurPage() {
             }
             // Mettre à jour le state pour les futurs PDFs
             setSyntheseIA(iaData)
-            console.log(`[PDF] Synthèse IA récupérée en direct (source: ${json.source})`)
           }
         } catch (directErr) {
           console.warn('[PDF] Appel API direct IA échoué, PDF sans IA:', directErr)
@@ -700,7 +700,7 @@ export default function ComparateurPage() {
 
       {/* ═══ HEADER (desktop card + tabs) ═══ */}
       <div className="hidden sm:block sticky top-0 z-30 bg-white border-b border-gray-100">
-        <div className={`mx-auto px-3 sm:px-5 py-2 sm:py-3 transition-all duration-300 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
+        <div className={`mx-auto px-4 sm:px-5 py-2 sm:py-3 transition-all duration-300 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
           <div className="sm:rounded-2xl sm:ring-1 sm:ring-gray-200/80 sm:shadow-sm sm:overflow-hidden">
 
             {/* Haut : identité + actions */}
@@ -905,7 +905,7 @@ export default function ComparateurPage() {
 
       {/* ═══ CONTENU ═══ */}
       <div className="flex-1">
-        <div className={`mx-auto px-3 sm:px-5 py-4 sm:py-6 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
+        <div className={`mx-auto px-4 sm:px-5 py-4 sm:py-6 ${activeTab === 'liste' ? 'max-w-5xl' : 'max-w-7xl'}`}>
 
           {/* ─── TAB LISTE ─── */}
           {activeTab === 'liste' && (
@@ -1051,39 +1051,74 @@ export default function ComparateurPage() {
                         />
                       </div>
                     </div>
-                    {/* Ligne titre + actions + profil — mobile */}
-                    <div className="sm:hidden border-b border-aquiz-gray-lightest">
-                      {/* Ligne titre */}
-                      <div className="flex items-center justify-between px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-aquiz-green text-white text-[10px] font-bold shrink-0">
-                            {annoncesSelectionnees.length}
-                          </span>
-                          <span className="text-sm font-semibold text-aquiz-black">
-                            bien{annoncesSelectionnees.length > 1 ? 's' : ''} en comparaison
-                          </span>
-                        </div>
+                    {/* Mobile header — tout en une seule section compacte */}
+                    <div className="sm:hidden">
+                      {/* Row 1: Badge + titre + profil chip + reset */}
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-aquiz-green text-white text-xs font-bold shrink-0">
+                          {annoncesSelectionnees.length}
+                        </span>
+                        <span className="text-[13px] font-semibold text-aquiz-black">
+                          bien{annoncesSelectionnees.length > 1 ? 's' : ''}
+                        </span>
+                        {/* Chip profil actif — tap pour ouvrir/fermer */}
+                        <button
+                          onClick={() => setMobileProfilOpen(!mobileProfilOpen)}
+                          className={`ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 ${
+                            (() => { const c: Record<string, string> = { equilibre: 'bg-slate-100 text-slate-600', investisseur: 'bg-amber-50 text-amber-600', famille: 'bg-blue-50 text-blue-600', premier_achat: 'bg-rose-50 text-rose-600', eco: 'bg-emerald-50 text-emerald-600', personnalise: 'bg-slate-100 text-slate-600' }; return c[activeProfilId] || c.equilibre })()
+                          }`}
+                        >
+                          <Scale className="w-3 h-3" />
+                          <span className="text-[10px] text-aquiz-gray font-medium">Profil</span>
+                          <span className="font-bold">{PROFILS_SCORING.find(p => p.id === activeProfilId)?.label || 'Profil'}</span>
+                          <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${mobileProfilOpen ? 'rotate-180' : ''}`} />
+                        </button>
                         <button
                           onClick={() => comparateur.deselectionnerTout()}
-                          className="flex items-center gap-1.5 text-[11px] text-aquiz-gray hover:text-red-500 font-medium transition-colors px-2 py-1 rounded-lg hover:bg-red-50"
+                          className="p-1.5 text-aquiz-gray hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                          title="Réinitialiser"
                         >
-                          <RotateCcw className="h-3 w-3" />
-                          Réinitialiser
+                          <RotateCcw className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      {/* Profil — pleine largeur */}
-                      <div className="px-4 pb-3 pt-1">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-[10px] font-bold text-aquiz-gray uppercase tracking-widest">Profil de scoring</span>
+                      {/* Description du profil actif — toujours visible */}
+                      {!mobileProfilOpen && (
+                        <div className="px-3 pb-2 -mt-1">
+                          <p className="text-[11px] text-aquiz-gray leading-snug pl-8">
+                            {PROFILS_SCORING.find(p => p.id === activeProfilId)?.description}
+                          </p>
                         </div>
-                        <ProfilScoringSelector
-                          activeProfilId={activeProfilId}
-                          onProfilChange={p => setActiveProfilId(p.id)}
-                          compact
-                          wrapPills
-                          className="w-full"
-                        />
-                      </div>
+                      )}
+                      {/* Panel déroulant — grille de profils avec descriptions */}
+                      {mobileProfilOpen && (
+                        <div className="px-3 pb-3 animate-in slide-in-from-top-1 fade-in duration-200">
+                          <p className="text-[10px] font-bold text-aquiz-gray uppercase tracking-widest mb-2 px-0.5">Profil de scoring</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {PROFILS_SCORING.map(profil => {
+                              const isActive = profil.id === activeProfilId
+                              const colorMap: Record<string, { active: string; inactive: string }> = {
+                                equilibre:    { active: 'bg-slate-600 text-white ring-2 ring-slate-300 ring-offset-1', inactive: 'bg-slate-50 text-slate-700 border border-slate-200' },
+                                investisseur: { active: 'bg-amber-500 text-white ring-2 ring-amber-300 ring-offset-1', inactive: 'bg-amber-50 text-amber-700 border border-amber-200' },
+                                famille:      { active: 'bg-blue-500 text-white ring-2 ring-blue-300 ring-offset-1', inactive: 'bg-blue-50 text-blue-700 border border-blue-200' },
+                                premier_achat:{ active: 'bg-rose-500 text-white ring-2 ring-rose-300 ring-offset-1', inactive: 'bg-rose-50 text-rose-700 border border-rose-200' },
+                                eco:          { active: 'bg-emerald-500 text-white ring-2 ring-emerald-300 ring-offset-1', inactive: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+                                personnalise: { active: 'bg-slate-600 text-white ring-2 ring-slate-300 ring-offset-1', inactive: 'bg-slate-50 text-slate-700 border border-slate-200' },
+                              }
+                              const c = colorMap[profil.id] || colorMap.equilibre
+                              return (
+                                <button
+                                  key={profil.id}
+                                  onClick={() => { setActiveProfilId(profil.id); setMobileProfilOpen(false) }}
+                                  className={`flex flex-col items-start gap-0.5 px-3 py-2.5 rounded-xl text-left transition-all active:scale-95 ${isActive ? c.active : c.inactive}`}
+                                >
+                                  <span className="text-[12px] font-bold">{profil.label}</span>
+                                  <span className={`text-[10px] leading-tight ${isActive ? 'text-white/75' : 'text-aquiz-gray'}`}>{profil.description}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
