@@ -190,7 +190,7 @@ export function HeroSection() {
               }}
             />
             <Calculator className="w-4 h-4 relative z-10" />
-            <span className="relative z-10">Simuler mon budget</span>
+            <span className="relative z-10">Simuler mon projet</span>
             <ArrowRight className="w-4 h-4 relative z-10 group-hover:translate-x-1 transition-transform" />
           </Link>
 

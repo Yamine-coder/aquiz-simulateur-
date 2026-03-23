@@ -31,6 +31,7 @@ interface ContactModalContextData {
   typeBien?: string
   mensualite?: number
   honoraires?: number
+  budgetLabel?: string
 }
 
 interface ContactModalProps {
@@ -174,7 +175,7 @@ export function ContactModal({ isOpen, onClose, onSuccess, commune, budgetOverri
   if (!isOpen) return null
 
   const budget = contextData?.prixBien ?? budgetOverride ?? resultats?.prixAchatMax ?? 0
-  const budgetLabel = contextData?.prixBien ? 'Prix du bien' : budgetOverride !== undefined ? 'Budget carte' : 'Budget estimé'
+  const budgetLabel = contextData?.budgetLabel ?? (contextData?.prixBien ? 'Prix du bien' : budgetOverride !== undefined ? 'Budget carte' : 'Budget estimé')
   const localisation = contextData?.localisation ?? commune
   const formatMontant = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 

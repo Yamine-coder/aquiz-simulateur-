@@ -1240,7 +1240,7 @@ function ModeAPageContent() {
                         onClick={goToNextEtape} 
                         disabled={calculs.revenusMensuelsTotal === 0 || mensualiteRecommandee === 0}
                       >
-                        Continuer vers la simulation
+                        Je valide mes revenus
                         <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </div>
@@ -2053,7 +2053,7 @@ function ModeAPageContent() {
                           <AlertCircle className="w-4 h-4 text-red-500" />
                         </div>
                         <div className="flex-1">
-                          <p className="font-semibold text-red-700 text-sm">Projet non finançable en l'état</p>
+                          <p className="font-semibold text-red-700 text-sm">Projet non finançable en l&apos;état</p>
                           <p className="text-xs text-red-600 mt-1">Réduisez la mensualité ou augmentez votre apport.</p>
                           <button 
                             type="button"

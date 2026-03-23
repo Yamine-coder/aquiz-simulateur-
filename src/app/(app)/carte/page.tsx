@@ -803,7 +803,17 @@ function CartePageContent() {
         })()}
       </main>
 
-      <ContactModal isOpen={showContactModal} onClose={() => { setShowContactModal(false); setContactCommune(undefined) }} commune={contactCommune} budgetOverride={budget} />
+      <ContactModal
+        isOpen={showContactModal}
+        onClose={() => { setShowContactModal(false); setContactCommune(undefined) }}
+        commune={contactCommune}
+        budgetOverride={budget}
+        contextData={{
+          prixBien: budget || undefined,
+          localisation: contactCommune,
+          budgetLabel: 'Budget estimé',
+        }}
+      />
     </div>
   )
 }

@@ -1286,7 +1286,7 @@ export default function ModeBPage() {
                 onClick={goToNextEtape}
               >
                 <CheckCircle className="w-5 h-5 mr-2" />
-                Calculer ma capacité sur ce bien
+                Je découvre mon plan de financement
               </Button>
             </div>
           </div>

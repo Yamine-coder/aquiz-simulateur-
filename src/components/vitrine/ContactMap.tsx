@@ -27,6 +27,7 @@ export function ContactMap() {
           referrerPolicy="no-referrer-when-downgrade"
           title="AQUIZ — 58 rue de Monceau, 75008 Paris"
           className="block grayscale brightness-110 contrast-95 group-hover/map:grayscale-0 group-hover/map:brightness-100 group-hover/map:contrast-100 transition-all duration-700 ease-out"
+          suppressHydrationWarning
         />
 
         {/* Tint vert subtil sur la carte désaturée */}

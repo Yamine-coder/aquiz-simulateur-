@@ -1,16 +1,16 @@
 import {
-  Award,
-  Building2,
-  Heart,
-  Home,
-  Mail,
-  MapPin,
-  Phone,
-  Ruler,
-  Shield,
-  Target,
-  Train,
-  Users
+    Award,
+    Building2,
+    Heart,
+    Home,
+    Mail,
+    MapPin,
+    Phone,
+    Ruler,
+    Shield,
+    Target,
+    Train,
+    Users
 } from 'lucide-react'
 import type { Metadata } from 'next'
 import Image from 'next/image'
@@ -288,7 +288,7 @@ export default function AProposPage() {
                 href="/simulateur"
                 className="inline-flex items-center justify-center px-6 py-2.5 bg-aquiz-green text-white text-xs font-semibold rounded-lg hover:bg-aquiz-green/90 transition-colors"
               >
-                Simuler mon budget
+                Simuler mon projet
               </Link>
               <TrackedCalendlyLink
                 position="about-footer"

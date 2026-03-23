@@ -176,6 +176,14 @@ export default function ComparateurPage() {
     () => calculerStatistiques(annoncesSelectionnees),
     [annoncesSelectionnees]
   )
+
+  // Meilleur bien recommandé (pour le CTA et la modale contact)
+  const bestAnnonceMemo = useMemo(() => {
+    if (scoresForEmail.length === 0) return null
+    const bestScore = Math.max(...scoresForEmail.map(s => s.scoreGlobal))
+    const bestId = scoresForEmail.find(s => s.scoreGlobal === bestScore)?.annonceId
+    return annoncesSelectionnees.find(a => a.id === bestId) ?? null
+  }, [scoresForEmail, annoncesSelectionnees])
   
   // Budget depuis le simulateur
   const budgetSimulateur = resultats?.prixAchatMax || 
@@ -1308,6 +1316,17 @@ export default function ComparateurPage() {
       <ContactModal
         isOpen={showContactModal}
         onClose={() => setShowContactModal(false)}
+        contextData={{
+          prixBien: (bestAnnonceMemo ?? annoncesSelectionnees[0])?.prix,
+          localisation: (bestAnnonceMemo ?? annoncesSelectionnees[0])?.ville,
+          budgetLabel: (() => {
+            const a = bestAnnonceMemo ?? annoncesSelectionnees[0]
+            if (!a) return 'Bien sélectionné'
+            const type = a.type === 'maison' ? 'Maison' : 'Appartement'
+            const pieces = a.pieces ? ` ${a.pieces} pièces` : ''
+            return `${type}${pieces} — ${a.ville}`
+          })(),
+        }}
       />
 
       {/* ═══ FLOATING MANAGE BAR ═══ */}

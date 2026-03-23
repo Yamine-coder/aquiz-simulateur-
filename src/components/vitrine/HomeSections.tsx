@@ -915,8 +915,8 @@ const tarifs = [
   {
     price: '2%',
     priceSuffix: ' TTC',
-    condition: 'Pour un bien d\u2019une valeur comprise',
-    threshold: 'entre 800 000€ et 1 000 000€',
+    condition: 'Pour un bien d\u2019une valeur',
+    threshold: 'à partir de 800 000€',
     features: TARIF_FEATURES,
     popular: false,
   },

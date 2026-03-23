@@ -252,7 +252,7 @@ export function WarmLeadCta() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-aquiz-gray-lighter hover:border-aquiz-green text-sm font-medium text-aquiz-black hover:text-aquiz-green rounded-xl transition-colors"
               >
                 <TrendingUp className="w-3.5 h-3.5" />
-                Simuler mon budget
+                Simuler mon projet
                 <ArrowRight className="w-3 h-3" />
               </a>
               <a
