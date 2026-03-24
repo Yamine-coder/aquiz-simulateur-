@@ -11,7 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://www.aquiz.eu'
 
   // Mettre à jour cette date lors de chaque déploiement majeur
-  const DERNIERE_MAJ = '2026-02-26'
+  const DERNIERE_MAJ = '2026-03-24'
 
   // Articles de blog
   const blogEntries: MetadataRoute.Sitemap = BLOG_ARTICLES.map((article) => ({
