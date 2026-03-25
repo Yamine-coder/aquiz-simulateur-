@@ -222,7 +222,7 @@ export function Footer() {
               <ul className="space-y-2.5 sm:space-y-3">
                 {FOOTER_LEGAL.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors">
+                    <Link href={link.href} rel="nofollow" className="text-xs sm:text-[13px] text-white/50 hover:text-white transition-colors">
                       {link.label}
                     </Link>
                   </li>
