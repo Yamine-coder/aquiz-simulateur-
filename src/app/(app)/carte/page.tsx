@@ -222,7 +222,9 @@ function CartePageContent() {
 
   return (
     <div className="h-[calc(100dvh-72px)] md:h-[calc(100dvh-88px)] flex flex-col bg-white overflow-hidden">
-      <h1 className="sr-only">Carte des prix immobiliers en Île-de-France</h1>
+      <h1 className="text-center text-[11px] font-medium text-gray-400 py-1">
+        Carte des prix immobiliers en Île-de-France
+      </h1>
 
       {/* ════════════════════════════════════════════ */}
       {/* BARRE D'OUTILS PRO                         */}

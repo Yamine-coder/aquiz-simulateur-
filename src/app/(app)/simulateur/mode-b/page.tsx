@@ -607,7 +607,9 @@ export default function ModeBPage() {
   return (
     <TooltipProvider>
     <div className="min-h-screen bg-white">
-      <h1 className="sr-only">Simulateur de faisabilité d&apos;achat immobilier</h1>
+      <h1 className="text-center text-[11px] font-medium text-gray-400 py-1">
+        Simulateur de faisabilité d&apos;achat immobilier
+      </h1>
       {/* Modal de reprise */}
       {showResumeModal && pendingToResume && (
         <ResumeModal

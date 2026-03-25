@@ -1,9 +1,21 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Simulateur immobilier gratuit — Capacité d\'achat & faisabilité',
+  title: 'Simulateur immobilier gratuit — Capacité d\'achat & faisabilité | AQUIZ',
   description:
-    'Calculez votre capacité d\'achat immobilier ou vérifiez la faisabilité d\'un bien. Simulateur conforme HCSF, 100% gratuit, sans inscription.',
+    'Calculez gratuitement votre capacité d\'achat immobilier ou vérifiez la faisabilité d\'un bien à Paris & IDF. Simulateur conforme HCSF 2026, résultat en 2 min.',
+  keywords: [
+    'simulateur immobilier gratuit',
+    'simulation achat immobilier',
+    'capacité d\'achat immobilier',
+    'calculer budget immobilier',
+    'simulateur prêt immobilier',
+    'taux endettement 35%',
+    'combien emprunter immobilier',
+    'simulation crédit immobilier Paris',
+    'faisabilité achat immobilier',
+    'HCSF 2026',
+  ],
   openGraph: {
     title: 'Simulateur immobilier gratuit — AQUIZ',
     description:

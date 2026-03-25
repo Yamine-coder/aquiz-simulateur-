@@ -773,7 +773,9 @@ function ModeAPageContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-white">
-        <h1 className="sr-only">Simulateur de capacité d&apos;achat immobilière</h1>
+        <h1 className="text-center text-[11px] font-medium text-gray-400 py-1">
+          Simulateur de capacité d&apos;achat immobilière
+        </h1>
         {showResumeModal && pendingToResume && <ResumeModal simulation={pendingToResume} onResume={handleResume} onNew={handleNew} />}
 
         {/* === STEPPER NAVIGATION (style Pretto/Stripe — stepper centré, pas de breadcrumb) === */}

@@ -600,7 +600,9 @@ export default function ComparateurPage() {
   // ─────────────── AVEC ANNONCES ───────────────
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      <h1 className="sr-only">Comparateur de biens immobiliers</h1>
+      <h1 className="text-center text-[11px] font-medium text-gray-400 py-1">
+        Comparateur de biens immobiliers
+      </h1>
 
       {/* ═══ MOBILE BACK NAV ═══ */}
       <div className="sm:hidden sticky top-0 z-30 bg-white border-b border-gray-100">

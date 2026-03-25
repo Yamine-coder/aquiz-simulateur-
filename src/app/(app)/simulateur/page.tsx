@@ -73,11 +73,11 @@ export default function SimulateurPage() {
         <div className="max-w-2xl mx-auto px-4 sm:px-5 text-center">
           <FadeIn>
             <h1 className="text-xl sm:text-2xl md:text-4xl font-extrabold text-aquiz-black tracking-tight leading-tight">
-              Choisissez le bon{' '}
-              <span className="text-aquiz-green">simulateur</span>
+              Simulateur immobilier{' '}
+              <span className="text-aquiz-green">en ligne</span>
             </h1>
             <p className="mt-2 text-xs sm:text-sm md:text-base text-aquiz-gray-light max-w-lg mx-auto leading-relaxed">
-              Deux parcours complémentaires: estimer votre budget d’achat ou valider la faisabilité d’un bien ciblé.
+              Calculez votre capacité d&apos;achat ou vérifiez la faisabilité d&apos;un bien. Conforme HCSF 2026, résultat en 2 minutes.
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 sm:gap-5 mt-3 text-[10px] sm:text-[11px] text-aquiz-gray-light">
