@@ -148,7 +148,7 @@ export function HeroSection() {
 
         {/* Main heading */}
         <motion.h1
-          className="mt-5 sm:mt-7 text-[1.75rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.1] sm:leading-[1.05] tracking-tight"
+          className="mt-5 sm:mt-7 text-[1.75rem] sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white leading-[1.25] sm:leading-[1.05] tracking-tight"
           initial={{ opacity: 0, y: 35 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -166,7 +166,7 @@ export function HeroSection() {
           transition={{ duration: 0.7, delay: 0.65 }}
         >
           Accompagnement personnalisé, chasse immobilière
-          <br className="hidden sm:block" />
+          <br className="hidden sm:block" />{' '}
           et solutions de financement sur mesure.
         </motion.p>
 
