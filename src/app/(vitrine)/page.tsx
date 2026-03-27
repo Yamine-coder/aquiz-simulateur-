@@ -1,12 +1,12 @@
 import {
-  BlogPreviewSection,
-  HeroSection,
-  OutilsSection,
-  ProcessSection,
-  ServicesSection,
-  StatsBar,
-  TarifsSection,
-  TestimonialsSection,
+    BlogPreviewSection,
+    HeroSection,
+    OutilsSection,
+    ProcessSection,
+    ServicesSection,
+    StatsBar,
+    TarifsSection,
+    TestimonialsSection,
 } from '@/components/vitrine'
 import { ContactSection } from '@/components/vitrine/ContactSection'
 import type { Metadata } from 'next'

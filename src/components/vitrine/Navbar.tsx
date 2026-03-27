@@ -107,17 +107,24 @@ export function Navbar() {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20)
 
-      // Scroll-spy: determine active section
+      // Scroll-spy: determine active section (closest to viewport top)
       const navOffset = window.innerWidth >= 768 ? 80 : 72
-      const scrollY = window.scrollY + navOffset
+      const scrollPos = window.scrollY + navOffset + 100
       let current = 'hero'
+      let minDistance = Infinity
 
       for (const id of SECTION_IDS) {
         const el = document.getElementById(id)
-        if (el && el.offsetTop <= scrollY) {
+        if (!el) continue
+        const distance = Math.abs(el.offsetTop - scrollPos)
+        if (el.offsetTop <= scrollPos && distance < minDistance) {
+          minDistance = distance
           current = id
         }
       }
+
+      // Si on est tout en haut, forcer hero
+      if (window.scrollY < 100) current = 'hero'
       setActiveSection(current)
     }
 

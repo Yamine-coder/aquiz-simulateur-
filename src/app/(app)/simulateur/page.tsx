@@ -174,6 +174,7 @@ export default function SimulateurPage() {
             </div>
           </FadeIn>
       </section>
+
     </div>
   )
 }
