@@ -25,10 +25,11 @@ export const metadata: Metadata = {
     "conseil acquisition immobilière Paris",
     "simulateur immobilier gratuit",
     "capacité d'emprunt",
+    "combien puis-je emprunter",
     "acheter un appartement à Paris",
     "premier achat immobilier",
     "chasse immobilière Paris",
-    "prêt immobilier",
+    "prêt immobilier 2026",
     "PTZ 2026",
     "primo-accédant Île-de-France",
     "frais de notaire calcul",
@@ -38,6 +39,11 @@ export const metadata: Metadata = {
     "achat appartement Paris",
     "achat maison IDF",
     "taux d'endettement 35%",
+    "simulation prêt immobilier",
+    "calcul mensualité crédit immobilier",
+    "quel salaire pour emprunter",
+    "calculette prêt immobilier",
+    "courtier immobilier Paris",
     "AQUIZ",
   ],
   authors: [{ name: "AQUIZ" }],
@@ -115,6 +121,18 @@ function OrganizationJsonLd() {
       'https://www.instagram.com/aquiz.eu/',
       'https://www.linkedin.com/company/aquiz/',
     ],
+    knowsAbout: [
+      'Acquisition immobilière',
+      'Crédit immobilier',
+      'Capacité d\'emprunt',
+      'Prêt à taux zéro',
+      'Primo-accédant',
+      'Prix immobilier Île-de-France',
+      'Frais de notaire',
+      'Taux d\'endettement HCSF',
+      'Chasse immobilière',
+    ],
+    knowsLanguage: 'fr',
   }
   return (
     <script
@@ -124,7 +142,7 @@ function OrganizationJsonLd() {
   )
 }
 
-/** JSON-LD WebSite — identité du site, légitime sur toutes les pages */
+/** JSON-LD WebSite — identité du site + SearchAction pour sitelinks search box */
 function WebSiteJsonLd() {
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -134,6 +152,14 @@ function WebSiteJsonLd() {
     url: 'https://www.aquiz.eu',
     publisher: { '@id': 'https://www.aquiz.eu/#org' },
     inLanguage: 'fr-FR',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: {
+        '@type': 'EntryPoint',
+        urlTemplate: 'https://www.aquiz.eu/blog?q={search_term_string}',
+      },
+      'query-input': 'required name=search_term_string',
+    },
   }
   return (
     <script

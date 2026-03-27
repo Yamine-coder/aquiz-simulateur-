@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'PTZ 2026, Action Logement, aides achat immobilier — Éligibilité gratuite',
+  title: 'PTZ 2026 : Éligibilité, plafonds & aides achat immobilier — Simulateur gratuit',
   description:
-    'Éligible au PTZ 2026 ? Vérifiez gratuitement vos aides : Prêt à Taux Zéro, Action Logement, TVA réduite, prêt Paris Logement. Résultat instantané.',
+    'Éligible au PTZ 2026 ? Vérifiez en 30 secondes vos aides : Prêt à Taux Zéro (jusqu\'à 50% du prix), Action Logement (40 000 € à 1%), TVA réduite, Prêt Paris Logement. Résultat personnalisé gratuit.',
   keywords: [
     'PTZ 2026',
     'prêt à taux zéro 2026',
@@ -18,9 +18,12 @@ export const metadata: Metadata = {
     'plafond PTZ zone A',
     'simulateur PTZ 2026',
     'aide accession propriété',
+    'prêt accession sociale',
+    'conditions PTZ 2026',
+    'zone PTZ Île-de-France',
   ],
   openGraph: {
-    title: 'Aides immobilières & PTZ 2026 — AQUIZ',
+    title: 'PTZ 2026 & aides achat immobilier — Testez votre éligibilité | AQUIZ',
     description:
       'PTZ, Action Logement, TVA réduite, Prêt Paris Logement… Vérifiez en 30 secondes quelles aides vous pouvez obtenir pour acheter en Île-de-France. Résultat personnalisé par département.',
     url: 'https://www.aquiz.eu/aides',

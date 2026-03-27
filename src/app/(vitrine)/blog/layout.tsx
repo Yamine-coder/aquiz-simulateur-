@@ -2,9 +2,9 @@ import { BLOG_ARTICLES } from '@/data/blog-articles'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Blog immobilier — Guides, conseils et actualités',
+  title: 'Blog immobilier — Guides, conseils achat & financement 2026',
   description:
-    'Retrouvez nos articles sur l\'achat immobilier à Paris & IDF : PTZ 2026, taux de crédit, guides primo-accédants, frais de notaire et astuces financement.',
+    'Guides pratiques et conseils d\'experts sur l\'achat immobilier à Paris & IDF : PTZ 2026, taux de crédit, premier achat, frais de notaire, négociation et financement.',
   keywords: [
     'blog immobilier',
     'guide primo-accédant',
@@ -13,9 +13,12 @@ export const metadata: Metadata = {
     'frais de notaire explication',
     'premier achat immobilier conseils',
     'financement immobilier guide',
+    'marché immobilier Île-de-France',
+    'taux crédit immobilier 2026',
+    'astuces achat immobilier',
   ],
   openGraph: {
-    title: 'Blog immobilier — AQUIZ',
+    title: 'Blog immobilier — Guides & conseils achat | AQUIZ',
     description:
       'Guides, analyses et conseils pour réussir votre achat immobilier en Île-de-France. Par les experts AQUIZ.',
     url: 'https://www.aquiz.eu/blog',

@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 
 export const metadata: Metadata = {
-  title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens',
+  title: 'Comparateur immobilier gratuit — Comparez jusqu\'à 4 biens côte à côte',
   description:
-    'Comparez jusqu\'à 4 biens immobiliers côte à côte : prix au m², scoring 10 axes, analyse IA, risques naturels, DPE. Outil 100\u00a0% gratuit.',
+    'Comparez jusqu\'à 4 biens immobiliers : prix au m² vs marché DVF, scoring IA sur 10 axes, DPE, risques naturels, transports. Outil 100% gratuit, sans inscription.',
   keywords: [
     'comparateur immobilier',
     'comparer annonces immobilières',
@@ -13,9 +13,13 @@ export const metadata: Metadata = {
     'analyse immobilière IA',
     'DPE comparaison',
     'acheter un bien immobilier',
+    'comparateur prix immobilier',
+    'outil comparaison bien immobilier',
+    'analyser annonce immobilière',
+    'rapport immobilier gratuit',
   ],
   openGraph: {
-    title: 'Comparateur immobilier — AQUIZ',
+    title: 'Comparateur immobilier gratuit — Scoring IA sur 10 axes | AQUIZ',
     description:
       'Comparez prix, surface, charges et localisation de plusieurs biens immobiliers pour prendre la meilleure décision.',
     url: 'https://www.aquiz.eu/comparateur',

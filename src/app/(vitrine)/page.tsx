@@ -14,13 +14,17 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'AQUIZ — Conseil en acquisition immobilière à Paris & Île-de-France',
   description:
-    'AQUIZ accompagne les primo-accédants à Paris & IDF : conseil personnalisé, chasse immobilière, simulateur gratuit et financement. Devis gratuit.',
+    'AQUIZ accompagne les primo-accédants à Paris & IDF : conseil personnalisé, chasse immobilière, simulateur de capacité d\'emprunt gratuit et solutions de financement. Devis gratuit.',
   keywords: [
     'conseil acquisition immobilière Paris',
     'acheter un appartement à Paris',
     'chasse immobilière Paris',
     'premier achat immobilier IDF',
     'simulateur immobilier gratuit',
+    'capacité d\'emprunt immobilier',
+    'primo-accédant Paris',
+    'accompagnement achat immobilier',
+    'courtier immobilier Paris',
     'AQUIZ',
   ],
   openGraph: {
@@ -253,6 +257,14 @@ function FaqSection() {
     {
       question: 'Comment calculer les frais de notaire pour un achat immobilier ?',
       answer: "Les frais de notaire représentent environ 7-8% du prix pour un bien ancien et 2-3% pour un bien neuf (VEFA). Notre simulateur les intègre automatiquement dans le calcul de votre budget global.",
+    },
+    {
+      question: 'Combien faut-il d\'apport personnel pour acheter un bien immobilier ?',
+      answer: "Les banques recommandent un apport de 10% minimum pour couvrir les frais de notaire et montrer votre capacité d'épargne. Pour un bien à 300 000 €, il faut idéalement 30 000 € d'apport. Cependant, certains profils (jeunes actifs en CDI) peuvent emprunter sans apport via des prêts aidés.",
+    },
+    {
+      question: 'Qu\'est-ce que le taux d\'endettement HCSF de 35% ?',
+      answer: "Depuis 2022, le Haut Conseil de Stabilité Financière (HCSF) impose que vos charges de crédit ne dépassent pas 35% de vos revenus nets, assurance emprunteur incluse. Cette norme protège les emprunteurs du surendettement. Notre simulateur calcule automatiquement ce taux pour votre situation.",
     },
   ]
 
