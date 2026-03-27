@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Simulateur immobilier gratuit — Capacité d\'achat & faisabilité | AQUIZ',
+  title: 'Simulateur immobilier gratuit — Capacité d\'achat & faisabilité',
   description:
     'Calculez gratuitement votre capacité d\'achat immobilier ou vérifiez la faisabilité d\'un bien à Paris & IDF. Simulateur conforme HCSF 2026, résultat en 2 min.',
   keywords: [

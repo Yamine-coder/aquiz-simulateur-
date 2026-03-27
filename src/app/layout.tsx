@@ -62,6 +62,14 @@ export const metadata: Metadata = {
     title: "AQUIZ — Conseil en acquisition immobilière à Paris & Île-de-France",
     description:
       "Accompagnement personnalisé des primo-accédants à Paris & IDF. Simulateur gratuit, chasse immobilière et solutions de financement sur mesure.",
+    images: [
+      {
+        url: "https://www.aquiz.eu/images/og-default.jpg",
+        width: 1200,
+        height: 630,
+        alt: "AQUIZ — Simulateur immobilier gratuit Paris & Île-de-France",
+      },
+    ],
   },
   metadataBase: new URL("https://www.aquiz.eu"),
   twitter: {
@@ -69,6 +77,7 @@ export const metadata: Metadata = {
     title: "AQUIZ — Acquisition immobilière Paris & IDF",
     description:
       "Simulateur immobilier gratuit, chasse immobilière et accompagnement financement. 100% gratuit, sans inscription.",
+    images: ["https://www.aquiz.eu/images/og-default.jpg"],
   },
 };
 

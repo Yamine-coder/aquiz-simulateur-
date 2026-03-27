@@ -5,6 +5,15 @@ export const metadata: Metadata = {
   title: 'Blog immobilier — Guides, conseils et actualités',
   description:
     'Retrouvez nos articles sur l\'achat immobilier à Paris & IDF : PTZ 2026, taux de crédit, guides primo-accédants, frais de notaire et astuces financement.',
+  keywords: [
+    'blog immobilier',
+    'guide primo-accédant',
+    'conseil achat immobilier Paris',
+    'PTZ 2026 guide',
+    'frais de notaire explication',
+    'premier achat immobilier conseils',
+    'financement immobilier guide',
+  ],
   openGraph: {
     title: 'Blog immobilier — AQUIZ',
     description:

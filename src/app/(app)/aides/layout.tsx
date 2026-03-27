@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'PTZ 2026, Action Logement, aides achat immobilier — Éligibilité gratuite',
   description:
-    'Suis-je éligible au PTZ 2026 ? Vérifiez gratuitement vos aides à l\'achat immobilier : Prêt à Taux Zéro, Action Logement, TVA réduite, prêt Paris Logement. Résultat instantané.',
+    'Éligible au PTZ 2026 ? Vérifiez gratuitement vos aides : Prêt à Taux Zéro, Action Logement, TVA réduite, prêt Paris Logement. Résultat instantané.',
   keywords: [
     'PTZ 2026',
     'prêt à taux zéro 2026',

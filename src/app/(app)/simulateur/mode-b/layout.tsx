@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Puis-je acheter ce bien ? — Vérification faisabilité immobilière 2026',
   description:
-    'Entrez le prix d\'un bien et vérifiez si vous pouvez l\'acheter : salaire minimum requis, apport conseillé, mensualités et taux d\'endettement. Gratuit et instantané.',
+    'Entrez le prix d\'un bien et vérifiez si vous pouvez l\'acheter : salaire minimum, apport conseillé, mensualités. Gratuit et instantané.',
   keywords: [
     'puis-je acheter ce bien',
     'faisabilité achat immobilier',

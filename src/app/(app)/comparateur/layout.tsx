@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Suspense } from 'react'
 
 export const metadata: Metadata = {
-  title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens | AQUIZ',
+  title: 'Comparateur de biens immobiliers — Comparez jusqu\'à 4 biens',
   description:
     'Comparez jusqu\'à 4 biens immobiliers côte à côte : prix au m², scoring 10 axes, analyse IA, risques naturels, DPE. Outil 100\u00a0% gratuit.',
   keywords: [
