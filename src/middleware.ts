@@ -62,10 +62,13 @@ ${pages.map((p) => `  <url>
 export async function middleware(request: NextRequest) {
   // ── Sitemap — réponse brute sans headers Next.js ────
   if (request.nextUrl.pathname === '/sitemap.xml') {
-    return new Response(buildSitemapXml(), {
+    const xml = buildSitemapXml()
+    const body = new TextEncoder().encode(xml)
+    return new Response(body, {
       status: 200,
       headers: {
         'Content-Type': 'application/xml; charset=utf-8',
+        'Content-Length': body.byteLength.toString(),
         'Cache-Control': 'public, max-age=86400, s-maxage=86400',
       },
     })
