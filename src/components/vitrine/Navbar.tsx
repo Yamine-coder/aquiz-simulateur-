@@ -433,14 +433,14 @@ export function Navbar() {
           {/* CTA */}
           <div className="hidden lg:flex items-center gap-1.5 xl:gap-2.5 shrink-0">
             <a
-              href="tel:+33749520106"
+              href="tel:+33172682480"
               onClick={() => trackEvent('cta-click', { type: 'phone', position: 'navbar', page: window.location.pathname })}
               className={`flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-200 ${
                 showSolid
                   ? 'text-gray-400 hover:text-aquiz-green hover:bg-aquiz-green/5'
                   : 'text-white/70 hover:text-white hover:bg-white/10'
               }`}
-              title="07 49 52 01 06"
+              title="01 72 68 24 80"
             >
               <Phone className="w-4 h-4" />
             </a>
@@ -552,12 +552,12 @@ export function Navbar() {
           {/* Phone + CTA */}
           <div className="pt-3 border-t border-gray-100/60 space-y-2">
             <a
-              href="tel:+33749520106"
+              href="tel:+33172682480"
               onClick={() => trackEvent('cta-click', { type: 'phone', position: 'navbar-mobile', page: window.location.pathname })}
               className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400 hover:text-gray-900 transition-colors duration-200"
             >
               <Phone className="w-4 h-4" />
-              07 49 52 01 06
+              01 72 68 24 80
             </a>
             <Link
               href="https://calendly.com/contact-aquiz/30min"

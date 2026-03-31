@@ -2,13 +2,13 @@
 
 import { trackEvent } from '@/lib/analytics'
 import {
-  ArrowRight,
-  Calendar,
-  Clock,
-  ExternalLink,
-  Mail,
-  MapPin,
-  Phone
+    ArrowRight,
+    Calendar,
+    Clock,
+    ExternalLink,
+    Mail,
+    MapPin,
+    Phone
 } from 'lucide-react'
 import Link from 'next/link'
 import { ContactForm } from './ContactForm'
@@ -49,7 +49,7 @@ export function ContactSection() {
               {/* Coordonnées */}
               <div className="space-y-2.5 mb-5">
                 <a
-                  href="tel:+33749520106"
+                  href="tel:+33172682480"
                   onClick={() => trackEvent('cta-click', { type: 'phone', position: 'contact-section', page: window.location.pathname })}
                   className="group flex items-center gap-4"
                 >
@@ -58,7 +58,7 @@ export function ContactSection() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-white group-hover:text-aquiz-green transition-colors">
-                      07 49 52 01 06
+                      01 72 68 24 80
                     </p>
                     <p className="text-[11px] text-white/35">
                       Lun – Ven · 9h – 19h

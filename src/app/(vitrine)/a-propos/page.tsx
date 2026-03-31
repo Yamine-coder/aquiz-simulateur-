@@ -269,7 +269,7 @@ export default function AProposPage() {
             <div className="bg-aquiz-gray-lightest/40 rounded-xl p-4 border border-aquiz-gray-lighter/50 space-y-2">
               <p><strong className="text-aquiz-black font-semibold">AQUIZ</strong> — Conseil en acquisition immobilière</p>
               <p className="flex items-center gap-2"><MapPin className="w-3.5 h-3.5 text-aquiz-green flex-shrink-0" />58 rue de Monceau, 75008 Paris</p>
-              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-aquiz-green flex-shrink-0" />07 49 52 01 06</p>
+              <p className="flex items-center gap-2"><Phone className="w-3.5 h-3.5 text-aquiz-green flex-shrink-0" />01 72 68 24 80</p>
               <p className="flex items-center gap-2"><Mail className="w-3.5 h-3.5 text-aquiz-green flex-shrink-0" /><a href="mailto:contact@aquiz.eu" className="text-aquiz-green hover:underline">contact@aquiz.eu</a></p>
               <p className="flex items-center gap-2"><Train className="w-3.5 h-3.5 text-aquiz-green flex-shrink-0" /><span className="text-xs text-aquiz-gray">Métro Monceau (ligne 2) · Villiers (lignes 2 &amp; 3)</span></p>
             </div>

@@ -105,7 +105,7 @@ function OrganizationJsonLd() {
     logo: 'https://www.aquiz.eu/image%20AQUIZ.jpeg',
     description: 'Conseil en acquisition immobilière à Paris & Île-de-France. Accompagnement personnalisé des primo-accédants : simulateur gratuit, chasse immobilière, financement.',
     email: 'contact@aquiz.eu',
-    telephone: '+33749520106',
+    telephone: '+33172682480',
     address: {
       '@type': 'PostalAddress',
       streetAddress: '58 rue de Monceau',

@@ -54,7 +54,7 @@ function JsonLd() {
         description:
           'Conseil en acquisition immobilière à Paris & Île-de-France : accompagnement personnalisé des primo-accédants, chasse immobilière, simulateur gratuit et solutions de financement sur mesure.',
         url: 'https://www.aquiz.eu',
-        telephone: '+33749520106',
+        telephone: '+33172682480',
         email: 'contact@aquiz.eu',
         image: 'https://www.aquiz.eu/image%20AQUIZ.jpeg',
         address: {

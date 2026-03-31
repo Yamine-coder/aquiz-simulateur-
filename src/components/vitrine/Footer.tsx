@@ -133,9 +133,9 @@ export function Footer() {
 
             {/* Contacts */}
             <div className="space-y-2 sm:space-y-2.5 text-xs sm:text-[13px] mb-5 sm:mb-6">
-              <a href="tel:+33749520106" onClick={() => trackEvent('cta-click', { type: 'phone', position: 'footer', page: window.location.pathname })} className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
+              <a href="tel:+33172682480" onClick={() => trackEvent('cta-click', { type: 'phone', position: 'footer', page: window.location.pathname })} className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Phone className="w-3.5 h-3.5 text-aquiz-green shrink-0" />
-                07 49 52 01 06
+                01 72 68 24 80
               </a>
               <a href="mailto:contact@aquiz.eu" className="flex items-center gap-2 sm:gap-2.5 text-white/50 hover:text-white transition-colors">
                 <Mail className="w-3.5 h-3.5 text-aquiz-green shrink-0" />

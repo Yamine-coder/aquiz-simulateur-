@@ -73,7 +73,7 @@ export default function MentionsLegalesPage() {
             </div>
             <div className="mt-3 flex flex-wrap gap-4 text-xs">
               <a href="mailto:contact@aquiz.eu" className="inline-flex items-center gap-1.5"><Mail className="w-3 h-3" />contact@aquiz.eu</a>
-              <span className="text-aquiz-gray-light">Tél : 07 49 52 01 06</span>
+              <span className="text-aquiz-gray-light">Tél : 01 72 68 24 80</span>
             </div>
             <p className="mt-3 text-xs text-aquiz-gray-light">
               Directeur de la publication : Yacine Houanti
