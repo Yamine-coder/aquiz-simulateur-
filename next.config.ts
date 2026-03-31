@@ -22,10 +22,15 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**' },
     ],
   },
+  async rewrites() {
+    return [
+      { source: '/sitemap.xml', destination: '/api/sitemap' },
+    ]
+  },
   async headers() {
     return [
       {
-        source: "/((?!sitemap\\.xml|robots\\.txt).*)",
+        source: "/((?!sitemap\\.xml|robots\\.txt|api/sitemap).*)",
         headers: [
           {
             key: "X-Frame-Options",
@@ -52,14 +57,6 @@ const nextConfig: NextConfig = {
             value: "max-age=63072000; includeSubDomains; preload",
           },
           // CSP est défini dynamiquement dans middleware.ts (nonce par requête)
-        ],
-      },
-      {
-        source: "/sitemap.xml",
-        headers: [
-          { key: "Content-Type", value: "application/xml; charset=utf-8" },
-          { key: "Cache-Control", value: "public, max-age=86400, s-maxage=86400" },
-          { key: "Vary", value: "Accept-Encoding" },
         ],
       },
     ];

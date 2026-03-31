@@ -1,14 +1,14 @@
+import { NextResponse } from 'next/server'
 import { BLOG_ARTICLES } from '@/data/blog-articles'
 
 const BASE_URL = 'https://www.aquiz.eu'
 
-// Force dynamic rendering — empêche le prerender static de Vercel
 export const dynamic = 'force-dynamic'
 
 /**
- * Route Handler pour /sitemap.xml
- * Contrôle total des headers — élimine les headers RSC parasites
- * qui empêchent Google Search Console de lire le sitemap.
+ * API Route /api/sitemap → redirigé depuis /sitemap.xml via rewrite
+ * Les API routes n'ont pas les headers RSC (Vary, Content-Disposition)
+ * qui empêchent Google Search Console de parser le sitemap.
  */
 export function GET() {
   const now = new Date().toISOString().split('T')[0]
@@ -27,7 +27,6 @@ export function GET() {
     { loc: `${BASE_URL}/mentions-legales`, lastmod: now, changefreq: 'yearly', priority: '0.3' },
   ]
 
-  // Articles de blog
   for (const article of BLOG_ARTICLES) {
     pages.push({
       loc: `${BASE_URL}/blog/${article.slug}`,
@@ -37,7 +36,6 @@ export function GET() {
     })
   }
 
-  // Catégories de blog
   const categories = [...new Set(BLOG_ARTICLES.map((a) => a.category))]
   for (const cat of categories) {
     pages.push({
@@ -58,11 +56,11 @@ ${pages.map((p) => `  <url>
   </url>`).join('\n')}
 </urlset>`
 
-  return new Response(xml, {
+  return new NextResponse(xml, {
     status: 200,
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400',
+      'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600',
     },
   })
 }
