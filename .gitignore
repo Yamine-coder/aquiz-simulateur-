@@ -60,3 +60,6 @@ dev.db-journal
 
 # screenshots
 /screenshots/
+
+# Sitemap (generated dynamically by middleware)
+/public/sitemap.xml
