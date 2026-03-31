@@ -2,6 +2,9 @@ import { BLOG_ARTICLES } from '@/data/blog-articles'
 
 const BASE_URL = 'https://www.aquiz.eu'
 
+// Force dynamic rendering — empêche le prerender static de Vercel
+export const dynamic = 'force-dynamic'
+
 /**
  * Route Handler pour /sitemap.xml
  * Contrôle total des headers — élimine les headers RSC parasites
