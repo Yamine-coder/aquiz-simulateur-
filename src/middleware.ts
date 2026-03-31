@@ -1,78 +1,12 @@
 import { jwtVerify } from 'jose'
 import { NextRequest, NextResponse } from 'next/server'
-import { BLOG_ARTICLES } from '@/data/blog-articles'
 
 const COOKIE_NAME = 'admin_token'
-const BASE_URL = 'https://www.aquiz.eu'
 
 /**
- * Génère le XML du sitemap. Exécuté dans le middleware (Edge Runtime)
- * pour bypasser les headers RSC de Next.js qui bloquent GSC.
- */
-function buildSitemapXml(): string {
-  const now = new Date().toISOString().split('T')[0]
-
-  const pages = [
-    { loc: BASE_URL, lastmod: now, changefreq: 'weekly', priority: '1.0' },
-    { loc: `${BASE_URL}/simulateur`, lastmod: now, changefreq: 'weekly', priority: '0.95' },
-    { loc: `${BASE_URL}/simulateur/mode-a`, lastmod: now, changefreq: 'weekly', priority: '0.9' },
-    { loc: `${BASE_URL}/simulateur/mode-b`, lastmod: now, changefreq: 'weekly', priority: '0.9' },
-    { loc: `${BASE_URL}/comparateur`, lastmod: now, changefreq: 'weekly', priority: '0.8' },
-    { loc: `${BASE_URL}/carte`, lastmod: now, changefreq: 'weekly', priority: '0.8' },
-    { loc: `${BASE_URL}/aides`, lastmod: now, changefreq: 'monthly', priority: '0.7' },
-    { loc: `${BASE_URL}/blog`, lastmod: now, changefreq: 'weekly', priority: '0.8' },
-    { loc: `${BASE_URL}/a-propos`, lastmod: now, changefreq: 'monthly', priority: '0.5' },
-    { loc: `${BASE_URL}/contact`, lastmod: now, changefreq: 'monthly', priority: '0.5' },
-    { loc: `${BASE_URL}/mentions-legales`, lastmod: now, changefreq: 'yearly', priority: '0.3' },
-  ]
-
-  for (const article of BLOG_ARTICLES) {
-    pages.push({
-      loc: `${BASE_URL}/blog/${article.slug}`,
-      lastmod: article.updatedAt ?? article.publishedAt,
-      changefreq: 'monthly',
-      priority: '0.7',
-    })
-  }
-
-  const categories = [...new Set(BLOG_ARTICLES.map((a) => a.category))]
-  for (const cat of categories) {
-    pages.push({
-      loc: `${BASE_URL}/blog/categorie/${cat}`,
-      lastmod: now,
-      changefreq: 'monthly',
-      priority: '0.5',
-    })
-  }
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${pages.map((p) => `  <url>
-    <loc>${p.loc}</loc>
-    <lastmod>${p.lastmod}</lastmod>
-    <changefreq>${p.changefreq}</changefreq>
-    <priority>${p.priority}</priority>
-  </url>`).join('\n')}
-</urlset>`
-}
-
-/**
- * Middleware Next.js — CSP nonce + protection admin + sitemap.
+ * Middleware Next.js — CSP nonce + protection admin.
  */
 export async function middleware(request: NextRequest) {
-  // ── Sitemap — réponse brute sans headers Next.js ────
-  if (request.nextUrl.pathname === '/sitemap.xml') {
-    const xml = buildSitemapXml()
-    const body = new TextEncoder().encode(xml)
-    return new Response(body, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/xml; charset=utf-8',
-        'Content-Length': body.byteLength.toString(),
-        'Cache-Control': 'public, max-age=86400, s-maxage=86400',
-      },
-    })
-  }
   // ── CSP Nonce ───────────────────────────────────────
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
 
@@ -144,11 +78,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Sitemap — intercepté par le middleware pour bypasser les headers RSC
-    '/sitemap.xml',
-    // Match all routes except static files, images and robots
+    // Match all routes except static files, images, sitemap and robots
     {
-      source: '/((?!_next/static|_next/image|favicon.ico|robots\\.txt|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+      source: '/((?!_next/static|_next/image|favicon.ico|sitemap\\.xml|robots\\.txt|manifest\\.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
       missing: [
         { type: 'header', key: 'next-router-prefetch' },
         { type: 'header', key: 'purpose', value: 'prefetch' },

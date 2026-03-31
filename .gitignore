@@ -60,6 +60,3 @@ dev.db-journal
 
 # screenshots
 /screenshots/
-
-# Generated sitemap (served by Route Handler)
-/public/sitemap.xml
