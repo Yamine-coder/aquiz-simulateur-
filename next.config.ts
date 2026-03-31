@@ -22,15 +22,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**' },
     ],
   },
-  async rewrites() {
-    return [
-      { source: '/sitemap.xml', destination: '/api/sitemap' },
-    ]
-  },
   async headers() {
     return [
       {
-        source: "/((?!sitemap\\.xml|robots\\.txt|api/sitemap).*)",
+        source: "/((?!sitemap\\.xml|robots\\.txt).*)",
         headers: [
           {
             key: "X-Frame-Options",
