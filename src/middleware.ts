@@ -61,10 +61,13 @@ export async function middleware(request: NextRequest) {
   // ── Sitemap (Edge Response — zéro header parasite) ──
   if (request.nextUrl.pathname === '/sitemap.xml') {
     const xml = buildSitemapXml()
-    return new Response(xml, {
+    const encoder = new TextEncoder()
+    const body = encoder.encode(xml)
+    return new Response(body, {
       status: 200,
       headers: {
-        'Content-Type': 'application/xml; charset=UTF-8',
+        'Content-Type': 'text/xml; charset=UTF-8',
+        'Content-Length': String(body.byteLength),
         'Cache-Control': 'public, max-age=86400, s-maxage=86400',
       },
     })
