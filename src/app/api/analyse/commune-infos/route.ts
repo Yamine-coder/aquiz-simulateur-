@@ -203,7 +203,11 @@ export async function GET(request: NextRequest) {
         try {
           const r = await fetch(serverUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              // ⚠️ Overpass API exige un User-Agent identifiable depuis 2024 — sinon 406 Not Acceptable
+              'User-Agent': 'AQUIZ/1.0 (https://www.aquiz.eu; contact@aquiz.eu)',
+            },
             body: `data=${encodeURIComponent(overpassQuery)}`,
             signal: ctrl.signal,
           })
