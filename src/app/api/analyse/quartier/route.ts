@@ -163,6 +163,10 @@ export async function GET(request: NextRequest) {
       quartierCache.set(cacheKey, diskCached) // réchauffe le cache mémoire
       return NextResponse.json(diskCached)
     }
+    // Fallback de secours (même expiré) en cas de panne upstream Overpass
+    const staleCached = (quartierCache.getStale(cacheKey) ?? quartierDiskCache.getStale(cacheKey)) as
+      | Record<string, unknown>
+      | undefined
 
     // Construire la requête Overpass
     // IMPORTANT : ancrer les regex avec ^(...)$ pour éviter les faux positifs
@@ -263,7 +267,10 @@ export async function GET(request: NextRequest) {
       try {
         const res = await fetch(serverUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept': 'application/json',
+          },
           body: `data=${encodeURIComponent(query)}`,
           signal: ctrl.signal,
         })
@@ -294,10 +301,20 @@ export async function GET(request: NextRequest) {
      * afin de ne pas maintenir 9 connexions simultanées vers Overpass.
      * Pire cas = 1× timeout au lieu de N× en séquentiel.
      */
-    async function fetchWithRotation(query: string, timeoutMs: number, label: string): Promise<{ elements: unknown[] }> {
+    async function fetchWithRotation(
+      query: string,
+      timeoutMs: number,
+      label: string,
+      options?: { critical?: boolean }
+    ): Promise<{ elements: unknown[] }> {
+      const critical = options?.critical ?? false
       const available = SERVERS.filter(s => !blocked429.has(s))
       if (available.length === 0) {
-        console.error(`[Quartier API] ${label}: no servers available`)
+        if (critical) {
+          console.error(`[Quartier API] ${label}: no servers available`)
+        } else {
+          console.warn(`[Quartier API] ${label}: no servers available (optional query)`)
+        }
         return { elements: [] }
       }
       // Un AbortController par serveur — abandonne les perdants dès qu'un gagnant répond
@@ -315,7 +332,11 @@ export async function GET(request: NextRequest) {
         return result
       } catch {
         // AggregateError — tous les serveurs ont échoué
-        console.error(`[Quartier API] ${label} failed on all servers`)
+        if (critical) {
+          console.error(`[Quartier API] ${label} failed on all servers`)
+        } else {
+          console.warn(`[Quartier API] ${label} failed on all servers (optional query)`)
+        }
         return { elements: [] }
       }
     }
@@ -324,9 +345,9 @@ export async function GET(request: NextRequest) {
     // Parallèle (3×3=9 connexions) → Overpass rate-limite les annonces suivantes.
     // Séquentiel (3 connexions max, une après l'autre) → fiable pour N annonces.
     // Compromis : +5-10s par analyse non-cachée, mais 100% de réussite.
-    let baseResult = await fetchWithRotation(queryBase, 17000, 'Base')
-    const transportNodesResult = await fetchWithRotation(queryTransportNodes, 10000, 'TransportNodes')
-    const relationsResult = await fetchWithRotation(queryRelations, 10000, 'Relations')
+    let baseResult = await fetchWithRotation(queryBase, 17000, 'Base', { critical: true })
+    const transportNodesResult = await fetchWithRotation(queryTransportNodes, 15000, 'TransportNodes')
+    const relationsResult = await fetchWithRotation(queryRelations, 15000, 'Relations')
 
     // ── Retry automatique de queryBase si vide ──────────────────────────────────
     // Pattern : queryTransportNodes trouve du transport (RER, bus) mais queryBase
@@ -640,6 +661,14 @@ export async function GET(request: NextRequest) {
 
     // Aucun POI trouvé = Overpass a échoué (timeout ou rate-limit) → ne pas renvoyer 0/100
     if (pois.length === 0) {
+      if (staleCached) {
+        console.warn('[Quartier API] Overpass indisponible — fallback sur cache stale')
+        return NextResponse.json({
+          ...(staleCached as Record<string, unknown>),
+          degraded: true,
+          source: 'OpenStreetMap (cache secours)',
+        })
+      }
       return NextResponse.json({ success: false, error: 'Données OpenStreetMap indisponibles' }, { status: 503 })
     }
 
@@ -1096,6 +1125,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(responseData)
     
   } catch (error) {
+    const cacheKey = `v37_${lat}_${lon}_${rayon}`
+    const staleCached = (quartierCache.getStale(cacheKey) ?? quartierDiskCache.getStale(cacheKey)) as
+      | Record<string, unknown>
+      | undefined
+    if (staleCached) {
+      console.warn('[Quartier API] exception Overpass — fallback sur cache stale')
+      return NextResponse.json({
+        ...(staleCached as Record<string, unknown>),
+        degraded: true,
+        source: 'OpenStreetMap (cache secours)',
+      })
+    }
     const errMsg = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     console.error(`[Quartier] Erreur pour (${request.nextUrl.searchParams.get('lat')}, ${request.nextUrl.searchParams.get('lon')}):`, errMsg)
     const message = error instanceof Error && error.name === 'AbortError'

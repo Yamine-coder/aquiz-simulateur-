@@ -25,6 +25,16 @@ export class ServerCache<T> {
     return entry.data
   }
 
+  /**
+   * Retourne la valeur même expirée (sans vérifier le TTL).
+   * Utilisable en mode dégradé quand la source upstream est indisponible.
+   */
+  getStale(key: string): T | undefined {
+    const entry = this.cache.get(key)
+    if (!entry) return undefined
+    return entry.data
+  }
+
   set(key: string, data: T): void {
     // Éviction si taille max atteinte (supprime le plus ancien = premier élément)
     if (this.cache.size >= this.maxSize) {
@@ -87,6 +97,22 @@ export class DiskCache<T> {
       if (!existsSync(file)) return undefined
       const entry = JSON.parse(readFileSync(file, 'utf-8')) as { ts: number; data: T }
       if (Date.now() - entry.ts > this.ttlMs) return undefined
+      return entry.data
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Retourne la valeur disque sans vérifier le TTL.
+   * Permet un fallback en mode dégradé si l'API distante est KO.
+   */
+  getStale(key: string): T | undefined {
+    if (!this.ready) return undefined
+    try {
+      const file = this.filePath(key)
+      if (!existsSync(file)) return undefined
+      const entry = JSON.parse(readFileSync(file, 'utf-8')) as { ts: number; data: T }
       return entry.data
     } catch {
       return undefined
