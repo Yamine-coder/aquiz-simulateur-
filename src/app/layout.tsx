@@ -1,5 +1,6 @@
 import { ConditionalAnalytics } from "@/components/ConditionalAnalytics";
 import { CookieConsent } from "@/components/CookieConsent";
+import { GoogleTagManager } from "@next/third-parties/google";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -227,6 +228,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr" className="scroll-smooth">
+      <GoogleTagManager gtmId="GTM-NVT8VQ47" />
       <head>
         <OrganizationJsonLd />
         <SiteNavigationJsonLd />

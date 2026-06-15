@@ -1,5 +1,5 @@
-import type { MetadataRoute } from 'next'
 import { BLOG_ARTICLES, getActiveCategories } from '@/data/blog-articles'
+import type { MetadataRoute } from 'next'
 
 const BASE_URL = 'https://www.aquiz.eu'
 

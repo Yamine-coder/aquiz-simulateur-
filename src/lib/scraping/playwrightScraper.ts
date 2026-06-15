@@ -175,7 +175,7 @@ async function tryLocalPlaywright(
       Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
       
       // Simuler Chrome runtime
-      // @ts-expect-error - Chrome runtime stub for anti-detection
+      // @ts-ignore - Chrome runtime stub for anti-detection
       window.chrome = {
         runtime: { id: undefined },
         loadTimes: () => ({ commitLoadTime: Date.now() / 1000 }),
